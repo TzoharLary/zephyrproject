@@ -1,0 +1,4 @@
+#!/bin/sh
+BASEDIR="$(cd "$(dirname "$0")/.." && pwd)"
+SCRIPTSDIR="$BASEDIR/share/openocd/scripts"
+exec "$(cd "$(dirname "$0")" && pwd)/openocd.real" -s "$SCRIPTSDIR" "$@"

@@ -31,6 +31,23 @@ Thumbs.db
 # West (Zephyr)
 .west/
 
+# West-managed external modules (fetched via west update)
+modules/
+bootloader/
+
+# West tool submodules inside tools/
+tools/edtt/
+tools/net-tools/
+
+# Embedded git repos in pts_offline_inventory
+pts_offline_inventory/extracted/python_automation/
+
+# Secrets and env files
+.env
+
+# Copilot internal logs
+panel_editAgent_*.copilotmd
+
 # Other
 *.log
 tmp/

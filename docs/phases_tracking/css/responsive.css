@@ -1,0 +1,185 @@
+@media (max-width: 1120px) {
+    .app {
+        padding: var(--sp-6) var(--sp-4) var(--sp-8);
+    }
+
+    .intro-grid,
+    .guide-overview {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .guide-layout {
+        flex-direction: column;
+    }
+
+    .guide-nav {
+        width: 100%;
+        position: static;
+        top: auto;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--sp-2);
+    }
+
+    .guide-nav-label {
+        grid-column: 1 / -1;
+    }
+
+    .guide-nav-item {
+        margin: 0;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 860px) {
+    .app-header {
+        padding: var(--sp-8) var(--sp-6);
+    }
+
+    .app-header h1 {
+        font-size: 1.7rem;
+    }
+
+    .hero-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .hero-note {
+        max-width: 100%;
+    }
+
+    .app-body {
+        padding: var(--sp-6);
+    }
+
+    .intro-grid,
+    .guide-overview {
+        grid-template-columns: 1fr;
+    }
+
+    .stats-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .data-table th,
+    .data-table td {
+        padding: var(--sp-2) var(--sp-3);
+    }
+
+    .guide-phase {
+        padding: var(--sp-5);
+    }
+
+    .onboarding-block {
+        padding: var(--sp-4);
+    }
+
+    .glossary-item summary,
+    .glossary-desc {
+        padding: var(--sp-3);
+    }
+
+    .btn-group {
+        flex-wrap: wrap;
+    }
+}
+
+@media (max-width: 640px) {
+    .app {
+        padding: var(--sp-3) var(--sp-3) var(--sp-6);
+    }
+
+    .app-header {
+        border-radius: var(--radius-xl);
+        padding: var(--sp-6) var(--sp-4);
+    }
+
+    .app-header h1 {
+        font-size: 1.4rem;
+    }
+
+    .hero-tag {
+        padding: 5px 10px;
+    }
+
+    .nav-tabs {
+        justify-content: stretch;
+        gap: var(--sp-1);
+        padding: var(--sp-2);
+    }
+
+    .tab-btn {
+        flex: 1;
+        padding: 8px;
+        font-size: var(--text-xs);
+    }
+
+    .app-body {
+        padding: var(--sp-4);
+    }
+
+    .sub-tabs {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .sub-tab-btn {
+        padding: 8px;
+        font-size: var(--text-xs);
+    }
+
+    .stats-row {
+        grid-template-columns: 1fr;
+    }
+
+    .guide-nav {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .guide-nav-item {
+        font-size: var(--text-xs);
+        padding: var(--sp-2);
+    }
+
+    .step-num {
+        width: 20px;
+        height: 20px;
+    }
+
+    .phase-title {
+        font-size: 1.14rem;
+    }
+
+    .phase-meta,
+    .phase-heading,
+    .step-list li,
+    .faq-body,
+    .section-text {
+        font-size: var(--text-xs);
+    }
+
+    .onboarding-steps,
+    .onboarding-outcomes,
+    .glossary-item summary,
+    .glossary-desc {
+        font-size: var(--text-xs);
+    }
+
+    .substep-details,
+    .substep-details li,
+    .flow-box {
+        font-size: var(--text-xs);
+    }
+
+    .btn-group {
+        flex-direction: column;
+    }
+
+    .save-toast {
+        left: var(--sp-3);
+        right: var(--sp-3);
+        bottom: var(--sp-3);
+        text-align: center;
+    }
+}

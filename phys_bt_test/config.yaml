@@ -1,0 +1,12 @@
+devices:
+  central:
+    board: nrf52840dk/nrf52840
+    serial_number: "683523456" # Replace with actual Serial Number
+    serial_port: "/dev/tty.usbmodem0006835234561" # Replace with actual Port
+  peripheral:
+    board: nrf52840dk/nrf52840
+    serial_number: "683692871" # Replace with actual Serial Number
+    serial_port: "/dev/tty.usbmodem0006836928711" # Replace with actual Port
+
+test:
+  timeout_sec: 60

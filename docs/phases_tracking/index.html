@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VPC - מעקב בדיקות BLE וירטואליות</title>
+
+    <!-- CSS — order matters (tokens first) -->
+    <link rel="stylesheet" href="css/tokens.css">
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/responsive.css">
+</head>
+<body>
+
+<div class="app">
+
+    <!-- ===== Header ===== -->
+    <header class="app-header">
+        <h1>VPC - מעקב בדיקות BLE</h1>
+        <p>תוכנית עבודה ברורה לבדיקות פרופילים וירטואליות (Renode + Bumble + Twister)</p>
+        <div class="hero-row">
+            <div class="hero-tags" aria-label="טכנולוגיות ליבה">
+                <span class="hero-tag">Renode</span>
+                <span class="hero-tag">Bumble</span>
+                <span class="hero-tag">Twister</span>
+                <span class="hero-tag">Zephyr</span>
+            </div>
+            <p class="hero-note">יעד: בדיקות פרופילים אוטומטיות על מחשב פיתוח, עם מינימום שינויי ליבה בקוד.</p>
+        </div>
+    </header>
+
+    <!-- ===== Main Card ===== -->
+    <main class="app-main">
+
+        <!-- Tab bar -->
+        <nav class="nav-tabs">
+            <button class="tab-btn active" data-tab="profiles">רשימת פרופילים</button>
+            <button class="tab-btn" data-tab="guide">תוכנית עבודה</button>
+            <button class="tab-btn" data-tab="faq">שאלות נפוצות</button>
+        </nav>
+
+        <div class="app-body">
+
+            <!-- ====================================================
+                 TAB 1 — Profiles
+                 ==================================================== -->
+            <section id="profiles" class="tab-pane active">
+
+                <div class="section">
+                    <h2 class="section-title">רשימת פרופילים <button class="help-trigger" data-help="פרופיל BLE = שירות סטנדרטי. לדוגמה: BAS מדווח סוללה, HRS משדר קצב לב.">?</button></h2>
+                    <p class="section-text">כאן מנהלים את העבודה היומית: מי אחראי על כל פרופיל, מה סטטוס הביצוע, ומה החסמים הפתוחים. כל שינוי נשמר אוטומטית.</p>
+                    <div class="intro-grid">
+                        <article class="intro-card">
+                            <h3 class="intro-title">מה מנהלים כאן?</h3>
+                            <p class="intro-text">מעקב מרכזי לכל פרופילי BLE בסקופ, כולל בעלות, סטטוס ופעולות חסרות.</p>
+                        </article>
+                        <article class="intro-card">
+                            <h3 class="intro-title">איך עובדים עם הטבלה?</h3>
+                            <ul class="intro-list">
+                                <li>מעדכנים Owner ו-Reviewer לכל פרופיל</li>
+                                <li>משנים סטטוס לפי התקדמות בפועל</li>
+                                <li>שומרים הערות קצרות עם החלטות/חסמים</li>
+                            </ul>
+                        </article>
+                        <article class="intro-card">
+                            <h3 class="intro-title">קריטריון סיום (DoD)</h3>
+                            <ul class="intro-list">
+                                <li>בדיקות Pytest עוברות</li>
+                                <li>הרצת Twister יציבה</li>
+                                <li>לוגים ותיעוד מעודכנים</li>
+                            </ul>
+                        </article>
+                    </div>
+                </div>
+
+                <!-- Stats -->
+                <div class="stats-row">
+                    <div class="stat-card">
+                        <div class="stat-value">9</div>
+                        <div class="stat-label">פרופילים</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">4</div>
+                        <div class="stat-label">קיימים</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">5</div>
+                        <div class="stat-label">חדשים</div>
+                    </div>
+                </div>
+
+                <!-- Sub-tabs for existing vs new profiles -->
+                <div class="sub-tabs">
+                    <button class="sub-tab-btn active" data-subtab="existing-profiles">פרופילים קיימים</button>
+                    <button class="sub-tab-btn" data-subtab="new-profiles">פרופילים חדשים</button>
+                </div>
+
+                <!-- Sub-tab 1: Existing profiles -->
+                <div id="existing-profiles" class="sub-tab-pane active">
+                    <div class="section">
+                    <h3 class="section-subtitle">
+                        פרופילים קיימים (דורשים שילוב)
+                        <button class="help-trigger" data-help="פרופילים אלו כבר ממומשים ב-Zephyr. המשימה היא לוודא שהם עובדים מתקמפלים ומתפקדים נכון על לוח CC2745R10 של TI.">?</button>
+                    </h3>
+                    <div class="table-wrap">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>פרופיל</th>
+                                    <th>UUID <button class="help-trigger" data-help="UUID (Universal Unique Identifier) — מזהה ייחודי של 16 ביט שמוקצה לכל שירות BLE סטנדרטי על ידי ארגון Bluetooth SIG. לדוגמה: 180A = Device Information.">?</button></th>
+                                    <th>סטטוס</th>
+                                    <th>Owner <button class="help-trigger" data-help="Owner — האדם האחראי על הפיתוח מקצה לקצה: Spec, קוד, בדיקות VPC ותיעוד. הוא פותח PR ומתקן לפי הערות הבודק.">?</button></th>
+                                    <th>Reviewer <button class="help-trigger" data-help="Reviewer — בודק הקוד. מוודא איכות, דיוק, עמידה ב-spec ו-coding style. לא יכול לאשר PR של עצמו. חייב להיות שונה מה-Owner.">?</button></th>
+                                    <th>הערות</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>
+                                        <span class="profile-name">DIS</span>
+                                        <button class="help-trigger" data-help="DIS — Device Information Service. שירות שמספק מידע בסיסי על ההתקן: שם יצרן, מספר דגם, גרסת firmware וכו'. אחד השירותים הפשוטים ביותר.">?</button>
+                                        <div class="profile-desc">מידע התקן</div>
+                                    </td>
+                                    <td><code>180A</code></td>
+                                    <td>
+                                        <select class="status-select" data-profile="dis" data-field="status">
+                                            <option value="existing" selected>קיים</option>
+                                            <option value="integrating">משלב</option>
+                                            <option value="done">הושלם</option>
+                                        </select>
+                                    </td>
+                                    <td><span class="editable" contenteditable="true" data-profile="dis" data-field="owner">לחץ להזנת שם</span></td>
+                                    <td><span class="editable" contenteditable="true" data-profile="dis" data-field="reviewer">לחץ להזנת שם</span></td>
+                                    <td><span class="editable" contenteditable="true" data-profile="dis" data-field="notes">&mdash;</span></td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <span class="profile-name">BAS</span>
+                                        <button class="help-trigger" data-help="BAS — Battery Service. שירות שמדווח על אחוז הסוללה הנותר בהתקן. כולל characteristic אחד (Battery Level) עם ערך 0-100.">?</button>
+                                        <div class="profile-desc">סוללה</div>
+                                    </td>
+                                    <td><code>180F</code></td>
+                                    <td>
+                                        <select class="status-select" data-profile="bas" data-field="status">
+                                            <option value="existing" selected>קיים</option>
+                                            <option value="integrating">משלב</option>
+                                            <option value="done">הושלם</option>
+                                        </select>
+                                    </td>
+                                    <td><span class="editable" contenteditable="true" data-profile="bas" data-field="owner">לחץ להזנת שם</span></td>
+                                    <td><span class="editable" contenteditable="true" data-profile="bas" data-field="reviewer">לחץ להזנת שם</span></td>
+                                    <td><span class="editable" contenteditable="true" data-profile="bas" data-field="notes">&mdash;</span></td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <span class="profile-name">HRS</span>
+                                        <button class="help-trigger" data-help="HRS — Heart Rate Service. שירות שמשדר נתוני קצב לב בזמן אמת. נפוץ בשעונים חכמים ורצועות חזה.">?</button>
+                                        <div class="profile-desc">קצב לב</div>
+                                    </td>
+                                    <td><code>180D</code></td>
+                                    <td>
+                                        <select class="status-select" data-profile="hrs" data-field="status">
+                                            <option value="existing" selected>קיים</option>
+                                            <option value="integrating">משלב</option>
+                                            <option value="done">הושלם</option>
+                                        </select>
+                                    </td>
+                                    <td><span class="editable" contenteditable="true" data-profile="hrs" data-field="owner">לחץ להזנת שם</span></td>
+                                    <td><span class="editable" contenteditable="true" data-profile="hrs" data-field="reviewer">לחץ להזנת שם</span></td>
+                                    <td><span class="editable" contenteditable="true" data-profile="hrs" data-field="notes">&mdash;</span></td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <span class="profile-name">HID</span>
+                                        <button class="help-trigger" data-help="HID — Human Interface Device. שירות להתקני קלט: מקלדת, עכבר, ג'ויסטיק. מורכב יותר כי דורש HID Report Map ו-descriptors מיוחדים.">?</button>
+                                        <div class="profile-desc">בקרה אדם</div>
+                                    </td>
+                                    <td><code>1812</code></td>
+                                    <td>
+                                        <select class="status-select" data-profile="hid" data-field="status">
+                                            <option value="sample" selected>דוגמה</option>
+                                            <option value="upgrading">משדרג</option>
+                                            <option value="done">הושלם</option>
+                                        </select>
+                                    </td>
+                                    <td><span class="editable" contenteditable="true" data-profile="hid" data-field="owner">לחץ להזנת שם</span></td>
+                                    <td><span class="editable" contenteditable="true" data-profile="hid" data-field="reviewer">לחץ להזנת שם</span></td>
+                                    <td><span class="editable" contenteditable="true" data-profile="hid" data-field="notes">להחליט: דוגמה או הסמכה?</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    </div>
+                </div>
+
+                <!-- Sub-tab 2: New profiles -->
+                <div id="new-profiles" class="sub-tab-pane">
+                    <div class="section">
+                        <h3 class="section-subtitle">
+                            פרופילים חדשים (דורשים מימוש)
+                            <button class="help-trigger" data-help="פרופילים אלו לא קיימים עדיין בקוד. צריך לכתוב אותם מאפס: spec, שלד קוד, מימוש מלא, ובדיקות VPC.">?</button>
+                        </h3>
+                        <div class="table-wrap">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>פרופיל</th>
+                                        <th>UUID</th>
+                                        <th>סיבוכיות</th>
+                                        <th>סטטוס</th>
+                                        <th>Owner</th>
+                                    <th>Reviewer</th>
+                                    <th>הערות</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>1</td>
+                                    <td>
+                                        <span class="profile-name">ScPS</span>
+                                        <button class="help-trigger" data-help="ScPS — Scan Parameters Service. שירות שמאפשר ל-client לשלוח את פרמטרי הסריקה שלו ל-server, כדי שה-server יוכל להתאים את פרסום ה-advertising שלו.">?</button>
+                                        <div class="profile-desc">סריקה</div>
+                                    </td>
+                                    <td><code>1813</code></td>
+                                    <td><span class="badge badge--easy">פשוט</span></td>
+                                    <td>
+                                        <select class="status-select" data-profile="scps" data-field="status">
+                                            <option value="not-started" selected>לא התחיל</option>
+                                            <option value="spec">Spec</option>
+                                            <option value="skeleton">Skeleton</option>
+                                            <option value="impl">מימוש</option>
+                                            <option value="vpc">VPC</option>
+                                            <option value="done">הושלם</option>
+                                        </select>
+                                    </td>
+                                    <td><span class="editable" contenteditable="true" data-profile="scps" data-field="owner">לחץ להזנת שם</span></td>
+                                    <td><span class="editable" contenteditable="true" data-profile="scps" data-field="reviewer">לחץ להזנת שם</span></td>
+                                    <td><span class="editable" contenteditable="true" data-profile="scps" data-field="notes">&mdash;</span></td>
+                                </tr>
+                                <tr>
+                                    <td>2</td>
+                                    <td>
+                                        <span class="profile-name">BPS</span>
+                                        <button class="help-trigger" data-help="BPS — Blood Pressure Service. שירות למדידת לחץ דם. כולל characteristics לערכי systolic/diastolic, timestamp ו-measurement status. דורש intermediate cuff pressure indication.">?</button>
+                                        <div class="profile-desc">לחץ דם</div>
+                                    </td>
+                                    <td><code>1810</code></td>
+                                    <td><span class="badge badge--medium">בינוני</span></td>
+                                    <td>
+                                        <select class="status-select" data-profile="bps" data-field="status">
+                                            <option value="not-started" selected>לא התחיל</option>
+                                            <option value="spec">Spec</option>
+                                            <option value="skeleton">Skeleton</option>
+                                            <option value="impl">מימוש</option>
+                                            <option value="vpc">VPC</option>
+                                            <option value="done">הושלם</option>
+                                        </select>
+                                    </td>
+                                    <td><span class="editable" contenteditable="true" data-profile="bps" data-field="owner">לחץ להזנת שם</span></td>
+                                    <td><span class="editable" contenteditable="true" data-profile="bps" data-field="reviewer">לחץ להזנת שם</span></td>
+                                    <td><span class="editable" contenteditable="true" data-profile="bps" data-field="notes">&mdash;</span></td>
+                                </tr>
+                                <tr>
+                                    <td>3</td>
+                                    <td>
+                                        <span class="profile-name">WSS</span>
+                                        <button class="help-trigger" data-help="WSS — Weight Scale Service. שירות למשקל גוף. דומה למבנה של BPS אבל עם characteristics למשקל, BMI, גובה, ו-timestamp.">?</button>
+                                        <div class="profile-desc">משקל</div>
+                                    </td>
+                                    <td><code>181D</code></td>
+                                    <td><span class="badge badge--medium">בינוני</span></td>
+                                    <td>
+                                        <select class="status-select" data-profile="wss" data-field="status">
+                                            <option value="not-started" selected>לא התחיל</option>
+                                            <option value="spec">Spec</option>
+                                            <option value="skeleton">Skeleton</option>
+                                            <option value="impl">מימוש</option>
+                                            <option value="vpc">VPC</option>
+                                            <option value="done">הושלם</option>
+                                        </select>
+                                    </td>
+                                    <td><span class="editable" contenteditable="true" data-profile="wss" data-field="owner">לחץ להזנת שם</span></td>
+                                    <td><span class="editable" contenteditable="true" data-profile="wss" data-field="reviewer">לחץ להזנת שם</span></td>
+                                    <td><span class="editable" contenteditable="true" data-profile="wss" data-field="notes">&mdash;</span></td>
+                                </tr>
+                                <tr>
+                                    <td>4</td>
+                                    <td>
+                                        <span class="profile-name">ANCS</span>
+                                        <button class="help-trigger" data-help="ANCS — Apple Notification Center Service. שירות קנייני של Apple שמאפשר להתקן BLE לקבל התראות מ-iPhone (שיחות, הודעות, אפליקציות). אין UUID רשמי — השירות של Apple בלבד.">?</button>
+                                        <div class="profile-desc">עדכוני Apple</div>
+                                    </td>
+                                    <td>קנייני</td>
+                                    <td><span class="badge badge--hard">מורכב</span></td>
+                                    <td>
+                                        <select class="status-select" data-profile="ancs" data-field="status">
+                                            <option value="not-started" selected>לא התחיל</option>
+                                            <option value="spec">Spec</option>
+                                            <option value="skeleton">Skeleton</option>
+                                            <option value="impl">מימוש</option>
+                                            <option value="vpc">VPC</option>
+                                            <option value="done">הושלם</option>
+                                        </select>
+                                    </td>
+                                    <td><span class="editable" contenteditable="true" data-profile="ancs" data-field="owner">לחץ להזנת שם</span></td>
+                                    <td><span class="editable" contenteditable="true" data-profile="ancs" data-field="reviewer">לחץ להזנת שם</span></td>
+                                    <td><span class="editable" contenteditable="true" data-profile="ancs" data-field="notes">&mdash;</span></td>
+                                </tr>
+                                <tr>
+                                    <td>5</td>
+                                    <td>
+                                        <span class="profile-name">AMS</span>
+                                        <button class="help-trigger" data-help="AMS — Apple Media Service. שירות קנייני של Apple לשליטה במדיה מרחוק: play/pause, next/prev, volume. מורכב מאוד כי דורש Entity Attributes ו-Commands ייחודיים.">?</button>
+                                        <div class="profile-desc">מדיה Apple</div>
+                                    </td>
+                                    <td>קנייני</td>
+                                    <td><span class="badge badge--hard">מורכב מאוד</span></td>
+                                    <td>
+                                        <select class="status-select" data-profile="ams" data-field="status">
+                                            <option value="not-started" selected>לא התחיל</option>
+                                            <option value="spec">Spec</option>
+                                            <option value="skeleton">Skeleton</option>
+                                            <option value="impl">מימוש</option>
+                                            <option value="vpc">VPC</option>
+                                            <option value="done">הושלם</option>
+                                        </select>
+                                    </td>
+                                    <td><span class="editable" contenteditable="true" data-profile="ams" data-field="owner">לחץ להזנת שם</span></td>
+                                    <td><span class="editable" contenteditable="true" data-profile="ams" data-field="reviewer">לחץ להזנת שם</span></td>
+                                    <td><span class="editable" contenteditable="true" data-profile="ams" data-field="notes">&mdash;</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    </div>
+                </div>
+
+                <!-- Action buttons -->
+                <div class="btn-group">
+                    <button id="btnExport" class="btn btn--primary">ייצא נתונים (JSON)</button>
+                    <button id="btnClear" class="btn btn--danger">נקה הכל</button>
+                </div>
+            </section>
+
+
+            <!-- ====================================================
+                 TAB 2 — Step-by-step guide
+                 ==================================================== -->
+            <section id="guide" class="tab-pane">
+
+                <div class="section">
+                    <h2 class="section-title">
+                        תוכנית עבודה VPC (7 שלבים)
+                        <button class="help-trigger" data-help="זהו מדריך ההקמה של תשתית בדיקות וירטואלית. כל שלב כולל מטרה, פעולות ברורות ותוצר שחייבים לסגור לפני מעבר לשלב הבא.">?</button>
+                    </h2>
+                    <p class="section-text">המטרה של התוכנית היא להחליף תלות ב-PTS פיזי בבדיקות וירטואליות יציבות. מתחילים משלב 1 ומתקדמים לפי הסדר; כל שלב מייצר בסיס לשלב הבא.</p>
+                    <p class="section-text">בשפה פשוטה: אנחנו רוצים מצב שבו אפשר לבדוק פרופילי Bluetooth שוב ושוב, בצורה אוטומטית, על מחשב פיתוח רגיל. במקום לחכות לחומרה, אנחנו מריצים את ההתקן בתוך סימולציה, מחברים אליו בודק חיצוני, ומקבלים תשובה ברורה אם הקוד עובד או לא.</p>
+                    <section class="onboarding-block" aria-label="מסלול קריאה למפתח חדש">
+                        <h3 class="phase-heading">איך להבין את הפרויקט הזה מאפס (קריאה מומלצת)</h3>
+                        <ol class="onboarding-steps">
+                            <li><strong>קודם מבינים את הבעיה:</strong> בדיקות ידניות על חומרה פיזית איטיות, תלויות בציוד, וקשה לשחזר איתן תקלות.</li>
+                            <li><strong>אחר כך מבינים את הפתרון:</strong> אנחנו בונים תשתית VPC שמריצה בדיקות פרופילים בצורה וירטואלית, עקבית ואוטומטית.</li>
+                            <li><strong>אחרי זה מבינים את הזרימה:</strong> בונים DUT ב-Zephyr, מריצים אותו ב-Renode, מחברים Tester עם Bumble, ו-Twister מריץ הכל ומחזיר PASS/FAIL.</li>
+                            <li><strong>רק אז עוברים ל-7 השלבים:</strong> כל שלב תלוי בשלב קודם, ולכן לא מדלגים בין השלבים.</li>
+                        </ol>
+                    </section>
+
+                    <section class="onboarding-block" aria-label="מילון מושגים">
+                        <h3 class="phase-heading">מילון מושגים (בשפה פשוטה)</h3>
+                        <p class="section-text">אם נתקלת במונח לא ברור בתוך השלבים, חזור לכאן. זה המילון שמסביר את המונחים המרכזיים של התוכנית.</p>
+                        <div class="glossary-list">
+                            <details class="glossary-item"><summary>Zephyr</summary><div class="glossary-desc">מערכת הפעלה בזמן אמת (RTOS) לעולמות Embedded. בפרויקט הזה Zephyr הוא בסיס הקוד של ה-DUT.</div></details>
+                            <details class="glossary-item"><summary>VPC</summary><div class="glossary-desc">תהליך בדיקה וירטואלי שבודק אם פרופילי Bluetooth עובדים נכון פונקציונלית.</div></details>
+                            <details class="glossary-item"><summary>DUT</summary><div class="glossary-desc">הקוד שלנו (אפליקציית Zephyr) שהוא המוצר שנבדק בפועל.</div></details>
+                            <details class="glossary-item"><summary>Bluetooth Host</summary><div class="glossary-desc">החלק שמטפל בלוגיקה של פרוטוקול Bluetooth (GAP/GATT/L2CAP). זה מה שמעניין אותנו בעיקר בבדיקות פרופילים.</div></details>
+                            <details class="glossary-item"><summary>Bluetooth Controller</summary><div class="glossary-desc">החלק שמטפל ברדיו וב-Link Layer. בסימולציה שלנו אנו מצמצמים תלות בו כדי להתמקד בלוגיקה פונקציונלית.</div></details>
+                            <details class="glossary-item"><summary>HCI</summary><div class="glossary-desc">ממשק סטנדרטי בין Host ל-Controller. דרכו פקודות ואירועים עוברים בין הצדדים.</div></details>
+                            <details class="glossary-item"><summary>H4</summary><div class="glossary-desc">פורמט העברה של HCI מעל UART (סוג framing). מאפשר לנו להעביר תעבורת HCI על קו סריאלי פשוט.</div></details>
+                            <details class="glossary-item"><summary>UART</summary><div class="glossary-desc">ערוץ תקשורת סריאלי פשוט ונפוץ. כאן הוא משמש גשר בין הקוד ב-Renode לבין ה-Tester החיצוני.</div></details>
+                            <details class="glossary-item"><summary>GATT</summary><div class="glossary-desc">שכבת השירותים והמאפיינים ב-BLE. רוב הפרופילים (DIS/BAS/HRS וכו׳) ממומשים עליה.</div></details>
+                            <details class="glossary-item"><summary>GAP</summary><div class="glossary-desc">השכבה שמנהלת גילוי, פרסום וחיבור בין התקנים. בלי GAP אין חיבור שעליו אפשר להריץ GATT.</div></details>
+                            <details class="glossary-item"><summary>PHY / RF</summary><div class="glossary-desc">שכבת הרדיו הפיזית. זו השכבה שקשה לסמלץ במלואה ולכן VPC עוקף חלק ממנה דרך HCI-UART.</div></details>
+                            <details class="glossary-item"><summary>Socket (TCP)</summary><div class="glossary-desc">ערוץ רשת מקומי על המחשב. משמש להעברת תעבורת UART/HCI בין Renode לבין סקריפט הבדיקה.</div></details>
+                            <details class="glossary-item"><summary>Overlay</summary><div class="glossary-desc">קובץ הגדרות נוסף שמלבישים בזמן build בלי לשנות את קוד הליבה. כך אפשר להפעיל מצב בדיקה ייעודי.</div></details>
+                            <details class="glossary-item"><summary>Build</summary><div class="glossary-desc">תהליך קומפילציה שיוצר את קובץ ההרצה ל-DUT. אם build נכשל, לא ממשיכים להרצת בדיקות.</div></details>
+                            <details class="glossary-item"><summary>Pytest Fixture</summary><div class="glossary-desc">מנגנון הכנה/ניקוי לפני ואחרי טסטים. אצלנו הוא מרים ומכבה את Renode ומוודא סביבה נקייה.</div></details>
+                            <details class="glossary-item"><summary>CI/CD</summary><div class="glossary-desc">הרצה אוטומטית בשרת (למשל GitHub). המטרה היא שאותו סט בדיקות יעבוד גם מקומית וגם ב-CI.</div></details>
+                            <details class="glossary-item"><summary>Renode</summary><div class="glossary-desc">סימולטור חומרה שמריץ את ה-DUT כאילו הוא על לוח אמיתי.</div></details>
+                            <details class="glossary-item"><summary>Tester (Bumble)</summary><div class="glossary-desc">סקריפט פייתון שמתקשר עם ה-DUT, מפעיל תרחישים, ובודק תגובות פרוטוקול.</div></details>
+                            <details class="glossary-item"><summary>Twister</summary><div class="glossary-desc">כלי ההרצה של Zephyr שמבצע build, מריץ בדיקות, ואוסף תוצאות ולוגים.</div></details>
+                            <details class="glossary-item"><summary>PASS / FAIL</summary><div class="glossary-desc">תוצאה מדידה של טסט. PASS אומר שהתנהגות בפועל תואמת לקריטריון שהוגדר; FAIL אומר שלא.</div></details>
+                            <details class="glossary-item"><summary>PTS</summary><div class="glossary-desc">כלי ההסמכה הרשמי. VPC לא מחליף אותו, אלא מכין אותנו להגיע אליו עם פחות סיכון.</div></details>
+                        </div>
+                    </section>
+
+                    <section class="onboarding-block" aria-label="תוצרי הצלחה">
+                        <h3 class="phase-heading">מה אנחנו אמורים לקבל בסוף?</h3>
+                        <ul class="onboarding-outcomes">
+                            <li>סט בדיקות יציב שכל מפתח בצוות יכול להריץ מהמחשב שלו.</li>
+                            <li>יכולת לשחזר כשל, להבין סיבה, ולתקן במהירות לפי לוגים ברורים.</li>
+                            <li>בסיס מקצועי חזק לפני הסמכה רשמית עם PTS.</li>
+                        </ul>
+                    </section>
+
+                    <div class="warning-box">
+                        <strong>איך להשתמש במסך הזה:</strong> קרא קודם את שלושת הבלוקים מעל, ואז עבור לניווט השלבים והתקדם מ-1 עד 7 לפי הסדר.
+                    </div>
+                </div>
+
+                <div class="guide-layout">
+
+                    <!-- Sidebar -->
+                    <nav class="guide-nav">
+                        <div class="guide-nav-label">שלבי תוכנית העבודה</div>
+                        <button class="guide-nav-item active" data-phase="1"><span class="step-num">1</span>צנרת Renode</button>
+                        <button class="guide-nav-item" data-phase="2"><span class="step-num">2</span>DUT גנרי</button>
+                        <button class="guide-nav-item" data-phase="3"><span class="step-num">3</span>Tester Bumble</button>
+                        <button class="guide-nav-item" data-phase="4"><span class="step-num">4</span>Quick Wins</button>
+                        <button class="guide-nav-item" data-phase="5"><span class="step-num">5</span>פרופילים חסרים</button>
+                        <button class="guide-nav-item" data-phase="6"><span class="step-num">6</span>Twister E2E</button>
+                        <button class="guide-nav-item" data-phase="7"><span class="step-num">7</span>ריצה וניתוח</button>
+                    </nav>
+
+                    <!-- Phase panels -->
+                    <div class="guide-panel">
+
+                        <!-- Phase 1 -->
+                        <article class="guide-phase active" id="phase-1">
+                            <h2 class="phase-title">שלב 1 — הקמת צנרת Renode + Bridge</h2>
+                            <p class="phase-meta">יעד: לראות HCI Reset דרך Socket</p>
+
+                            <h3 class="phase-heading">מה עושים?</h3>
+                            <ol class="step-list">
+                                <li>יוצרים `boards/vpc_overlay.conf` עם `CONFIG_BT_CTLR=n`, `CONFIG_BT_HCI=y`, `CONFIG_BT_H4=y`</li>
+                                <li>כותבים `ti_renode_bridge.resc` שמחבר `sysbus.uart0` לשרת TCP (פורט `3456`)</li>
+                                <li>בונים ומריצים `samples/bluetooth/hci_uart` עם ה-Overlay</li>
+                                <li>מאמתים תעבורת HCI עם `btmon` או `bumble-hci-bridge`</li>
+                            </ol>
+
+                            <h3 class="phase-heading">מה זה אומר בפועל, ולמה כל תת-שלב חשוב?</h3>
+                            <ul class="substep-details">
+                                <li><strong>תת-שלב 1 — הגדרות Overlay:</strong><span class="substep-line"><strong>מה זה אומר:</strong> מגדירים את Zephyr לעבוד כ-Host דרך HCI על UART, בלי Controller פיזי.</span><span class="substep-line"><strong>מה זה נותן:</strong> אפשר לבדוק לוגיקת BLE בצורה וירטואלית בלי להיתקע על שכבת RF.</span></li>
+                                <li><strong>תת-שלב 2 — Bridge ב-Renode:</strong><span class="substep-line"><strong>מה זה אומר:</strong> מחברים את `sysbus.uart0` ל-Socket TCP ב-Renode.</span><span class="substep-line"><strong>מה זה נותן:</strong> ה-Tester בפייתון מקבל ערוץ תקשורת ישיר אל ה-DUT מתוך המחשב.</span></li>
+                                <li><strong>תת-שלב 3 — הרצת `hci_uart`:</strong><span class="substep-line"><strong>מה זה אומר:</strong> מריצים sample בסיסי ומוכר של Zephyr לפני אפליקציית הפרופילים המלאה.</span><span class="substep-line"><strong>מה זה נותן:</strong> מבודדים תקלות תשתית מוקדם ולא מערבבים אותן עם לוגיקת פרופילים.</span></li>
+                                <li><strong>תת-שלב 4 — אימות HCI:</strong><span class="substep-line"><strong>מה זה אומר:</strong> בודקים שיש פקודות/אירועי HCI אמיתיים (למשל Reset) עם `btmon` או Bumble.</span><span class="substep-line"><strong>מה זה נותן:</strong> הוכחה שהצנרת באמת עובדת מקצה לקצה ולא רק שהמערכת עלתה.</span></li>
+                            </ul>
+
+                            <div class="flow-box">
+                                <strong>איך הזרימה מייצרת את התוצר:</strong> קודם מגדירים תצורה נכונה, אחר כך פותחים ערוץ תקשורת, אחר כך מריצים firmware בסיסי, ולבסוף מאמתים תעבורה. הרצף הזה מבטיח שהתוצר הוא צנרת אמינה, לא רק הרצה חלקית.
+                            </div>
+
+                            <div class="warning-box">
+                                <strong>חשוב:</strong> אם אין HCI Reset יציב, לא עוברים לשלב הבא.
+                            </div>
+
+                            <div class="code-block">west build -b cc1352r1_launchxl samples/bluetooth/hci_uart -- -DDTC_OVERLAY_FILE=boards/vpc_overlay.conf
+west simulate --runner=renode</div>
+
+                            <h3 class="phase-heading">תוצר</h3>
+                            <div class="deliverable-box">
+                                <strong>תוצר:</strong> צנרת תקשורת עובדת בין DUT ב-Renode לבין Tester חיצוני.
+                            </div>
+                        </article>
+
+                        <!-- Phase 2 -->
+                        <article class="guide-phase" id="phase-2">
+                            <h2 class="phase-title">שלב 2 — בניית DUT גנרי</h2>
+                            <p class="phase-meta">יעד: אפליקציה אחת לכל הפרופילים</p>
+
+                            <h3 class="phase-heading">מה עושים?</h3>
+                            <ol class="step-list">
+                                <li>יוצרים `tests/vpc/src/main.c` עם init ל-Bluetooth ורישום שירותים תחת `#ifdef`</li>
+                                <li>יוצרים `tests/vpc/prj.conf` עם קונפיג בסיס משותף</li>
+                                <li>פותחים תיקיית `tests/vpc/profiles/` למימושים חסרים</li>
+                                <li>מוודאים Build נקי עבור קומבינציות פרופילים שונות</li>
+                            </ol>
+
+                            <h3 class="phase-heading">מה זה אומר בפועל, ולמה כל תת-שלב חשוב?</h3>
+                            <ul class="substep-details">
+                                <li><strong>תת-שלב 1 — `main.c` מודולרי:</strong><span class="substep-line"><strong>מה זה אומר:</strong> אפליקציה אחת עם רישום שירותים תחת `#ifdef`, במקום כמה אפליקציות נפרדות.</span><span class="substep-line"><strong>מה זה נותן:</strong> פחות שכפול קוד ופחות תחזוקה, עם שליטה מלאה דרך קונפיג.</span></li>
+                                <li><strong>תת-שלב 2 — `prj.conf` בסיסי:</strong><span class="substep-line"><strong>מה זה אומר:</strong> מרכזים את כל ההגדרות המשותפות של DUT בקובץ בסיס אחד.</span><span class="substep-line"><strong>מה זה נותן:</strong> כל הרצה מתחילה מאותה נקודת ייחוס ולכן התוצאות עקביות יותר.</span></li>
+                                <li><strong>תת-שלב 3 — תיקיית `profiles/`:</strong><span class="substep-line"><strong>מה זה אומר:</strong> כל פרופיל מקבל קבצי `.c/.h` משלו עם לוגיקה ממוקדת.</span><span class="substep-line"><strong>מה זה נותן:</strong> קל לבצע review, לתקן באג נקודתי, ולהוסיף פרופיל בלי לשבור אחרים.</span></li>
+                                <li><strong>תת-שלב 4 — Build matrix:</strong><span class="substep-line"><strong>מה זה אומר:</strong> בודקים קומפילציה בכמה קומבינציות קונפיגורציה של פרופילים.</span><span class="substep-line"><strong>מה זה נותן:</strong> תופסים תלות הדדית והתנגשויות בשלב מוקדם במקום בזמן אינטגרציה מאוחר.</span></li>
+                            </ul>
+
+                            <div class="flow-box">
+                                <strong>איך הזרימה מייצרת את התוצר:</strong> מבנה קוד אחיד + קונפיג בסיסי + מודולריות + בדיקות קומפילציה מייצרים DUT גנרי שאפשר להריץ עליו את כל התוכנית.
+                            </div>
+
+                            <div class="code-block">west build -b cc1352r1_launchxl tests/vpc</div>
+
+                            <h3 class="phase-heading">תוצר</h3>
+                            <div class="deliverable-box">
+                                <strong>תוצר:</strong> DUT אחד מודולרי שמסוגל להדליק/לכבות פרופילים דרך קונפיג.
+                            </div>
+                        </article>
+
+                        <!-- Phase 3 -->
+                        <article class="guide-phase" id="phase-3">
+                            <h2 class="phase-title">שלב 3 — הקמת Tester ב-Python (Bumble)</h2>
+                            <p class="phase-meta">יעד: בודק חיצוני מחובר ל-DUT</p>
+
+                            <h3 class="phase-heading">מה עושים?</h3>
+                            <ol class="step-list">
+                                <li>מתקינים Bumble בסביבת Python</li>
+                                <li>יוצרים `tests/vpc/pytest/conftest.py` לחיבור Socket ו-setup/teardown</li>
+                                <li>יוצרים מחלקת בסיס `BumbleTester` עם פונקציות עזר (connect/discover/read)</li>
+                                <li>מריצים בדיקת Smoke שמוודאת חיבור ו-discovery</li>
+                            </ol>
+
+                            <h3 class="phase-heading">מה זה אומר בפועל, ולמה כל תת-שלב חשוב?</h3>
+                            <ul class="substep-details">
+                                <li><strong>תת-שלב 1 — התקנת Bumble:</strong><span class="substep-line"><strong>מה זה אומר:</strong> מכניסים ספריית BLE בפייתון שיודעת לדבר HCI/GATT ולדמות צד בודק.</span><span class="substep-line"><strong>מה זה נותן:</strong> יש לנו מנוע בדיקה גמיש במקום להסתמך על כלי חומרה ייעודיים.</span></li>
+                                <li><strong>תת-שלב 2 — `conftest.py`:</strong><span class="substep-line"><strong>מה זה אומר:</strong> מנהלים חיבור Socket, setup ו-teardown ברמת pytest fixtures.</span><span class="substep-line"><strong>מה זה נותן:</strong> כל טסט מתחיל נקי ומסתיים נקי, בלי זליגת מצב בין ריצות.</span></li>
+                                <li><strong>תת-שלב 3 — `BumbleTester`:</strong><span class="substep-line"><strong>מה זה אומר:</strong> עוטפים פעולות נפוצות כמו connect/discover/read במחלקה משותפת.</span><span class="substep-line"><strong>מה זה נותן:</strong> כתיבת טסטים מהירה יותר וקוד בדיקות אחיד שקל לתחזק.</span></li>
+                                <li><strong>תת-שלב 4 — Smoke:</strong><span class="substep-line"><strong>מה זה אומר:</strong> מריצים בדיקה קצרה שבודקת חיבור וגילוי שירותים בלבד.</span><span class="substep-line"><strong>מה זה נותן:</strong> אימות מוקדם שהתשתית חיה לפני שנכנסים לסצנריוס מורכבים.</span></li>
+                            </ul>
+
+                            <div class="flow-box">
+                                <strong>איך הזרימה מייצרת את התוצר:</strong> מתקינים מנוע בדיקה, עוטפים אותו בפיקצ'רים ו-abstractions, ומאמתים הכל ב-Smoke. כך מתקבל Tester יציב שאפשר לבנות עליו סט בדיקות מלא.
+                            </div>
+
+                            <div class="code-block">pip install bumble
+pytest tests/vpc/pytest -k smoke</div>
+
+                            <h3 class="phase-heading">תוצר</h3>
+                            <div class="deliverable-box">
+                                <strong>תוצר:</strong> Tester חיצוני שמתחבר ל-DUT ומבצע פעולות GATT בסיסיות.
+                            </div>
+                        </article>
+
+                        <!-- Phase 4 -->
+                        <article class="guide-phase" id="phase-4">
+                            <h2 class="phase-title">שלב 4 — Quick Wins לפרופילים קיימים</h2>
+                            <p class="phase-meta">יעד: להוכיח שהתשתית יציבה על DIS/BAS/HRS/HID</p>
+
+                            <h3 class="phase-heading">מה עושים?</h3>
+                            <ol class="step-list">
+                                <li>מממשים בדיקות DIS לקריאת `Manufacturer Name`</li>
+                                <li>מממשים בדיקות BAS לקריאה ו-Notification</li>
+                                <li>מוסיפים בדיקות HRS/HID בסיסיות כדי לוודא discover/connect/notify</li>
+                                <li>מייצבים את ה-run כך שיעבור באופן עקבי</li>
+                            </ol>
+
+                            <h3 class="phase-heading">מה זה אומר בפועל, ולמה כל תת-שלב חשוב?</h3>
+                            <ul class="substep-details">
+                                <li><strong>תת-שלב 1 — DIS:</strong><span class="substep-line"><strong>מה זה אומר:</strong> בודקים קריאה לשדה סטטי כמו `Manufacturer Name`.</span><span class="substep-line"><strong>מה זה נותן:</strong> אימות בסיסי ש-discovery ו-Read עובדים נכון מול ה-DUT.</span></li>
+                                <li><strong>תת-שלב 2 — BAS:</strong><span class="substep-line"><strong>מה זה אומר:</strong> בודקים גם קריאה וגם Notification על שינוי ערך סוללה.</span><span class="substep-line"><strong>מה זה נותן:</strong> כיסוי גם למסלול סינכרוני וגם למסלול אירועים אסינכרוני.</span></li>
+                                <li><strong>תת-שלב 3 — HRS/HID:</strong><span class="substep-line"><strong>מה זה אומר:</strong> מוסיפים שירותים עם התנהגות מעט שונה (למשל notify ודו-שיח קלט).</span><span class="substep-line"><strong>מה זה נותן:</strong> ביטחון שהתשתית לא מותאמת רק לשירות פשוט יחיד.</span></li>
+                                <li><strong>תת-שלב 4 — ייצוב ריצות:</strong><span class="substep-line"><strong>מה זה אומר:</strong> מריצים כמה פעמים ומטפלים ב-timeouts וב-flakiness.</span><span class="substep-line"><strong>מה זה נותן:</strong> baseline אמין שאפשר לסמוך עליו לפני כניסה לשלב המורכב.</span></li>
+                            </ul>
+
+                            <div class="flow-box">
+                                <strong>איך הזרימה מייצרת את התוצר:</strong> מתחילים מפשוט (DIS), מוסיפים מורכבות (BAS/HRS/HID), ואז מוודאים יציבות. כך מתקבל baseline ירוק שאפשר לסמוך עליו לפני הפרופילים החסרים.
+                            </div>
+
+                            <div class="code-block">pytest tests/vpc/pytest -k "dis or bas or hrs or hid"</div>
+
+                            <h3 class="phase-heading">תוצר</h3>
+                            <div class="deliverable-box">
+                                <strong>תוצר:</strong> baseline ירוק על פרופילים קיימים.
+                            </div>
+                        </article>
+
+                        <!-- Phase 5 -->
+                        <article class="guide-phase" id="phase-5">
+                            <h2 class="phase-title">שלב 5 — מימוש ובדיקות לפרופילים חסרים</h2>
+                            <p class="phase-meta">יעד: BPS/WSS/ScPS + ANCS/AMS</p>
+
+                            <h3 class="phase-heading">מה עושים?</h3>
+                            <ol class="step-list">
+                                <li>מממשים BPS/WSS/ScPS בצד DUT + בדיקות Bumble כ-GATT Client</li>
+                                <li>מממשים ANCS/AMS כך שה-DUT לקוח, וה-Tester מדמה שרת Apple</li>
+                                <li>מוודאים רצפי שליטה (Enable Indications, Control Point, Notification flow)</li>
+                                <li>מתעדים לכל בדיקה מה Pass/Fail המדויק</li>
+                            </ol>
+
+                            <h3 class="phase-heading">מה זה אומר בפועל, ולמה כל תת-שלב חשוב?</h3>
+                            <ul class="substep-details">
+                                <li><strong>תת-שלב 1 — פרופילים סטנדרטיים:</strong><span class="substep-line"><strong>מה זה אומר:</strong> מממשים BPS/WSS/ScPS בצד DUT ובודקים אותם עם Bumble כ-GATT Client.</span><span class="substep-line"><strong>מה זה נותן:</strong> כיסוי ישיר להתנהגות GATT סטנדרטית של שירותים רפואיים/מדידה.</span></li>
+                                <li><strong>תת-שלב 2 — ANCS/AMS:</strong><span class="substep-line"><strong>מה זה אומר:</strong> ה-Tester מדמה שרת Apple וה-DUT פועל כלקוח שמבצע discovery וכתיבות.</span><span class="substep-line"><strong>מה זה נותן:</strong> בדיקה שמכבדת את תפקידי הצדדים האמיתיים בפרופילי Apple.</span></li>
+                                <li><strong>תת-שלב 3 — רצפי שליטה:</strong><span class="substep-line"><strong>מה זה אומר:</strong> בודקים Enable Indications, כתיבה ל-Control Point וזרימת Notifications בסדר הנכון.</span><span class="substep-line"><strong>מה זה נותן:</strong> מונע מצב של &ldquo;PASS מזויף&rdquo; שבו יש חיבור אבל הפרוטוקול לא מתבצע נכון.</span></li>
+                                <li><strong>תת-שלב 4 — תיעוד Pass/Fail:</strong><span class="substep-line"><strong>מה זה אומר:</strong> לכל טסט מגדירים תנאי הצלחה וכישלון מדידים וברורים.</span><span class="substep-line"><strong>מה זה נותן:</strong> החלטות עקביות, Debug מהיר, ויכולת handoff נוחה בין מפתחים.</span></li>
+                            </ul>
+
+                            <div class="flow-box">
+                                <strong>איך הזרימה מייצרת את התוצר:</strong> מממשים, מדמים צד נגדי נכון, בודקים רצפים קריטיים, ומתעדים תוצאות. כך מתקבל כיסוי פונקציונלי אמיתי ולא סימון וי שטחי.
+                            </div>
+
+                            <h3 class="phase-heading">תוצר</h3>
+                            <div class="deliverable-box">
+                                <strong>תוצר:</strong> כיסוי פונקציונלי מלא לכל הפרופילים שבסקופ.
+                            </div>
+                        </article>
+
+                        <!-- Phase 6 -->
+                        <article class="guide-phase" id="phase-6">
+                            <h2 class="phase-title">שלב 6 — אינטגרציה מלאה עם Twister</h2>
+                            <p class="phase-meta">יעד: פקודה אחת שמריצה Build + Renode + Pytest</p>
+
+                            <h3 class="phase-heading">מה עושים?</h3>
+                            <ol class="step-list">
+                                <li>מגדירים `testcase.yaml` עם `harness: pytest` לכל פרופיל</li>
+                                <li>מזריקים `DTC_OVERLAY_FILE=boards/vpc_overlay.conf` ב-`extra_args`</li>
+                                <li>מפעילים fixture שמרים Renode ברקע בתחילת בדיקה ומכבה בסוף</li>
+                                <li>מוודאים ריצה עקבית ב-local וב-CI</li>
+                            </ol>
+
+                            <h3 class="phase-heading">מה זה אומר בפועל, ולמה כל תת-שלב חשוב?</h3>
+                            <ul class="substep-details">
+                                <li><strong>תת-שלב 1 — `harness: pytest`:</strong><span class="substep-line"><strong>מה זה אומר:</strong> מגדירים ל-Twister להריץ את הטסטים דרך Pytest באופן רשמי.</span><span class="substep-line"><strong>מה זה נותן:</strong> אותה פקודת הרצה מייצרת Build והרצת בדיקות תחת orchestration אחד.</span></li>
+                                <li><strong>תת-שלב 2 — `extra_args`:</strong><span class="substep-line"><strong>מה זה אומר:</strong> מזריקים את Overlay של VPC לכל build מתוך `testcase.yaml`.</span><span class="substep-line"><strong>מה זה נותן:</strong> אין תלות בזיכרון של המפתח להוסיף דגלים ידנית בכל ריצה.</span></li>
+                                <li><strong>תת-שלב 3 — fixture ל-Renode:</strong><span class="substep-line"><strong>מה זה אומר:</strong> מעלים/מורידים Renode אוטומטית בתחילת/סוף כל ריצה.</span><span class="substep-line"><strong>מה זה נותן:</strong> בדיקות נקיות ויציבות יותר, בלי תהליכים תקועים מהרצה קודמת.</span></li>
+                                <li><strong>תת-שלב 4 — Local + CI:</strong><span class="substep-line"><strong>מה זה אומר:</strong> מריצים את אותו סט ב-local וב-CI ומשווים תוצאות.</span><span class="substep-line"><strong>מה זה נותן:</strong> ביטחון שהפייפליין שחי בשרת באמת מייצג את מה שהמפתח רואה מקומית.</span></li>
+                            </ul>
+
+                            <div class="flow-box">
+                                <strong>איך הזרימה מייצרת את התוצר:</strong> מגדירים orchestration, מקבעים קונפיג, שולטים בסביבת הריצה, ומאמתים עקביות. כך מתקבל Pipeline E2E שמופעל בפקודה אחת.
+                            </div>
+
+                            <div class="code-block">west twister -T tests/vpc -p cc1352r1_launchxl --enable-slow</div>
+
+                            <h3 class="phase-heading">תוצר</h3>
+                            <div class="deliverable-box">
+                                <strong>תוצר:</strong> Pipeline בדיקה אוטומטי מקצה לקצה.
+                            </div>
+                        </article>
+
+                        <!-- Phase 7 -->
+                        <article class="guide-phase" id="phase-7">
+                            <h2 class="phase-title">שלב 7 — ריצה סופית וניתוח תוצאות</h2>
+                            <p class="phase-meta">יעד: דו"ח ברור של PASS/FAIL + לוגים ל-debug</p>
+
+                            <h3 class="phase-heading">מה עושים?</h3>
+                            <ol class="step-list">
+                                <li>מריצים את כל סט הבדיקות מהתחלה ועד הסוף</li>
+                                <li>בכשל: בודקים לוגי Renode (בצד DUT) + לוגי Bumble (בצד פרוטוקול)</li>
+                                <li>מתקנים וחוזרים לריצה מלאה עד יציבות</li>
+                                <li>מעלים דו"ח תוצאות קצר שמובן גם לחבר צוות חדש</li>
+                            </ol>
+
+                            <h3 class="phase-heading">מה זה אומר בפועל, ולמה כל תת-שלב חשוב?</h3>
+                            <ul class="substep-details">
+                                <li><strong>תת-שלב 1 — Full run:</strong><span class="substep-line"><strong>מה זה אומר:</strong> מריצים את כל סט הבדיקות מקצה לקצה ולא רק טסטים נקודתיים.</span><span class="substep-line"><strong>מה זה נותן:</strong> תמונת מצב אמיתית של מוכנות המערכת לפני מסירה או אינטגרציה.</span></li>
+                                <li><strong>תת-שלב 2 — קריאת לוגים משני צדדים:</strong><span class="substep-line"><strong>מה זה אומר:</strong> מנתחים גם את לוגי Renode (DUT) וגם את לוגי Bumble (פרוטוקול).</span><span class="substep-line"><strong>מה זה נותן:</strong> מאתרים מהר אם הכשל הוא במימוש הפרופיל או בסקריפט הבדיקה.</span></li>
+                                <li><strong>תת-שלב 3 — תיקון וחזרה:</strong><span class="substep-line"><strong>מה זה אומר:</strong> מתקנים ואז מריצים מחדש עד שהכשל לא חוזר.</span><span class="substep-line"><strong>מה זה נותן:</strong> ודאות שהתיקון סגר את הבעיה בשורש ולא רק במקרה ספציפי.</span></li>
+                                <li><strong>תת-שלב 4 — דו"ח קצר וברור:</strong><span class="substep-line"><strong>מה זה אומר:</strong> מסכמים מה עבר, מה נכשל, ומה נשאר פתוח בשפה פשוטה.</span><span class="substep-line"><strong>מה זה נותן:</strong> כל מפתח חדש יכול להיכנס לפרויקט ולהבין מצב בלי תלות בידע סמוי.</span></li>
+                            </ul>
+
+                            <div class="flow-box">
+                                <strong>איך הזרימה מייצרת את התוצר:</strong> מודדים, מנתחים, מתקנים, ומדווחים. זה הופך את הסטטוס לסמיך ומבוסס נתונים, עם יכולת handoff אמיתית.
+                            </div>
+
+                            <div class="warning-box">
+                                <strong>הבהרה:</strong> VPC נותן שקילות פונקציונלית ל-PTS, אך לא מחליף הסמכה רשמית של Bluetooth SIG.
+                            </div>
+
+                            <h3 class="phase-heading">תוצר</h3>
+                            <div class="deliverable-box">
+                                <strong>תוצר:</strong> דו"ח VPC ברור ואמין שמאפשר המשך עבודה בלי תלות ב-PTS פיזי.
+                            </div>
+                        </article>
+
+                    </div><!-- /guide-panel -->
+                </div><!-- /guide-layout -->
+            </section>
+
+
+            <!-- ====================================================
+                 TAB 3 — FAQ
+                 ==================================================== -->
+            <section id="faq" class="tab-pane">
+
+                <div class="section">
+                    <h2 class="section-title">שאלות נפוצות</h2>
+                </div>
+
+                <details class="faq-item">
+                    <summary>מה ההבדל בין Owner ל-Reviewer?</summary>
+                    <div class="faq-body">
+                        <p><strong>Owner (בעלים):</strong></p>
+                        <ul>
+                            <li>אחראי על כל הדרך: Spec, Code, בדיקות VPC ותיעוד</li>
+                            <li>כותב קוד וקובע צורה</li>
+                            <li>פותח PR</li>
+                            <li>מתקן לפי תגובות ה-Reviewer</li>
+                        </ul>
+                        <p><strong>Reviewer (בודק):</strong></p>
+                        <ul>
+                            <li>בדיקת קוד לטיב ודיוק</li>
+                            <li>אישור או בקשת שינויים</li>
+                            <li>לא יכול לאשר PR של עצמו</li>
+                            <li>מוודא ש-DoD מתקיים</li>
+                        </ul>
+                    </div>
+                </details>
+
+                <details class="faq-item">
+                    <summary>מה זה Definition of Done?</summary>
+                    <div class="faq-body">
+                        <p>DoD = רשימת תנאים שחייבת להתקיים כדי להגיד &ldquo;הפרופיל סיים&rdquo;.</p>
+                        <p><strong>דוגמה:</strong></p>
+                        <ul>
+                            <li>צנרת Renode + Socket יציבה</li>
+                            <li>DUT גנרי מתקמפל ומתחבר</li>
+                            <li>בדיקות Pytest עוברות מקומית</li>
+                            <li>הרצת Twister עוברת</li>
+                            <li>לוגים ותיעוד כשל/תיקון מעודכנים</li>
+                        </ul>
+                    </div>
+                </details>
+
+                <details class="faq-item">
+                    <summary>איך מריצים בדיקה מקצה לקצה?</summary>
+                    <div class="faq-body">
+                        <p>הרצה מלאה מתבצעת עם Twister, והמערכת מרימה את Renode + Pytest כחלק מהתהליך.</p>
+                        <div class="code-block">west twister -T tests/vpc -p cc1352r1_launchxl --enable-slow</div>
+                        <p>בכשל, מתחילים מקריאת לוג Renode ולוג Bumble כדי להבין האם הבעיה בצד DUT או בצד ה-Tester.</p>
+                    </div>
+                </details>
+
+                <details class="faq-item">
+                    <summary>מה ההבדל בין VPC ל-PTS?</summary>
+                    <div class="faq-body">
+                        <p><strong>VPC</strong> הוא מנגנון בדיקות וירטואלי שמיועד לפיתוח, רגרסיה ו-CI.</p>
+                        <p><strong>PTS</strong> הוא כלי הסמכה רשמי של Bluetooth SIG.</p>
+                        <p>כלומר: VPC מאיץ פיתוח ומקטין סיכון, אבל לא מחליף אישור הסמכה רשמי.</p>
+                    </div>
+                </details>
+
+                <details class="faq-item">
+                    <summary>מה אם אני תקוע?</summary>
+                    <div class="faq-body">
+                        <ul>
+                            <li><strong>Renode לא עולה?</strong> בדוק קודם את קובץ `.resc` וה-connector ל-UART</li>
+                            <li><strong>אין HCI traffic?</strong> ודא שה-Overlay כולל `CONFIG_BT_H4=y` ו-`CONFIG_BT_CTLR=n`</li>
+                            <li><strong>בדיקה נופלת בלי סיבה ברורה?</strong> פתח issue עם לוג DUT ולוג Bumble צמודים</li>
+                            <li><strong>Spec לא ברור?</strong> תעד הנחות ותאם עם Reviewer לפני כתיבת קוד נוסף</li>
+                        </ul>
+                    </div>
+                </details>
+
+                <details class="faq-item">
+                    <summary>מאיפה מפתח חדש מתחיל?</summary>
+                    <div class="faq-body">
+                        <p>התחלה מומלצת ליום הראשון:</p>
+                        <ul>
+                            <li>פותחים את לשונית &ldquo;תוכנית עבודה&rdquo; ועוברים על שלב 1 במלואו</li>
+                            <li>מריצים sanity של `hci_uart` עד שרואים HCI Reset</li>
+                            <li>רק אחרי זה עוברים ל-DUT הגנרי ולבדיקות Pytest</li>
+                        </ul>
+                    </div>
+                </details>
+            </section>
+
+        </div><!-- /app-body -->
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <p>מעקב בדיקות BLE וירטואליות (VPC) — TI CC2745R10-Q1</p>
+            <p>עדכון אחרון: פברואר 2026</p>
+        </footer>
+    </main>
+</div>
+
+<!-- Toast -->
+<div class="save-toast" id="saveToast">נשמר</div>
+
+<!-- JS -->
+<script src="js/help.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>

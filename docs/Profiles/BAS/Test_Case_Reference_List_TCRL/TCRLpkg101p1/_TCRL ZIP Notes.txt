@@ -1,0 +1,54 @@
+This is the pkg101p1 TCRL:
+
+Modified with pkg101p1 (Dec 2025):
+
+• VAP_VAS.TCRL.pkg101p1-addition
+  o Adoption of VAP/VAS 1.0
+
+• IOPT.TCRL.p8 
+  o Updates from VAS 1.0 adoption
+
+• HFP.TCRL.pkg101p1-addition
+  o Adoption of HFP 1.10
+
+• Integrated Errata - Traditional TCRL_p9
+
+Unmodified since pkg101p0 (Nov 2025):
+• Core.TCRL.p49
+  o Adoption of Core 6.2 
+  o Maintenance updates from TSEs
+
+• GATTBased.TCRL.p27
+  o Adoption of CWS/CWP 1.0
+  o Maintenance updates from TSEs
+
+• GATTBasedAudio.TCRL.p8
+  o Adoption of CSIS/CSIP 1.1 
+  o 1 specification maintenance update: PBP 1.0.2
+  o Maintenance updates from TSEs
+
+• MESH.MMDL.TCRL.p15
+  o 2 specification maintenance updates: Mesh 1.1.1, MMDL 1.1.1
+  o Maintenance updates from TSEs
+ 
+• Traditional.TCRL.p47
+  o 1 specification maintenance update: HID 1.1.2
+  o Maintenance updates from TSEs
+
+• Integrated Errata - Core TCRL_p8
+• Integrated Errata - GATTBasedAudio TCRL_p6
+• Integrated Errata - MESH.MMDL TCRL_p6
+
+Unmodified since pkg100:
+• Integrated Errata - GATTBased TCRL_p8
+ 
+
+
+
+
+
+
+
+
+
+
