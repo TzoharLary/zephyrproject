@@ -1,0 +1,10 @@
+[submodule "zephyr"]
+	path = zephyr
+	url = https://github.com/TexasInstruments/simplelink-zephyr.git
+	branch = v3.7.0-ti-9.14
+	ignore = dirty
+[submodule "auto-pts"]
+	path = auto-pts
+	url = https://github.com/intel/auto-pts.git
+	branch = master
+	ignore = dirty
