@@ -1,6 +1,12 @@
 # 🚀 פרויקט Zephyr עם TI CC2745R10-Q1
 
-ברוכים הבאים! זהו סביבת פיתוח מלאה של **Zephyr RTOS** עם תמיכה בלוח **TI LP-EM-CC2745R10-Q1**, כולל כלי בדיקות Bluetooth, סימולציה BabbleSim, וכלים להנדסה מוככת.
+ברוכים הבאים! זהו סביבת פיתוח מלאה של **Zephyr RTOS** עם תמיכה בלוח **TI LP-EM-CC2745R10-Q1**, כולל כלי בדיקות Bluetooth, סימולציה BabbleSim, וכלים להנדסה מוטמעת.
+
+> **מבנה הריפו:** פרויקט זה מנוהל כ-Git Repository ראשי המכיל שני **Git Submodules**:
+> - `zephyr/` — [TexasInstruments/simplelink-zephyr](https://github.com/TexasInstruments/simplelink-zephyr) (ענף: `v3.7.0-ti-9.14`)
+> - `auto-pts/` — [intel/auto-pts](https://github.com/intel/auto-pts) (ענף: `master`)
+>
+> שאר התיקיות (`modules/`, `bootloader/` וכו') מנוהלות על ידי **West** ואינן חלק מה-Git של פרויקט זה.
 
 ---
 
@@ -67,78 +73,61 @@ OpenOCD (צריבה וניקוד)
 ### 📂 מבנה מלא (עם הסברים)
 
 ```
-/Users/tzoharlary/zephyrproject/
+/Users/tzoharlary/zephyrproject/   ← ריפו Git ראשי
 │
 ├─── 🎯 START HERE ────────────────────────────────────────
-│    ├── README.md                  ← אתה כאן! תחילת המסע
-│    ├── docs/README.md             ← מדריך תיעוד מפורט
-│    └── west_boards.txt, workspace_projects.txt
+│    ├── README.md                  ← אתה כאן!
+│    ├── docs/                      ← תיעוד מלא
+│    ├── west_boards.txt            ← רשימת לוחות West
+│    └── workspace_projects.txt    ← פרויקטים פעילים
 │
 ├─── 📚 DOCUMENTATION ─────────────────────────────────────
 │    └── docs/
-│        ├── README.md              📍 START: מדריך לתיקייה זו
-│        ├── CHANGELOG.md           📋 יומן שינויים מלא
-│        ├── plans/                             🗺️ תוכניות עבודה
-│        │   └── ble_pts_plan.md
-│        ├── phases_tracking/                   🎛️ דשבורד מעקב VPC
-│        └── reports/                           📑 דוחות לפי תחום
-│            ├── build-and-flash/
-│            ├── test-automation/
+│        ├── README.md              📍 מדריך לתיקייה
+│        ├── CHANGELOG.md           📋 יומן שינויים
+│        ├── plans/                 🗺️ תוכניות עבודה
+│        ├── phases_tracking/       🎛️ דשבורד מעקב (HTML)
+│        ├── Profiles/              📄 פרופילי Bluetooth (BAS, DIS, HID, HRS)
+│        ├── pts_report_he/         📊 דוחות PTS בעברית (HTML)
+│        └── reports/               📑 דוחות לפי תחום
 │            ├── bluetooth/
-│            └── simulation/
+│            ├── build-and-flash/
+│            ├── simulation/
+│            ├── test-automation/
+│            └── templates/
 │
-├─── 🔧 ZEPHYR CORE ───────────────────────────────────────
-│    └── zephyr/                    🏆 ליבת Zephyr RTOS (קוד פתוח)
-│        ├── boards/ti/lp_em_cc2745r10_q1/  🎛️ תצורת הלוח שלנו
-│        ├── tests/                 ✅ בדיקות יחידה ואינטגרציה
-│        ├── samples/               💡 דוגמאות (blinky, hello, וכו')
-│        ├── CMakeLists.txt         🔨 Build configuration
-│        └── ... (קבצים נוספים)
+├─── 🔧 ZEPHYR CORE — Git Submodule ────────────────────────
+│    └── zephyr/                    🏆 TexasInstruments/simplelink-zephyr
+│        ├── boards/ti/             🎛️ תצורות לוחות TI
+│        ├── tests/                 ✅ בדיקות
+│        ├── samples/               💡 דוגמאות
+│        └── west.yml               📋 West Manifest
 │
 ├─── 🤖 BLUETOOTH TESTING ──────────────────────────────────
-│    ├── auto-pts/                  🧪 AutoPTS - בדיקות Compliance
+│    ├── auto-pts/                  🧪 Git Submodule — intel/auto-pts
 │    │   ├── autoptsclient_bot.py   🤖 Bot אוטומטי
 │    │   ├── autoptsserver.py       🖥️ שרת PTS
-│    │   └── autopts/               💻 קוד ראשי
+│    │   └── autopts/              💻 קוד ראשי
 │    │
-│    └── phys_bt_test/              📱 בדיקות Bluetooth פיזיות
-│        ├── runner.py              🏃 מריץ בדיקות
-│        ├── config.yaml            ⚙️ הגדרות
-│        ├── functional_tests/      🧮 טסטים פונקציונליים
-│        └── utils/                 🛠️ כלים עזר
+│    └── phys_bt_test/             📱 בדיקות Bluetooth פיזיות (קוד שלנו)
+│        ├── runner.py
+│        ├── config.yaml
+│        ├── functional_tests/
+│        └── utils/
 │
-├─── 🏗️ BUILD OUTPUTS ─────────────────────────────────────
-│    ├── build/                     📦 תוצאות Build (Ninja, .o, .elf)
-│    ├── build_central/             📦 Build נוסף
-│    └── twister-out/               📊 דוחות בדיקות
-│        ├── twister-out/           (הרצה הנוכחית)
-│        ├── twister-out.1/         (היסטוריה)
-│        ├── twister-out.2/
-│        └── twister-out.3/
+├─── 🔌 MODULES & TOOLS (West-managed, לא ב-Git) ──────────
+│    ├── modules/                   📚 West modules חיצוניים (HAL, Crypto...)
+│    ├── bootloader/mcuboot/        🔐 MCUBoot
+│    └── tools/edtt, tools/net-tools/  🧪 כלי בדיקות חיצוניים
 │
-├─── 🔌 MODULES & TOOLS ────────────────────────────────────
-│    ├── modules/                   📚 מודולים חיצוניים
-│    │   ├── bsim_hw_models/        🌐 סימולציה BabbleSim
-│    │   ├── crypto/                🔐 ספריות הצפנה
-│    │   ├── hal/                   ⚙️ Hardware Abstraction Layer
-│    │   └── lib/                   📦 ספריות נוספות
-│    │
-│    ├── ti-openocd/                🛠️ OpenOCD של TI
-│    │   ├── bin/                   🖥️ executable של OpenOCD
-│    │   └── share/                 📄 קבצי הגדרה
-│    │
-│    ├── bootloader/                🔐 Secure Bootloader
-│    │   └── mcuboot/               🚀 MCUBoot של TI
-│    │
-│    └── tools/                     🔨 כלים שונים
-│        ├── edtt/                  🧪 EDTT - כלי בדיקות
-│        ├── net-tools/             🌐 כלי רשת
-│        └── twister_report.py      📊 יוצר דוחות
+├─── 🛠️ LOCAL TOOLS ─────────────────────────────────────────
+│    ├── ti-openocd/                🛠️ OpenOCD של TI (צריבה + ניקוד)
+│    └── tools/twister_report.py    📊 יוצר דוחות Twister
 │
 └─── ⚙️ CONFIGURATION ──────────────────────────────────────
-     ├── .west/                     📋 הגדרות West Manifest
-     ├── .env                       🔑 משתנים סביבה
-     └── .venv/                     🐍 Python 3 Virtual Environment
+     ├── .west/                     📋 הגדרות West (לא ב-Git)
+     ├── .env                       🔑 משתנים סביבה (לא ב-Git)
+     └── .venv/                     🐍 Python Virtual Environment (לא ב-Git)
 ```
 
 ---
@@ -297,7 +286,7 @@ openocd -f ti-openocd/share/openocd/scripts/board/lp_em_cc2745r10_q1.cfg
 | **לוחות TI בפרויקט** | 50+ לוחות (כולל שלנו CC2745R10) |
 | **אפליקציות לדוגמה** | 100+ דוגמאות |
 | **בדיקות** | 1000+ בדיקות |
-| **תיעוד** | 11 קבצי md בתיקיית docs |
+| **תיעוד** | 15 קבצי markdown בתיקיית `docs/` |
 
 ---
 
@@ -319,7 +308,7 @@ openocd -f ti-openocd/share/openocd/scripts/board/lp_em_cc2745r10_q1.cfg
 ## 📖 מפת קריאה מומלצת
 
 ### 👶 למתחילים (שעה 1)
-1. קরא את סעיף [🎯 התחלה מהירה](#-התחלה-מהירה-30-שניות) כאן
+1. קרא את סעיף [🎯 דוגמא מהירה](#-דוגמא-מהירה) כאן
 2. בצע את הפקודות - עד שה-LED יהבהב
 3. קרא [`docs/README.md`](docs/README.md) - מדריך לתיעוד
 
@@ -490,14 +479,14 @@ tests:
 
 | תיקייה | תוכן | דרוש ל- |
 |-------|------|---------|
-| **`docs/`** | 11 קבצי תיעוד מפורטים בעברית | הבנת כל הsystem |
-| **`zephyr/`** | קוד ה-RTOS העיקרי (5M+ שורות) | בנייה וטעינה |
-| **`auto-pts/`** | כלי בדיקות Bluetooth Automated | בדיקות compliance |
-| **`build/`, `build_central/`** | תוצאות CMake (object files, elf) | ניקוד וצריבה |
-| **`modules/`** | ספריות חיצוניות (BabbleSim, Crypto) | בדיקות וביטחון |
+| **`docs/`** | 15 קבצי markdown + דשבורדים HTML | הבנת כל הsystem |
+| **`zephyr/`** | Git Submodule — קוד RTOS (5M+ שורות) | בנייה וטעינה |
+| **`auto-pts/`** | Git Submodule — כלי בדיקות AutoPTS | בדיקות compliance |
+| **`phys_bt_test/`** | בדיקות Bluetooth פיזיות (קוד שלנו) | בדיקות מותאמות |
+| **`modules/`** | West modules חיצוניים — **לא ב-Git** | (מנוהל ע"י West) |
 | **`ti-openocd/`** | כלי צריבה וניקוד של TI | צריבה פיזית |
-| **`tools/`** | כלים שונים (EDTT, Twister reports) | בדיקות ודוחות |
-| **`twister-out/`** | דוחות בדיקות (JSON, XML, HTML) | ניתוח בדיקות |
+| **`tools/`** | כלים: `twister_report.py` + West tools | דוחות ובדיקות |
+| **`build/`, `twister-out/`** | נוצרים locally בלבד — **אינם ב-Git** | (generated) |
 
 ---
 
@@ -529,13 +518,13 @@ west boards
 
 **אתה מוכן!** בחר מה אתה רוצה לעשות:
 
-1. **👶 מתחיל** → בצע את [🎯 התחלה מהירה](#-התחלה-מהירה-30-שניות)
+1. **👶 מתחיל** → בצע את [🎯 דוגמא מהירה](#-דוגמא-מהירה)
 2. **🧑‍💻 מפתח** → קרא [`docs/README.md`](docs/README.md)
 3. **🧪 בדיקות** → קפוץ לסעיף [🧪 בדיקות ובדיקה](#-בדיקות-ובדיקה-qa)
 4. **❓ יש לך שאלה** → בדוק [📞 שאלות נפוצות](#-שאלות-נפוצות)
 
 ---
 
-**עדכון אחרון:** פברואר 2026
+**עדכון אחרון:** יולי 2025
 
 🚀 **עכשיו בואו נתחיל!**
