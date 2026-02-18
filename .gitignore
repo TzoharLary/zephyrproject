@@ -51,6 +51,25 @@ pts_offline_inventory/reports/payload_investigation/logs/
 pts_offline_inventory/reports/*raw*.txt
 pts_offline_inventory/reports/tcid_matches_*
 pts_offline_inventory/**/.DS_Store
+pts_offline_inventory/reports/tcids_by_prefix/
+pts_offline_inventory/reports/prefix_counts*.txt
+pts_offline_inventory/reports/tcid_*.tsv
+pts_offline_inventory/reports/tcid_match_files_top.txt
+pts_offline_inventory/reports/tcids_unique_all.txt
+pts_offline_inventory/reports/tcids_unmapped.txt
+pts_offline_inventory/reports/tcids_unmapped_with_source.tsv
+pts_offline_inventory/reports/scan_coverage_inventory.tsv
+pts_offline_inventory/reports/outside_previous_scope*.tsv
+pts_offline_inventory/reports/archive_extraction_log.tsv
+pts_offline_inventory/reports/ets_name_hits.txt
+pts_offline_inventory/reports/xml_signature_files.txt
+pts_offline_inventory/reports/tcids_new_vs_extended.txt
+pts_offline_inventory/reports/payload_investigation/*.tsv
+pts_offline_inventory/reports/payload_investigation/investigation_summary.md
+pts_offline_inventory/reports/payload_investigation/msi_tables/
+pts_offline_inventory/reports/untracked_curated/*
+!pts_offline_inventory/reports/untracked_curated/
+!pts_offline_inventory/reports/untracked_curated/*.md
 
 # Secrets and env files
 .env
