@@ -39,8 +39,18 @@ bootloader/
 tools/edtt/
 tools/net-tools/
 
-# Embedded git repos in pts_offline_inventory
-pts_offline_inventory/extracted/python_automation/
+# pts_offline_inventory — exclude binaries, payloads, temp artifacts, heavy logs
+pts_offline_inventory/extracted/
+pts_offline_inventory/tmp/
+pts_offline_inventory/scan_workspace/
+pts_offline_inventory/reports/payload_investigation/setup_scan/
+pts_offline_inventory/reports/payload_investigation/extract_msi/
+pts_offline_inventory/reports/payload_investigation/extract_cab/
+pts_offline_inventory/reports/payload_investigation/firmware_scan/
+pts_offline_inventory/reports/payload_investigation/logs/
+pts_offline_inventory/reports/*raw*.txt
+pts_offline_inventory/reports/tcid_matches_*
+pts_offline_inventory/**/.DS_Store
 
 # Secrets and env files
 .env

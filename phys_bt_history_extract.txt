@@ -1,0 +1,48 @@
+source .venv/bin/activate && west build -p always -b lp_em_cc2745r10_q1/cc2745r10_q1 zephyr/tests/bluetooth/tester
+cp /Users/tzoharlary/.gemini/antigravity/brain/97795329-8da3-461d-8aea-ef8c202fbb27/physical_bluetooth_testing_report.md /Users/tzoharlary/zephyrproject/physical_bluetooth_testing_report.md
+west twister --help
+west twister --help | grep -i "warn"
+cp /Users/tzoharlary/.gemini/antigravity/brain/97795329-8da3-461d-8aea-ef8c202fbb27/edtt_test_specs_report.md /Users/tzoharlary/zephyrproject/edtt_test_specs_report.md
+mkdir -p phys_bt_test/utils phys_bt_test/functional_tests/demo_test/src
+python3 phys_bt_test/runner.py --test-dir phys_bt_test/functional_tests/demo_test --only-build
+python3 phys_bt_test/runner.py --config phys_bt_test/config.yaml --test-dir phys_bt_test/functional_tests/demo_test --only-build
+rm -rf build_central && west build -b nrf52840dk/nrf52840 -d build_central phys_bt_test/functional_tests/demo_test -- -DCONFIG_BT_CENTRAL=y
+west twister --help
+west twister --help 2>&1 | head -n 120
+----
+cp /Users/tzoharlary/.gemini/antigravity/brain/97795329-8da3-461d-8aea-ef8c202fbb27/physical_bluetooth_testing_report.md /Users/tzoharlary/zephyrproject/physical_bluetooth_testing_report.md
+west twister --help
+west twister --help | grep -i "warn"
+cp /Users/tzoharlary/.gemini/antigravity/brain/97795329-8da3-461d-8aea-ef8c202fbb27/edtt_test_specs_report.md /Users/tzoharlary/zephyrproject/edtt_test_specs_report.md
+mkdir -p phys_bt_test/utils phys_bt_test/functional_tests/demo_test/src
+python3 phys_bt_test/runner.py --test-dir phys_bt_test/functional_tests/demo_test --only-build
+python3 phys_bt_test/runner.py --config phys_bt_test/config.yaml --test-dir phys_bt_test/functional_tests/demo_test --only-build
+rm -rf build_central && west build -b nrf52840dk/nrf52840 -d build_central phys_bt_test/functional_tests/demo_test -- -DCONFIG_BT_CENTRAL=y
+west twister --help
+west twister --help 2>&1 | head -n 120
+source .venv/bin/activate && west twister -p lp_em_cc2745r10_q1/cc2745r10_q1 -T zephyr/tests/bluetooth/tester --build-only -v
+----
+west twister --help
+west twister --help | grep -i "warn"
+cp /Users/tzoharlary/.gemini/antigravity/brain/97795329-8da3-461d-8aea-ef8c202fbb27/edtt_test_specs_report.md /Users/tzoharlary/zephyrproject/edtt_test_specs_report.md
+mkdir -p phys_bt_test/utils phys_bt_test/functional_tests/demo_test/src
+python3 phys_bt_test/runner.py --test-dir phys_bt_test/functional_tests/demo_test --only-build
+python3 phys_bt_test/runner.py --config phys_bt_test/config.yaml --test-dir phys_bt_test/functional_tests/demo_test --only-build
+rm -rf build_central && west build -b nrf52840dk/nrf52840 -d build_central phys_bt_test/functional_tests/demo_test -- -DCONFIG_BT_CENTRAL=y
+west twister --help
+west twister --help 2>&1 | head -n 120
+source .venv/bin/activate && west twister -p lp_em_cc2745r10_q1/cc2745r10_q1 -T zephyr/tests/bluetooth/tester --build-only -v
+find /Users/tzoharlary/zephyrproject -maxdepth 2 -name "twister-out*"
+----
+west twister --help | grep -i "warn"
+cp /Users/tzoharlary/.gemini/antigravity/brain/97795329-8da3-461d-8aea-ef8c202fbb27/edtt_test_specs_report.md /Users/tzoharlary/zephyrproject/edtt_test_specs_report.md
+mkdir -p phys_bt_test/utils phys_bt_test/functional_tests/demo_test/src
+python3 phys_bt_test/runner.py --test-dir phys_bt_test/functional_tests/demo_test --only-build
+python3 phys_bt_test/runner.py --config phys_bt_test/config.yaml --test-dir phys_bt_test/functional_tests/demo_test --only-build
+rm -rf build_central && west build -b nrf52840dk/nrf52840 -d build_central phys_bt_test/functional_tests/demo_test -- -DCONFIG_BT_CENTRAL=y
+west twister --help
+west twister --help 2>&1 | head -n 120
+source .venv/bin/activate && west twister -p lp_em_cc2745r10_q1/cc2745r10_q1 -T zephyr/tests/bluetooth/tester --build-only -v
+find /Users/tzoharlary/zephyrproject -maxdepth 2 -name "twister-out*"
+cd /Users/tzoharlary/zephyrproject/zephyr/subsys/bluetooth/host
+----
