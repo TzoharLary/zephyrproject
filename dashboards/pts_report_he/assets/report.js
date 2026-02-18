@@ -765,12 +765,44 @@ function fallbackSummaryStatusReason(row) {
   return "אין מספיק נתונים כדי לקבוע מצב הפעלה.";
 }
 
+function officialWhatTestedEnglish(row) {
+  if (row && row.what_tested_en_official) return row.what_tested_en_official;
+  if (row && row.ts_title && row.desc) return `${row.desc} (TS: ${row.ts_title})`;
+  if (row && row.desc) return row.desc;
+  if (row && row.ts_title) return `TS: ${row.ts_title}`;
+  return "No official English test description is available.";
+}
+
+function whatTestedSources(row) {
+  if (row && Array.isArray(row.what_tested_sources) && row.what_tested_sources.length) {
+    return uniqueSources(row.what_tested_sources);
+  }
+  const sources = [];
+  if (row && row.source && row.source.file) {
+    sources.push({
+      file: row.source.file,
+      sheet: row.source.sheet,
+      row: row.source.row,
+      columns: row.source.columns,
+      note: "תיאור טסט מתוך TCRL",
+    });
+  }
+  if (row && row.ts_title_source && row.ts_title_source.file) {
+    sources.push({
+      file: row.ts_title_source.file,
+      line: row.ts_title_source.line,
+      note: row.ts_title_source.note || "כותרת טסט מתוך TS",
+    });
+  }
+  return uniqueSources(sources);
+}
+
 function summaryWhatTested(row) {
   return (
+    (row && row.what_tested_he_verified) ||
     (row && row.summary_what_tested_he) ||
-    (row && row.ts_title ? `${row.desc || "אין תיאור זמין"} (TS: ${row.ts_title})` : "") ||
-    (row && row.desc) ||
-    "אין תיאור זמין לטסט זה."
+    (row && row.desc ? `הטסט מאמת את התרחיש הרשמי: ${row.desc}.` : "") ||
+    "אין תיאור טסט רשמי זמין במקורות."
   );
 }
 
@@ -782,6 +814,114 @@ function summaryWhyRelevant(row) {
   const plain = first && (first.plain_condition_he || conditionPlainText(first));
   if (conditions.length === 1) return plain || "נמצא תנאי יחיד עבור TCID זה.";
   return `${plain || "נמצא תנאי ראשי."} קיימות עוד ${conditions.length - 1} אפשרויות הפעלה חלופיות (OR).`;
+}
+
+function logicEvalLabel(result) {
+  if (result === "true") return "TRUE";
+  if (result === "false") return "FALSE";
+  return "UNKNOWN";
+}
+
+function buildWhyRelevantRows(row, options) {
+  const settings = Object.assign({ includeDetails: false }, options || {});
+  const conditions = (row && row.conditions) || [];
+  if (!conditions.length) {
+    return [
+      { label: "מצב תנאי מרכזי", value: (row && row.unmapped_note) || "אין תנאים משויכים כרגע." },
+      { label: "מסקנה", value: summaryStatusReason(row) },
+    ];
+  }
+
+  const primary = conditions[0] || {};
+  const evalResult = primary && primary.expression_eval && primary.expression_eval.result;
+  const evalItems =
+    primary && primary.expression_eval && Array.isArray(primary.expression_eval.items) ? primary.expression_eval.items : [];
+  const icsValues = evalItems.length
+    ? evalItems
+        .map((item) => `${item && item.item ? item.item : "-"}=${item && item.value ? item.value : "-"}`)
+        .join(" , ")
+    : "לא סופקו ערכי ICS מפורשים.";
+
+  const rows = [
+    {
+      label: "מצב יכולת/תנאי",
+      value: primary.plain_condition_he || conditionPlainText(primary),
+    },
+    {
+      label: "תוצאת TCMT",
+      value: `ביטוי TCMT: ${logicEvalLabel(evalResult)}${primary.logic_eval_reason_he ? ` · ${primary.logic_eval_reason_he}` : ""}`,
+    },
+    {
+      label: "ערכי ICS עיקריים",
+      value: icsValues,
+    },
+    {
+      label: "מסקנת השפעה",
+      value: summaryStatusReason(row),
+    },
+  ];
+
+  if (conditions.length > 1) {
+    rows.push({
+      label: "אפשרויות נוספות (OR)",
+      value: `${conditions.length - 1} וריאנטים נוספים זמינים ל-TCID זה.`,
+      emphasis: true,
+    });
+  }
+
+  if (settings.includeDetails && row && row.summary_why_relevant_he) {
+    rows.push({
+      label: "ניסוח מלא",
+      value: row.summary_why_relevant_he,
+    });
+  }
+
+  return rows;
+}
+
+function renderWhyRelevantStructured(row, options) {
+  const items = buildWhyRelevantRows(row, options);
+  return `
+    <div class="tcid-why-grid">
+      ${items
+        .map(
+          (item) => `
+            <div class="tcid-why-item ${item.emphasis ? "tcid-why-item-emphasis" : ""}">
+              <div class="tcid-why-label">${esc(item.label || "")}</div>
+              <div class="tcid-why-value">${esc(item.value || "-")}</div>
+            </div>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderWhatTestedBlock(row, options) {
+  const settings = Object.assign({ includeSources: false, compact: false }, options || {});
+  const hebrewText = summaryWhatTested(row);
+  const englishText = officialWhatTestedEnglish(row);
+  const quality = (row && row.translation_quality) || "verified_from_mapping";
+  const panelId = nextTableId("what-en");
+  const sources = whatTestedSources(row);
+  return `
+    <div class="tcid-what-wrap" dir="rtl" data-translation-quality="${esc(quality)}">
+      <div class="tcid-what-headline">
+        <div class="tcid-what-he">${esc(hebrewText)}</div>
+        <button
+          type="button"
+          class="what-tested-en-toggle"
+          data-target="${esc(panelId)}"
+          aria-expanded="false"
+          title="הצג ניסוח באנגלית"
+        >EN</button>
+      </div>
+      <div id="${esc(panelId)}" class="what-tested-en-panel" hidden>
+        <pre dir="ltr"><code>${esc(englishText)}</code></pre>
+      </div>
+      ${settings.includeSources ? `<div class="tcid-what-sources">${sourceDetails(sources, "מקורות לניסוח הטסט")}</div>` : ""}
+    </div>
+  `;
 }
 
 function summaryStatus(row) {
@@ -948,10 +1088,7 @@ function renderTcidMeaningCell(row) {
   const tcmtFeatures = collectTcmtFeatures(row);
   const lines = [];
 
-  lines.push(`<div class="tcid-test-desc">${esc(row && row.desc ? row.desc : "אין תיאור זמין לטסט זה.")}</div>`);
-  if (row && row.ts_title) {
-    lines.push(`<div class="small"><b>כותרת TS:</b> ${esc(row.ts_title)}</div>`);
-  }
+  lines.push(renderWhatTestedBlock(row, { includeSources: true }));
 
   if (tcmtFeatures.length) {
     const featureItems = tcmtFeatures.map((feature) => `<li>${esc(feature)}</li>`).join("");
@@ -1290,6 +1427,10 @@ function renderTcidExpandedDetails(row, options) {
         ${renderTcidMeaningCell(row)}
       </div>
       <div class="tcid-expand-section">
+        <h4>למה רלוונטי עכשיו</h4>
+        ${renderWhyRelevantStructured(row, { includeDetails: true })}
+      </div>
+      <div class="tcid-expand-section">
         <h4>תנאי הפעלה מלאים (TCMT/ICS)</h4>
         ${renderTcidConditionsCell(row, settings)}
       </div>
@@ -1314,8 +1455,6 @@ function renderTcidExpandedDetails(row, options) {
 }
 
 function renderTcidCompactRow(row, settings, expandId) {
-  const what = summaryWhatTested(row);
-  const why = summaryWhyRelevant(row);
   const statusValue = summaryStatus(row);
   const statusReason = summaryStatusReason(row);
   const badges = (summaryBadges(row) || [])
@@ -1331,7 +1470,7 @@ function renderTcidCompactRow(row, settings, expandId) {
     >
       <div class="tcid-row-head">
         <div class="tcid-compact-main">
-          <code>${esc(row.tcid || "")}</code>
+          <div class="tcid-test-name"><span>שם הטסט:</span> <code>${esc(row.tcid || "")}</code></div>
           ${badges ? `<div class="tcid-compact-badges">${badges}</div>` : ""}
         </div>
         <div class="tcid-compact-status">
@@ -1347,11 +1486,11 @@ function renderTcidCompactRow(row, settings, expandId) {
       <div class="tcid-row-grid">
         <section class="tcid-row-block">
           <h4>מה הטסט בודק</h4>
-          <div class="tcid-compact-what">${esc(what)}</div>
+          ${renderWhatTestedBlock(row, { includeSources: false, compact: true })}
         </section>
         <section class="tcid-row-block">
           <h4>למה רלוונטי עכשיו</h4>
-          <div class="tcid-compact-why">${esc(why)}</div>
+          ${renderWhyRelevantStructured(row)}
         </section>
         <section class="tcid-row-block tcid-row-block-status">
           <h4>סטטוס נוכחי</h4>
@@ -1785,28 +1924,20 @@ function renderTcTable(title, rows, options) {
     { label: "מזהה בדיקת תקן", key: "tcid", technical: "TCID" },
     { label: "סוג בדיקה", key: "tc_category", technical: "Category" },
     { label: "תאריך רלוונטיות", key: "active_date", technical: "Active Date" },
-    { label: "תיאור הבדיקה מתוך התקן", key: "test_desc" },
+    { label: "מה הטסט בודק (עברית מאומתת)", key: "test_desc" },
     { label: "מקור", key: "source" },
   ];
   const tableId = nextTableId("tc-table");
 
   const body = rows
     .map((row) => {
-      const src = sourceDetails([
-        {
-          file: row.source && row.source.file,
-          sheet: row.source && row.source.sheet,
-          row: row.source && row.source.row,
-          columns: row.source && row.source.columns,
-          note: "שורת מקור מתוך קובץ TCRL",
-        },
-      ]);
+      const src = sourceDetails(whatTestedSources(row), "מקור לניסוח ולרשומת TCID");
       return `
       <tr data-searchable>
         <td><code>${esc(row.tcid || "")}</code></td>
         <td>${esc(row.category || "")}</td>
         <td>${esc(row.active_date || "")}</td>
-        <td>${esc(row.desc || "")}</td>
+        <td>${renderWhatTestedBlock(row, { includeSources: false })}</td>
         <td>${src}</td>
       </tr>
     `;
@@ -1835,7 +1966,7 @@ function renderTcTable(title, rows, options) {
   return `
     <details>
       <summary>${esc(title)} (${rows.length})</summary>
-      <div class="small muted" style="margin:8px 0;">הכותרות בעברית, ומזהי הבדיקות והתיאורים נשמרים באנגלית המקורית לצורך אמינות מול התקן.</div>
+      <div class="small muted" style="margin:8px 0;">ברירת המחדל מוצגת בעברית מאומתת. לחיצה על EN בכל תא חושפת את הניסוח האנגלי הרשמי.</div>
       ${table}
     </details>
   `;
@@ -2715,6 +2846,23 @@ function bindGlobalEvents() {
         rerenderOverviewPanel();
       } else if (PROFILE_PANEL_CONFIG[scope]) {
         rerenderProfilePanel(scope);
+      }
+      return;
+    }
+
+    const enToggle = event.target && event.target.closest ? event.target.closest(".what-tested-en-toggle") : null;
+    if (enToggle) {
+      const targetId = enToggle.getAttribute("data-target");
+      if (!targetId) return;
+      const panel = document.getElementById(targetId);
+      if (!panel) return;
+      const isOpen = !panel.hasAttribute("hidden");
+      if (isOpen) {
+        panel.setAttribute("hidden", "");
+        enToggle.setAttribute("aria-expanded", "false");
+      } else {
+        panel.removeAttribute("hidden");
+        enToggle.setAttribute("aria-expanded", "true");
       }
       return;
     }

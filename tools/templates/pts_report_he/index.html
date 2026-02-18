@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>דו"ח PTS - DIS/BAS/HRS/HID</title>
+  <link rel="stylesheet" href="assets/report.css" />
+</head>
+<body>
+  <div class="topbar">
+    <button id="toggleNav" type="button">תפריט</button>
+  </div>
+  <div class="overlay" id="overlay"></div>
+  <div class="overlay glossary-overlay" id="glossaryOverlay"></div>
+
+  <button
+    id="openGlossaryDrawer"
+    type="button"
+    class="glossary-fab"
+    aria-controls="glossaryDrawer"
+    aria-expanded="false"
+  >
+    מילון מונחים
+  </button>
+
+  <aside id="glossaryDrawer" class="glossary-drawer" aria-hidden="true">
+    <div class="glossary-drawer-head">
+      <div class="glossary-drawer-head-main">
+        <h3>מילון מונחים</h3>
+        <label class="glossary-width-control" for="glossaryDrawerWidthRange">
+          <span>רוחב</span>
+          <input id="glossaryDrawerWidthRange" type="range" min="300" max="920" step="10" value="430" />
+          <output id="glossaryDrawerWidthValue" for="glossaryDrawerWidthRange">430px</output>
+        </label>
+      </div>
+      <button id="closeGlossaryDrawer" type="button" aria-label="סגירת מילון מונחים">סגור</button>
+    </div>
+    <div id="glossaryDrawerResizer" class="glossary-drawer-resizer" role="separator" aria-orientation="vertical" aria-label="גרירת רוחב המילון"></div>
+    <div id="glossaryDrawerContent" class="glossary-drawer-content"></div>
+  </aside>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <h1>תמונת מצב בדיקות PTS<br />DIS / BAS / HRS / HID</h1>
+        <p>קודם החלטה מהירה: מה ירוץ, למה, ומה דורש תשומת לב.</p>
+      </div>
+
+      <div class="nav">
+        <button class="nav-btn active" data-panel-target="overview">סקירה מהירה</button>
+        <button class="nav-btn" data-panel-target="dis">DIS</button>
+        <button class="nav-btn" data-panel-target="bas">BAS</button>
+        <button class="nav-btn" data-panel-target="hrs">HRS</button>
+        <button class="nav-btn" data-panel-target="hid">HID (HOGP)</button>
+        <button class="nav-btn" data-panel-target="iopt">בדיקות שילוב בין פרופילים (IOPT)</button>
+        <button class="nav-btn" data-panel-target="runtime">תוצאות הרצת PTS</button>
+        <button class="nav-btn" data-panel-target="comparison">אימות מול מקורות רשמיים</button>
+        <button class="nav-btn" data-panel-target="sources">מקורות</button>
+      </div>
+
+      <div class="meta">
+        בכל מסך: החלטה תמציתית בראש, פירוט טכני בהרחבה בלחיצה.
+      </div>
+    </aside>
+
+    <main class="content">
+      <section class="hero">
+        <h2>מה ירוץ ב-PTS עכשיו, ובאיזה תנאים</h2>
+        <p>כל שורה מציגה: מה נבדק, למה רלוונטי, וסטטוס משוער. כל העומק הטכני נשמר בהרחבה.</p>
+      </section>
+
+      <section class="toolbar">
+        <input id="searchInput" type="search" placeholder="חיפוש חופשי בתוך הפאנל הפעיל..." />
+        <button id="clearSearchBtn" type="button">נקה חיפוש</button>
+        <button id="openSourcesBtn" type="button">פתח כל המקורות</button>
+        <button id="closeSourcesBtn" type="button">סגור כל המקורות</button>
+      </section>
+
+      <section class="panel active" id="panel-overview"><div id="overviewContent"></div></section>
+      <section class="panel" id="panel-dis"><div id="disContent"></div></section>
+      <section class="panel" id="panel-bas"><div id="basContent"></div></section>
+      <section class="panel" id="panel-hrs"><div id="hrsContent"></div></section>
+      <section class="panel" id="panel-hid"><div id="hidContent"></div></section>
+      <section class="panel" id="panel-iopt"><div id="ioptContent"></div></section>
+      <section class="panel" id="panel-runtime"><div id="runtimeContent"></div></section>
+      <section class="panel" id="panel-comparison"><div id="comparisonContent"></div></section>
+      <section class="panel" id="panel-sources"><div id="sourcesContent"></div></section>
+
+      <div class="footer-note">
+        הדוח נטען מקובץ נתונים חיצוני: <code>data/report-data.js</code>.
+      </div>
+    </main>
+  </div>
+
+  <script src="data/report-data.js"></script>
+  <script src="assets/report.js"></script>
+</body>
+</html>

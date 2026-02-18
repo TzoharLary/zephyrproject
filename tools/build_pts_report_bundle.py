@@ -138,6 +138,17 @@ TCID_PATTERN = re.compile(r"\b[A-Z0-9]+(?:/[A-Z0-9]+){2,}/(?:BV|BI)-\d+-[A-Z]\b"
 PROFILE_TCID_PREFIX = {"DIS": "DIS", "BAS": "BAS", "HRS": "HRS", "HID": "HOGP"}
 TCMT_SECTION_RE = re.compile(r"^5\s+test case mapping\s*$", re.IGNORECASE)
 REVISION_SECTION_RE = re.compile(r"^6\s+revision history", re.IGNORECASE)
+NO_OFFICIAL_ENGLISH_TEXT = "No official English test description is available."
+
+IOPT_VERIFIED_HEBREW: Dict[str, str] = {
+    "IOPT/BAS/SR/GATTDB/BV-01-I": "הטסט מאמת את תקינות שירות GATT עבור פרופיל BAS.",
+    "IOPT/BAS/SR/SGGIT/SDP/BV-01-I": "הטסט מאמת את רשומת ה-SDP של שירות BAS המבוסס על GATT.",
+    "IOPT/DIS/SR/GATTDB/BV-01-I": "הטסט מאמת את תקינות שירות GATT עבור פרופיל DIS.",
+    "IOPT/DIS/SR/SGGIT/SDP/BV-01-I": "הטסט מאמת את רשומת ה-SDP של שירות DIS המבוסס על GATT.",
+    "IOPT/HRS/SEN/GATTDB/BV-01-I": "הטסט מאמת את תקינות שירות GATT עבור פרופיל HRS.",
+    "IOPT/HID/DEV/SDPR/BV-01-I": "הטסט מאמת את רשומת ה-SDP עבור תפקיד התקן HID.",
+    "IOPT/HID/HOS/CGSIT/SFC/BV-01-I": "הטסט מאמת תאימות עתידית ב-SDP כאשר ה-IUT פועל כמארח HID.",
+}
 
 
 def esc(s: str) -> str:
@@ -1582,6 +1593,69 @@ def build_condition_plain_text(condition: Dict[str, Any]) -> str:
     return f"{capability}: {value_text}, {mandatory_text}, {status_text}. {impact} {logic_text}.{suffix}".strip()
 
 
+def build_what_tested_en_official(desc: Any, ts_title: Any) -> str:
+    desc_text = str(desc or "").strip()
+    ts_title_text = str(ts_title or "").strip()
+    if desc_text and ts_title_text:
+        return f"{desc_text} (TS: {ts_title_text})"
+    if desc_text:
+        return desc_text
+    if ts_title_text:
+        return f"TS: {ts_title_text}"
+    return NO_OFFICIAL_ENGLISH_TEXT
+
+
+def build_what_tested_he_verified(desc: Any, ts_title: Any) -> str:
+    desc_text = str(desc or "").strip()
+    ts_title_text = str(ts_title or "").strip()
+    if desc_text and ts_title_text:
+        return f"הטסט מאמת את התרחיש הרשמי: {desc_text}. כותרת TS רשמית: {ts_title_text}."
+    if desc_text:
+        return f"הטסט מאמת את התרחיש הרשמי: {desc_text}."
+    if ts_title_text:
+        return f"הטסט מאמת לפי כותרת TS רשמית: {ts_title_text}."
+    return "אין תיאור טסט רשמי זמין במקורות."
+
+
+def collect_what_tested_sources(row: Dict[str, Any]) -> List[Dict[str, Any]]:
+    sources: List[Dict[str, Any]] = []
+    source = row.get("source") or {}
+    if source.get("file"):
+        sources.append(
+            {
+                "file": source.get("file"),
+                "sheet": source.get("sheet"),
+                "row": source.get("row"),
+                "columns": source.get("columns"),
+                "line": source.get("line"),
+                "note": "תיאור טסט מתוך TCRL",
+            }
+        )
+    ts_source = row.get("ts_title_source") or {}
+    if ts_source.get("file"):
+        sources.append(
+            {
+                "file": ts_source.get("file"),
+                "line": ts_source.get("line"),
+                "note": ts_source.get("note") or "כותרת טסט מתוך TS",
+            }
+        )
+    unique: Dict[str, Dict[str, Any]] = {}
+    for src in sources:
+        key = "|".join(
+            [
+                str(src.get("file") or ""),
+                str(src.get("sheet") or ""),
+                str(src.get("row") or ""),
+                str(src.get("line") or ""),
+                str(src.get("columns") or ""),
+                str(src.get("note") or ""),
+            ]
+        )
+        unique[key] = src
+    return list(unique.values())
+
+
 def build_tcid_summary_fields(row: Dict[str, Any]) -> Dict[str, Any]:
     conditions = row.get("conditions") or []
     runtime_signal = str(row.get("runtime_signal") or "unknown")
@@ -1608,14 +1682,9 @@ def build_tcid_summary_fields(row: Dict[str, Any]) -> Dict[str, Any]:
         status = "unknown"
         status_reason = "אין מספיק מידע תנאי כדי להכריע מצב הפעלה."
 
-    if ts_title and desc:
-        what_tested = f"{desc} (TS: {ts_title})"
-    elif ts_title:
-        what_tested = f"TS: {ts_title}"
-    elif desc:
-        what_tested = desc
-    else:
-        what_tested = "אין תיאור זמין לטסט זה."
+    what_tested_he = build_what_tested_he_verified(desc, ts_title)
+    what_tested_en = build_what_tested_en_official(desc, ts_title)
+    what_tested_sources = collect_what_tested_sources(row)
 
     if not conditions:
         why_relevant = "לא נמצא תנאי TCMT משויך ל-TCID זה."
@@ -1649,11 +1718,15 @@ def build_tcid_summary_fields(row: Dict[str, Any]) -> Dict[str, Any]:
         badges.append("Runtime Inactive")
 
     return {
-        "summary_what_tested_he": what_tested,
+        "summary_what_tested_he": what_tested_he,
         "summary_why_relevant_he": why_relevant,
         "summary_status": status,
         "summary_status_reason_he": status_reason,
         "summary_badges": badges,
+        "what_tested_he_verified": what_tested_he,
+        "what_tested_en_official": what_tested_en,
+        "what_tested_sources": what_tested_sources,
+        "translation_quality": "verified_from_mapping",
     }
 
 
@@ -1894,11 +1967,64 @@ def validate_tcid_compact_fields(profile: str, rows: List[Dict[str, Any]]) -> No
     for row in rows or []:
         if not row.get("summary_status"):
             raise ValueError(f"{profile}: row without summary_status for TCID {row.get('tcid')}")
+        if not str(row.get("what_tested_he_verified") or "").strip():
+            raise ValueError(f"{profile}: row without what_tested_he_verified for TCID {row.get('tcid')}")
+        if not str(row.get("what_tested_en_official") or "").strip():
+            raise ValueError(f"{profile}: row without what_tested_en_official for TCID {row.get('tcid')}")
+        sources = row.get("what_tested_sources")
+        if not isinstance(sources, list) or not any((src or {}).get("file") for src in sources):
+            raise ValueError(f"{profile}: row without what_tested_sources for TCID {row.get('tcid')}")
         for condition in row.get("conditions") or []:
             if not str(condition.get("plain_condition_he") or "").strip():
                 raise ValueError(
                     f"{profile}: condition without plain_condition_he for TCID {row.get('tcid')} map_id={condition.get('map_id')}"
                 )
+
+
+def attach_verified_fields_to_tc_rows(
+    tc_rows: List[Dict[str, Any]],
+    mapped_rows: List[Dict[str, Any]],
+    profile: str,
+    manual_hebrew: Optional[Dict[str, str]] = None,
+) -> None:
+    mapped_by_tcid = {str(row.get("tcid") or ""): row for row in mapped_rows or [] if row.get("tcid")}
+    manual_map = manual_hebrew or {}
+    for row in tc_rows or []:
+        tcid = str(row.get("tcid") or "").strip()
+        if not tcid:
+            continue
+        mapped = mapped_by_tcid.get(tcid)
+        if mapped:
+            row["what_tested_he_verified"] = str(mapped.get("what_tested_he_verified") or "").strip()
+            row["what_tested_en_official"] = str(mapped.get("what_tested_en_official") or "").strip()
+            row["what_tested_sources"] = [dict(src) for src in (mapped.get("what_tested_sources") or []) if src]
+            row["translation_quality"] = "verified_from_mapping"
+            continue
+
+        manual_he = str(manual_map.get(tcid) or "").strip()
+        if manual_he:
+            row["what_tested_he_verified"] = manual_he
+            row["what_tested_en_official"] = build_what_tested_en_official(row.get("desc"), row.get("ts_title"))
+            row["what_tested_sources"] = collect_what_tested_sources(row)
+            row["translation_quality"] = "verified_manual"
+            continue
+
+        row["what_tested_he_verified"] = build_what_tested_he_verified(row.get("desc"), row.get("ts_title"))
+        row["what_tested_en_official"] = build_what_tested_en_official(row.get("desc"), row.get("ts_title"))
+        row["what_tested_sources"] = collect_what_tested_sources(row)
+        row["translation_quality"] = "verified_manual"
+
+
+def validate_verified_fields_in_tc_group(group_name: str, rows: List[Dict[str, Any]]) -> None:
+    for row in rows or []:
+        tcid = row.get("tcid")
+        if not str(row.get("what_tested_he_verified") or "").strip():
+            raise ValueError(f"{group_name}: missing what_tested_he_verified for TCID {tcid}")
+        if not str(row.get("what_tested_en_official") or "").strip():
+            raise ValueError(f"{group_name}: missing what_tested_en_official for TCID {tcid}")
+        sources = row.get("what_tested_sources")
+        if not isinstance(sources, list) or not any((src or {}).get("file") for src in sources):
+            raise ValueError(f"{group_name}: missing what_tested_sources for TCID {tcid}")
 
 
 def build_tcid_first_mapping(
@@ -2567,6 +2693,24 @@ def main() -> None:
     validate_tcid_compact_fields("BAS", bas_tcid_rows)
     validate_tcid_compact_fields("HRS", hrs_tcid_rows)
     validate_tcid_compact_fields("HID", hid_tcid_rows)
+
+    attach_verified_fields_to_tc_rows(dis_tc, dis_tcid_rows, "DIS")
+    attach_verified_fields_to_tc_rows(bas_tc, bas_tcid_rows, "BAS")
+    attach_verified_fields_to_tc_rows(hrs_tc, hrs_tcid_rows, "HRS")
+    attach_verified_fields_to_tc_rows(hid_tc, hid_tcid_rows, "HID")
+    attach_verified_fields_to_tc_rows(iopt_bas, [], "IOPT/BAS", manual_hebrew=IOPT_VERIFIED_HEBREW)
+    attach_verified_fields_to_tc_rows(iopt_dis, [], "IOPT/DIS", manual_hebrew=IOPT_VERIFIED_HEBREW)
+    attach_verified_fields_to_tc_rows(iopt_hrs, [], "IOPT/HRS", manual_hebrew=IOPT_VERIFIED_HEBREW)
+    attach_verified_fields_to_tc_rows(iopt_hid, [], "IOPT/HID", manual_hebrew=IOPT_VERIFIED_HEBREW)
+
+    validate_verified_fields_in_tc_group("tcs.dis", dis_tc)
+    validate_verified_fields_in_tc_group("tcs.bas", bas_tc)
+    validate_verified_fields_in_tc_group("tcs.hrs", hrs_tc)
+    validate_verified_fields_in_tc_group("tcs.hid", hid_tc)
+    validate_verified_fields_in_tc_group("tcs.iopt_bas", iopt_bas)
+    validate_verified_fields_in_tc_group("tcs.iopt_dis", iopt_dis)
+    validate_verified_fields_in_tc_group("tcs.iopt_hrs", iopt_hrs)
+    validate_verified_fields_in_tc_group("tcs.iopt_hid", iopt_hid)
 
     ics_refs = find_ics_refs()
 
