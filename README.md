@@ -77,7 +77,7 @@ OpenOCD (צריבה וניקוד)
 │
 ├─── 🎯 START HERE ────────────────────────────────────────
 │    ├── README.md                  ← אתה כאן!
-│    ├── docs/                      ← תיעוד מלא
+│    ├── docs/                      ← תיעוד כתוב (markdown + PDFs)
 │    ├── west_boards.txt            ← רשימת לוחות West
 │    └── workspace_projects.txt    ← פרויקטים פעילים
 │
@@ -86,15 +86,19 @@ OpenOCD (צריבה וניקוד)
 │        ├── README.md              📍 מדריך לתיקייה
 │        ├── CHANGELOG.md           📋 יומן שינויים
 │        ├── plans/                 🗺️ תוכניות עבודה
-│        ├── phases_tracking/       🎛️ דשבורד מעקב (HTML)
-│        ├── Profiles/              📄 פרופילי Bluetooth (BAS, DIS, HID, HRS)
-│        ├── pts_report_he/         📊 דוחות PTS בעברית (HTML)
+│        ├── profiles/              📄 פרופילי Bluetooth (BAS, DIS, HID, HRS)
 │        └── reports/               📑 דוחות לפי תחום
+│            ├── TS_DATA_EXTRACTION_GUIDE.md
 │            ├── bluetooth/
 │            ├── build-and-flash/
 │            ├── simulation/
 │            ├── test-automation/
-│            └── templates/
+│            └── templates/         ← תבניות HTML לסקריפטים
+│
+├─── 🎛️ DASHBOARDS ────────────────────────────────────────
+│    └── dashboards/
+│        ├── phases_tracking/       🎛️ דשבורד מעקב שלבים (HTML)
+│        └── pts_report_he/         📊 דוחות PTS בעברית (HTML)
 │
 ├─── 🔧 ZEPHYR CORE — Git Submodule ────────────────────────
 │    └── zephyr/                    🏆 TexasInstruments/simplelink-zephyr
@@ -104,16 +108,10 @@ OpenOCD (צריבה וניקוד)
 │        └── west.yml               📋 West Manifest
 │
 ├─── 🤖 BLUETOOTH TESTING ──────────────────────────────────
-│    ├── auto-pts/                  🧪 Git Submodule — intel/auto-pts
-│    │   ├── autoptsclient_bot.py   🤖 Bot אוטומטי
-│    │   ├── autoptsserver.py       🖥️ שרת PTS
-│    │   └── autopts/              💻 קוד ראשי
-│    │
-│    └── phys_bt_test/             📱 בדיקות Bluetooth פיזיות (קוד שלנו)
-│        ├── runner.py
-│        ├── config.yaml
-│        ├── functional_tests/
-│        └── utils/
+│    └── auto-pts/                  🧪 Git Submodule — intel/auto-pts
+│        ├── autoptsclient_bot.py   🤖 Bot אוטומטי
+│        ├── autoptsserver.py       🖥️ שרת PTS
+│        └── autopts/              💻 קוד ראשי
 │
 ├─── 🔌 MODULES & TOOLS (West-managed, לא ב-Git) ──────────
 │    ├── modules/                   📚 West modules חיצוניים (HAL, Crypto...)
@@ -122,7 +120,11 @@ OpenOCD (צריבה וניקוד)
 │
 ├─── 🛠️ LOCAL TOOLS ─────────────────────────────────────────
 │    ├── ti-openocd/                🛠️ OpenOCD של TI (צריבה + ניקוד)
-│    └── tools/twister_report.py    📊 יוצר דוחות Twister
+│    └── tools/                     📊 כלים: דוחות + גנרטורי נתונים
+│        ├── twister_report.py
+│        ├── build_pts_report_bundle.py
+│        ├── build_pts_dis_bas_hrs_hid_report.py
+│        └── export_runtime_active_tcids.py
 │
 └─── ⚙️ CONFIGURATION ──────────────────────────────────────
      ├── .west/                     📋 הגדרות West (לא ב-Git)
@@ -479,13 +481,13 @@ tests:
 
 | תיקייה | תוכן | דרוש ל- |
 |-------|------|---------|
-| **`docs/`** | 15 קבצי markdown + דשבורדים HTML | הבנת כל הsystem |
+| **`docs/`** | תיעוד כתוב: markdown, PDFs, פרופילי Bluetooth | הבנת כל הsystem |
+| **`dashboards/`** | דשבורדים HTML: `phases_tracking/`, `pts_report_he/` | מעקב ויזואלי |
 | **`zephyr/`** | Git Submodule — קוד RTOS (5M+ שורות) | בנייה וטעינה |
 | **`auto-pts/`** | Git Submodule — כלי בדיקות AutoPTS | בדיקות compliance |
-| **`phys_bt_test/`** | בדיקות Bluetooth פיזיות (קוד שלנו) | בדיקות מותאמות |
 | **`modules/`** | West modules חיצוניים — **לא ב-Git** | (מנוהל ע"י West) |
 | **`ti-openocd/`** | כלי צריבה וניקוד של TI | צריבה פיזית |
-| **`tools/`** | כלים: `twister_report.py` + West tools | דוחות ובדיקות |
+| **`tools/`** | כלים: דוחות + גנרטורי נתונים PTS | דוחות ובדיקות |
 | **`build/`, `twister-out/`** | נוצרים locally בלבד — **אינם ב-Git** | (generated) |
 
 ---

@@ -905,7 +905,7 @@ Integration points:
 
 ### 13.2 Update Build Script
 
-Current: `build_pts_report_bundle.py`
+Current: `tools/build_pts_report_bundle.py`
 Lines affected:
 ```
 Lines 797-820: build_official_sources()

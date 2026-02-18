@@ -10,8 +10,8 @@ from pathlib import Path
 from typing import Dict, List, Set, Tuple
 
 DEFAULT_WORKSPACE = Path("auto-pts/autopts/workspaces/zephyr/zephyr-master/zephyr-master.pqw6")
-DEFAULT_OUTPUT = Path("docs/reports/runtime_active_tcids.json")
-DEFAULT_HISTORY_DIR = Path("docs/reports/runtime_history")
+DEFAULT_OUTPUT = Path("tools/runtime_active_tcids.json")
+DEFAULT_HISTORY_DIR = Path("tools/runtime_history")
 
 PROFILE_PREFIXES = {
     "DIS": "DIS/",
@@ -154,7 +154,7 @@ def main() -> int:
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "workspace": str(workspace),
-        "export_tool": "docs/reports/export_runtime_active_tcids.py",
+        "export_tool": "tools/export_runtime_active_tcids.py",
         "platform": platform.platform(),
         "profile_prefixes": PROFILE_PREFIXES,
         "projects": {project: {"active_tcids": tcids, "count": len(tcids)} for project, tcids in project_cases.items()},

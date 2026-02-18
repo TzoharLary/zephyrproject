@@ -1,7 +1,7 @@
 # 📚 מדריך לתיקיית `docs`
 
-התיקייה אורגנה לפי תחומים כדי להקל ניווט.  
-**לא נמחקו דוחות תוכן** — הקבצים עברו לתת־תיקיות מסודרות.
+התיקייה מכילה תיעוד כתוב בלבד.  
+דשבורדים ויזואליים (HTML) עברו אל `dashboards/`, סקריפטים לייצור נתונים עברו אל `tools/`.
 
 ## מבנה התיקייה
 
@@ -12,24 +12,33 @@ docs/
 ├── plans/
 │   ├── README.md
 │   └── ble_pts_plan.md
-├── phases_tracking/
-│   ├── index.html
-│   ├── css/
-│   └── js/
+├── profiles/              ← פרופילי Bluetooth (BAS, DIS, HID, HRS) – PDF + TCRL
 └── reports/
     ├── README.md
+    ├── TS_DATA_EXTRACTION_GUIDE.md
+    ├── templates/         ← תבניות HTML לסקריפטים (tools/)
     ├── build-and-flash/
     ├── test-automation/
     ├── bluetooth/
     └── simulation/
 ```
 
+> **דשבורדים HTML** נמצאים כעת ב-[`../dashboards/`](../dashboards/):
+> - [`../dashboards/phases_tracking/index.html`](../dashboards/phases_tracking/index.html) — מעקב שלבים
+> - [`../dashboards/pts_report_he/index.html`](../dashboards/pts_report_he/index.html) — דוחות PTS בעברית
+>
+> **סקריפטי ייצור** נמצאים כעת ב-[`../tools/`](../tools/):
+> - `build_pts_report_bundle.py` — יוצר דוח PTS HTML
+> - `build_pts_dis_bas_hrs_hid_report.py` — דוח DIS/BAS/HRS/HID
+> - `export_runtime_active_tcids.py` — מייצא TCIDs פעילים
+
 ## ניווט מהיר
 
 | מה מחפשים | קובץ / תיקייה |
 |---|---|
 | תוכנית VPC | [`plans/ble_pts_plan.md`](plans/ble_pts_plan.md) |
-| דף המעקב הויזואלי | [`phases_tracking/index.html`](phases_tracking/index.html) |
+| דף המעקב הויזואלי | [`../dashboards/phases_tracking/index.html`](../dashboards/phases_tracking/index.html) |
+| דוח PTS בעברית | [`../dashboards/pts_report_he/index.html`](../dashboards/pts_report_he/index.html) |
 | דוחות Build/Flash | [`reports/build-and-flash/`](reports/build-and-flash/) |
 | דוחות Twister/Pytest | [`reports/test-automation/`](reports/test-automation/) |
 | דוחות Bluetooth | [`reports/bluetooth/`](reports/bluetooth/) |
@@ -69,7 +78,7 @@ docs/
 1. [`reports/test-automation/west_twister_report.md`](reports/test-automation/west_twister_report.md)
 2. [`reports/test-automation/zephyr_pytest_testing_guide.md`](reports/test-automation/zephyr_pytest_testing_guide.md)
 3. [`plans/ble_pts_plan.md`](plans/ble_pts_plan.md)
-4. [`phases_tracking/index.html`](phases_tracking/index.html)
+4. [`../dashboards/phases_tracking/index.html`](../dashboards/phases_tracking/index.html)
 
 ### מפתח Bluetooth
 1. [`reports/bluetooth/physical_bluetooth_testing_report.md`](reports/bluetooth/physical_bluetooth_testing_report.md)
@@ -88,10 +97,11 @@ docs/
 
 ## כללי סדר להמשך
 
-- דוחות חדשים נכנסים תחת `reports/<category>/`.
+- דוחות כתובים (markdown) נכנסים תחת `reports/<category>/`.
 - תוכניות עבודה נכנסות תחת `plans/`.
-- נכסי UI (HTML/CSS/JS) נשארים תחת `phases_tracking/`.
-- כל הוספת קובץ חדש מחייבת עדכון `docs/README.md`.
+- נכסי UI (HTML/CSS/JS) נכנסים תחת `../dashboards/<name>/`.
+- סקריפטי Python לייצור נתונים נכנסים תחת `../tools/`.
+- כל הוספת קובץ מחייבת עדכון `docs/README.md`.
 
 ---
 

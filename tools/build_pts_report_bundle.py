@@ -18,7 +18,7 @@ WORKSPACE_PQW6 = Path("auto-pts/autopts/workspaces/zephyr/zephyr-master/zephyr-m
 PTSCONTROL_PY = Path("auto-pts/autopts/ptscontrol.py")
 ICS_RST_SCRIPT = Path("auto-pts/tools/ics_rst_from_html.py")
 
-PROFILES_DIR = Path("docs/Profiles")
+PROFILES_DIR = Path("docs/profiles")
 PROFILE_DOCS = {
     "BAS": {
         "dir": PROFILES_DIR / "BAS",
@@ -53,7 +53,7 @@ ICS_PDF = {
     "HOGP": PROFILE_DOCS["HID"]["dir"] / PROFILE_DOCS["HID"]["ics"],
 }
 
-OUT_DIR = Path("docs/pts_report_he")
+OUT_DIR = Path("dashboards/pts_report_he")
 OUT_HTML = OUT_DIR / "index.html"
 OUT_CSS = OUT_DIR / "assets" / "report.css"
 OUT_JS = OUT_DIR / "assets" / "report.js"
@@ -63,8 +63,8 @@ TEMPLATE_DIR = Path(__file__).parent / "templates" / "pts_report_he"
 TEMPLATE_HTML = TEMPLATE_DIR / "index.html"
 TEMPLATE_CSS = TEMPLATE_DIR / "report.css"
 TEMPLATE_JS = TEMPLATE_DIR / "report.js"
-RUNTIME_ACTIVE_EXPORT_DEFAULT = Path("docs/reports/runtime_active_tcids.json")
-RUNTIME_ACTIVE_HISTORY_DIR_DEFAULT = Path("docs/reports/runtime_history")
+RUNTIME_ACTIVE_EXPORT_DEFAULT = Path("tools/runtime_active_tcids.json")
+RUNTIME_ACTIVE_HISTORY_DIR_DEFAULT = Path("tools/runtime_history")
 
 EXPECTED_WORKSPACE_SUFFIX = "/zephyr-master/zephyr-master.pqw6"
 
@@ -2356,14 +2356,14 @@ def build_comparison(data: Dict, official_sources: Dict[str, Dict]) -> Dict[str,
         bad = [
             f
             for f in files
-            if (f.lower().endswith(".pdf") or f.lower().endswith(".xlsx")) and not f.startswith("docs/Profiles/")
+            if (f.lower().endswith(".pdf") or f.lower().endswith(".xlsx")) and not f.startswith("docs/profiles/")
         ]
         add_finding(
             profile=profile,
             topic="source_path",
             status="conflict" if bad else "match",
             site_claim=f"נבדקו {len(files)} נתיבי מקור רלוונטיים לפרופיל.",
-            official_evidence="קו הבסיס הרשמי מחייב שימוש בקבצים מתוך docs/Profiles בלבד.",
+            official_evidence="קו הבסיס הרשמי מחייב שימוש בקבצים מתוך docs/profiles בלבד.",
             impact_meaning=(
                 "מקורות מחוץ לתיקיית Profiles עלולים לגרום לפער בין הדוח לבין המקור הרשמי."
                 if bad
@@ -2379,9 +2379,9 @@ def build_comparison(data: Dict, official_sources: Dict[str, Dict]) -> Dict[str,
                 "note": "תיקיית baseline הרשמית",
             },
             recommended_action=(
-                "להחליף מקורות חיצוניים בנתיבים מתוך docs/Profiles."
+                "להחליף מקורות חיצוניים בנתיבים מתוך docs/profiles."
                 if bad
-                else "להמשיך לאכוף docs/Profiles כמקור הרשמי."
+                else "להמשיך לאכוף docs/profiles כמקור הרשמי."
             ),
         )
 
@@ -2635,7 +2635,7 @@ def main() -> None:
                 "project_lines": pqw6["_project_lines"],
             },
             "baseline": {
-                "source": "docs/Profiles",
+                "source": "docs/profiles",
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "comparison_engine_version": "v1.0",
             },
