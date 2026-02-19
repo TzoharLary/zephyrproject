@@ -1133,14 +1133,14 @@ body.glossary-open .glossary-drawer {
 
 .tcid-cards {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .tcid-row-card {
   border: 1px solid #d2e3ef;
   border-radius: 12px;
   background: #fff;
-  padding: 10px;
+  padding: 8px;
 }
 
 .tcid-row-head {
@@ -1183,19 +1183,19 @@ body.glossary-open .glossary-drawer {
 
 .tcid-row-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 260px;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) 230px;
+  gap: 8px;
 }
 
 .tcid-row-block {
   border: 1px solid #e1ecf5;
   border-radius: 10px;
   background: #fbfdff;
-  padding: 8px;
+  padding: 6px;
 }
 
 .tcid-row-block h4 {
-  margin: 0 0 6px;
+  margin: 0 0 4px;
   color: #1a4f71;
   font-size: 0.84rem;
 }
@@ -1205,35 +1205,35 @@ body.glossary-open .glossary-drawer {
 }
 
 .tcid-run-widget {
-  margin-top: 8px;
+  margin-top: 5px;
   display: grid;
-  gap: 8px;
+  gap: 5px;
   border: 1px solid #d4e6f2;
   border-radius: 10px;
   background: #ffffff;
-  padding: 8px;
+  padding: 6px;
 }
 
 .tcid-run-widget.compact {
-  padding: 7px;
+  padding: 5px;
 }
 
 .tcid-run-row {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 5px;
 }
 
 .tcid-run-track {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: #1f5373;
   font-weight: 700;
 }
 
 .tcid-run-field {
   display: grid;
-  gap: 4px;
-  font-size: 0.75rem;
+  gap: 3px;
+  font-size: 0.74rem;
   color: #2c5975;
 }
 
@@ -1242,14 +1242,14 @@ body.glossary-open .glossary-drawer {
   border-radius: 7px;
   background: #f9fcff;
   color: #113d58;
-  padding: 4px 6px;
-  font-size: 0.8rem;
+  padding: 3px 5px;
+  font-size: 0.78rem;
 }
 
 .tcid-row-collapsibles {
-  margin-top: 10px;
+  margin-top: 6px;
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .tcid-compact-what,
@@ -1273,13 +1273,13 @@ body.glossary-open .glossary-drawer {
 
 .tcid-what-he {
   display: grid;
-  gap: 4px;
+  gap: 3px;
   color: #173f58;
   word-break: break-word;
 }
 
 .tcid-what-line {
-  line-height: 1.55;
+  line-height: 1.45;
 }
 
 .tcid-what-line-primary {
@@ -1396,6 +1396,8 @@ body.glossary-open .glossary-drawer {
 .tcid-pre-value {
   color: #173f58;
   line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .tcid-table-collapsible {
