@@ -1385,11 +1385,15 @@ function renderRunPreconditionsBlock(row) {
       <div class="tcid-inline-details-body">
         <div class="tcid-pre-grid">
           <div class="tcid-pre-item">
-            <div class="tcid-pre-label">תנאי הרצה</div>
+            <div class="tcid-pre-label">התנאים</div>
             <div class="tcid-pre-value">${esc(pre.conditions_he || "-")}</div>
           </div>
           <div class="tcid-pre-item">
-            <div class="tcid-pre-label">איך עומדים בהם (מה עושים בפועל)</div>
+            <div class="tcid-pre-label">מה זה אומר בעברית (מה משמעות התנאים)</div>
+            <div class="tcid-pre-value">${esc(pre.meaning_he || "-")}</div>
+          </div>
+          <div class="tcid-pre-item">
+            <div class="tcid-pre-label">איך אני גורם לעצמי לעמוד בתנאים (סדר פעולות)</div>
             <div class="tcid-pre-value">${esc(pre.how_to_meet_he || "-")}</div>
           </div>
         </div>

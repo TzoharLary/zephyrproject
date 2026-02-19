@@ -1374,7 +1374,8 @@ body.glossary-open .glossary-drawer {
 }
 
 .tcid-pre-grid {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
 }
 
