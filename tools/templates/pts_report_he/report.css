@@ -1183,7 +1183,7 @@ body.glossary-open .glossary-drawer {
 
 .tcid-row-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 260px;
+  grid-template-columns: minmax(0, 1fr) 260px;
   gap: 10px;
 }
 
@@ -1202,6 +1202,54 @@ body.glossary-open .glossary-drawer {
 
 .tcid-row-block-status {
   background: #f7fbff;
+}
+
+.tcid-run-widget {
+  margin-top: 8px;
+  display: grid;
+  gap: 8px;
+  border: 1px solid #d4e6f2;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 8px;
+}
+
+.tcid-run-widget.compact {
+  padding: 7px;
+}
+
+.tcid-run-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tcid-run-track {
+  font-size: 0.8rem;
+  color: #1f5373;
+  font-weight: 700;
+}
+
+.tcid-run-field {
+  display: grid;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: #2c5975;
+}
+
+.tcid-run-field select {
+  border: 1px solid #bfd6e6;
+  border-radius: 7px;
+  background: #f9fcff;
+  color: #113d58;
+  padding: 4px 6px;
+  font-size: 0.8rem;
+}
+
+.tcid-row-collapsibles {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
 }
 
 .tcid-compact-what,
@@ -1224,9 +1272,34 @@ body.glossary-open .glossary-drawer {
 }
 
 .tcid-what-he {
-  line-height: 1.55;
+  display: grid;
+  gap: 4px;
   color: #173f58;
   word-break: break-word;
+}
+
+.tcid-what-line {
+  line-height: 1.55;
+}
+
+.tcid-what-line-primary {
+  font-weight: 600;
+}
+
+.tcid-what-line-secondary {
+  border-top: 1px dashed #d7e6f2;
+  padding-top: 4px;
+}
+
+.tcid-what-line-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #4a7a96;
+  margin-top: 4px;
+}
+
+.tcid-what-line-label:first-child {
+  margin-top: 0;
 }
 
 .what-tested-en-toggle {
@@ -1263,6 +1336,71 @@ body.glossary-open .glossary-drawer {
 
 .tcid-what-sources .src-details {
   margin: 0;
+}
+
+.tcid-inline-details {
+  border: 1px dashed #c9deed;
+  border-radius: 9px;
+  background: #fcfeff;
+  padding: 6px 8px;
+}
+
+.tcid-inline-details summary {
+  cursor: pointer;
+  color: #0f5f8b;
+  font-weight: 600;
+}
+
+.tcid-inline-details-body {
+  margin-top: 7px;
+  display: grid;
+  gap: 8px;
+}
+
+.tcid-inline-details-text {
+  color: #1b425a;
+  line-height: 1.55;
+}
+
+.tcid-inline-details-empty {
+  display: grid;
+  gap: 5px;
+}
+
+.tcid-inline-details-title {
+  color: #1f5373;
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+
+.tcid-pre-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.tcid-pre-item {
+  border: 1px solid #d8e7f2;
+  border-radius: 9px;
+  background: #ffffff;
+  padding: 7px 8px;
+  display: grid;
+  gap: 5px;
+}
+
+.tcid-pre-label {
+  color: #2a5875;
+  font-size: 0.77rem;
+  font-weight: 700;
+}
+
+.tcid-pre-value {
+  color: #173f58;
+  line-height: 1.5;
+}
+
+.tcid-table-collapsible {
+  display: grid;
+  gap: 7px;
 }
 
 .tcid-why-grid {
@@ -1330,28 +1468,6 @@ body.glossary-open .glossary-drawer {
   border-color: #d1deea;
 }
 
-.tcid-expand-toggle {
-  justify-self: start;
-  border: 1px solid #9ec0d9;
-  border-radius: 8px;
-  background: #f7fbff;
-  color: #0a567f;
-  font-weight: 700;
-  font-size: 0.82rem;
-  padding: 4px 10px;
-  cursor: pointer;
-}
-
-.tcid-expand-toggle:hover {
-  background: #ecf6ff;
-}
-
-.tcid-expand-slot {
-  border-top: 1px dashed #d3e4ef;
-  margin-top: 10px;
-  padding-top: 10px;
-}
-
 .tcid-expand-panel {
   display: grid;
   gap: 10px;
@@ -1374,6 +1490,14 @@ body.glossary-open .glossary-drawer {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 7px 12px;
+}
+
+.tcid-expand-run-status {
+  margin-top: 10px;
+}
+
+.tcid-expand-conditions {
+  margin-top: 10px;
 }
 
 .tcid-expand-sources .src-details {
@@ -1493,6 +1617,33 @@ body.glossary-open .glossary-drawer {
   gap: 8px 12px;
 }
 
+.ts-summary-field {
+  border: 1px solid #d5e6f2;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 8px 9px;
+  display: grid;
+  gap: 4px;
+}
+
+.ts-summary-label {
+  color: #1f5273;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.ts-summary-value {
+  color: #103f5c;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.ts-summary-help {
+  color: #47657a;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
 .ts-revision-details {
   margin-top: 8px;
   border: 1px dashed #c9deed;
@@ -1524,6 +1675,52 @@ body.glossary-open .glossary-drawer {
   margin-top: 10px;
   display: grid;
   gap: 12px;
+}
+
+.profile-delta-card {
+  border-color: #c6ddef;
+  background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+}
+
+.profile-delta-grid {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.profile-delta-kpi {
+  border: 1px solid #d6e8f3;
+  border-radius: 9px;
+  background: #ffffff;
+  padding: 8px;
+}
+
+.profile-delta-label {
+  color: #275a79;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.profile-delta-value {
+  margin-top: 2px;
+  color: #0f4260;
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.profile-delta-details {
+  margin-top: 8px;
+  border: 1px dashed #c8ddea;
+  border-radius: 9px;
+  background: #fcfeff;
+  padding: 6px 8px;
+}
+
+.profile-delta-details summary {
+  cursor: pointer;
+  color: #0f5f8b;
+  font-weight: 600;
 }
 
 @media (max-width: 1280px) {
@@ -1597,6 +1794,10 @@ body.glossary-open .glossary-drawer {
     grid-template-columns: 1fr;
   }
 
+  .profile-delta-grid {
+    grid-template-columns: 1fr;
+  }
+
   .detail-item {
     grid-template-columns: 1fr;
   }
@@ -1661,6 +1862,10 @@ body.glossary-open .glossary-drawer {
 
   .tcid-row-grid {
     display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .tcid-run-row {
     grid-template-columns: 1fr;
   }
 

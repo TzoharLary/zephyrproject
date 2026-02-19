@@ -6,6 +6,7 @@ import json
 import os
 import re
 import subprocess
+import copy
 import zipfile
 import xml.etree.ElementTree as ET
 from collections import Counter
@@ -148,6 +149,16 @@ IOPT_VERIFIED_HEBREW: Dict[str, str] = {
     "IOPT/HRS/SEN/GATTDB/BV-01-I": "הטסט מאמת את תקינות שירות GATT עבור פרופיל HRS.",
     "IOPT/HID/DEV/SDPR/BV-01-I": "הטסט מאמת את רשומת ה-SDP עבור תפקיד התקן HID.",
     "IOPT/HID/HOS/CGSIT/SFC/BV-01-I": "הטסט מאמת תאימות עתידית ב-SDP כאשר ה-IUT פועל כמארח HID.",
+}
+
+SCENARIO_EXPLANATION_OVERRIDES_HE: Dict[str, str] = {
+    "IOPT/BAS/SR/GATTDB/BV-01-I": "תרחיש שבודק ששירות BAS מוגדר נכון במסד ה-GATT ושמאפייני השירות זמינים לפי התקן.",
+    "IOPT/BAS/SR/SGGIT/SDP/BV-01-I": "תרחיש שבודק שרשומת ה-SDP של BAS קיימת ומצהירה נכון על שירות GATT של BAS.",
+    "IOPT/DIS/SR/GATTDB/BV-01-I": "תרחיש שבודק ששירות DIS מוגדר נכון במסד ה-GATT ושהמאפיינים הצפויים של השירות זמינים.",
+    "IOPT/DIS/SR/SGGIT/SDP/BV-01-I": "תרחיש שבודק שרשומת ה-SDP של DIS קיימת ותואמת למבנה השירות ב-GATT.",
+    "IOPT/HRS/SEN/GATTDB/BV-01-I": "תרחיש שבודק ששירות HRS קיים ב-GATT ושהמבנה שלו מתאים להגדרת התקן.",
+    "IOPT/HID/DEV/SDPR/BV-01-I": "תרחיש שבודק שרשומת ה-SDP בתפקיד HID Device מוגדרת תקין ומייצגת נכון את היכולות.",
+    "IOPT/HID/HOS/CGSIT/SFC/BV-01-I": "תרחיש שבודק תאימות עתידית של רשומת SDP כאשר ה-IUT פועל בתפקיד HID Host.",
 }
 
 
@@ -1605,16 +1616,46 @@ def build_what_tested_en_official(desc: Any, ts_title: Any) -> str:
     return NO_OFFICIAL_ENGLISH_TEXT
 
 
-def build_what_tested_he_verified(desc: Any, ts_title: Any) -> str:
+def build_official_scenario_name_en(desc: Any, ts_title: Any) -> str:
     desc_text = str(desc or "").strip()
-    ts_title_text = str(ts_title or "").strip()
-    if desc_text and ts_title_text:
-        return f"הטסט מאמת את התרחיש הרשמי: {desc_text}. כותרת TS רשמית: {ts_title_text}."
     if desc_text:
-        return f"הטסט מאמת את התרחיש הרשמי: {desc_text}."
+        return desc_text
+    ts_title_text = str(ts_title or "").strip()
     if ts_title_text:
-        return f"הטסט מאמת לפי כותרת TS רשמית: {ts_title_text}."
-    return "אין תיאור טסט רשמי זמין במקורות."
+        return ts_title_text
+    return NO_OFFICIAL_ENGLISH_TEXT
+
+
+def dedupe_sources(sources: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    unique: Dict[str, Dict[str, Any]] = {}
+    for src in sources:
+        if not src or not src.get("file"):
+            continue
+        key = "|".join(
+            [
+                str(src.get("file") or ""),
+                str(src.get("sheet") or ""),
+                str(src.get("row") or ""),
+                str(src.get("line") or ""),
+                str(src.get("columns") or ""),
+                str(src.get("field_path") or ""),
+                str(src.get("note") or ""),
+            ]
+        )
+        unique[key] = src
+    return list(unique.values())
+
+
+def unique_strings(values: List[str]) -> List[str]:
+    out: List[str] = []
+    seen: Set[str] = set()
+    for value in values:
+        text = str(value or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        out.append(text)
+    return out
 
 
 def collect_what_tested_sources(row: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -1640,23 +1681,248 @@ def collect_what_tested_sources(row: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "note": ts_source.get("note") or "כותרת טסט מתוך TS",
             }
         )
-    unique: Dict[str, Dict[str, Any]] = {}
-    for src in sources:
-        key = "|".join(
-            [
-                str(src.get("file") or ""),
-                str(src.get("sheet") or ""),
-                str(src.get("row") or ""),
-                str(src.get("line") or ""),
-                str(src.get("columns") or ""),
-                str(src.get("note") or ""),
-            ]
+    return dedupe_sources(sources)
+
+
+def collect_condition_sources(row: Dict[str, Any]) -> List[Dict[str, Any]]:
+    sources: List[Dict[str, Any]] = []
+    for condition in row.get("conditions") or []:
+        map_id = str(condition.get("map_id") or "").strip()
+        map_tag = f" ({map_id})" if map_id else ""
+        for evidence in condition.get("tspc_evidence") or []:
+            official = (evidence or {}).get("official_source") or {}
+            site = (evidence or {}).get("site_source") or {}
+            if official.get("file"):
+                sources.append(
+                    {
+                        "file": official.get("file"),
+                        "sheet": official.get("sheet"),
+                        "row": official.get("row"),
+                        "line": official.get("line"),
+                        "columns": official.get("columns"),
+                        "note": (official.get("note") or f"תנאי TSPC רשמי{map_tag}").strip(),
+                    }
+                )
+            if site.get("file"):
+                sources.append(
+                    {
+                        "file": site.get("file"),
+                        "line": site.get("line"),
+                        "note": (site.get("note") or f"שורת Workspace לתנאי{map_tag}").strip(),
+                    }
+                )
+        for evidence in condition.get("relation_evidence") or []:
+            official = (evidence or {}).get("official_source") or {}
+            site = (evidence or {}).get("site_source") or {}
+            if official.get("file"):
+                sources.append(
+                    {
+                        "file": official.get("file"),
+                        "sheet": official.get("sheet"),
+                        "row": official.get("row"),
+                        "line": official.get("line"),
+                        "columns": official.get("columns"),
+                        "note": (official.get("note") or f"קשר TCMT↔TCID רשמי{map_tag}").strip(),
+                    }
+                )
+            if site.get("file"):
+                sources.append(
+                    {
+                        "file": site.get("file"),
+                        "line": site.get("line"),
+                        "note": (site.get("note") or f"מקור מיפוי באתר{map_tag}").strip(),
+                    }
+                )
+    return dedupe_sources(sources)
+
+
+def choose_scenario_subject_he(normalized: str) -> str:
+    subject_hints = [
+        ("battery level", "נתוני מצב סוללה"),
+        ("battery", "שירות ומדדי סוללה"),
+        ("device information", "מידע זיהוי התקן"),
+        ("manufacturer name", "שם יצרן"),
+        ("model number", "מספר דגם"),
+        ("serial number", "מספר סידורי"),
+        ("firmware", "גרסת קושחה"),
+        ("software revision", "גרסת תוכנה"),
+        ("hardware revision", "גרסת חומרה"),
+        ("heart rate measurement", "מדידת דופק"),
+        ("heart rate", "נתוני דופק"),
+        ("report map", "מפת דוחות HID"),
+        ("report characteristic", "מאפייני Report של HID"),
+        ("protocol mode", "מצב פרוטוקול HID"),
+        ("operation mode", "מצב פעולה"),
+        ("hid", "יכולות HID over GATT"),
+        ("descriptor", "תיאורנים (Descriptors)"),
+        ("service", "שירותי GATT"),
+        ("characteristic", "מאפייני GATT"),
+        ("sdp", "רשומת SDP"),
+    ]
+    for needle, subject in subject_hints:
+        if needle in normalized:
+            return subject
+    return "היכולת המוגדרת בתרחיש"
+
+
+def build_official_scenario_explanation_he(tcid: Any, scenario_name_en: str) -> Tuple[str, str]:
+    tcid_text = str(tcid or "").strip()
+    if tcid_text and tcid_text in SCENARIO_EXPLANATION_OVERRIDES_HE:
+        return str(SCENARIO_EXPLANATION_OVERRIDES_HE[tcid_text]).strip(), "verified_manual"
+
+    normalized = normalize_text(str(scenario_name_en or ""))
+    if not normalized:
+        return (
+            "תרחיש שבודק שה-IUT עומד ברצף הבדיקה הרשמי כפי שמוגדר במסמכי TS/TCRL.",
+            "verified_rule",
         )
-        unique[key] = src
-    return list(unique.values())
+
+    checks: List[str] = []
+
+    def has_any(*needles: str) -> bool:
+        return any(needle in normalized for needle in needles)
+
+    if has_any("service ggit", "primary service", "secondary service", "service"):
+        checks.append("שהשירות הרלוונטי קיים במסד ה-GATT ומוצהר לפי הדרישות")
+    if has_any("characteristic ggit", "characteristic"):
+        checks.append("שהמאפיין הנבדק קיים עם הרשאות ופורמט ערך תקינים")
+    if has_any("descriptor", "client characteristic configuration"):
+        checks.append("שה-Descriptor הדרוש קיים וניתן לקריאה/כתיבה לפי התקן")
+    if has_any("configure notification", "enable notifications", "receive notifications", "notification"):
+        checks.append("שהפעלת Notification עובדת וההודעות מתקבלות בהתאם לתרחיש")
+    if has_any("configure indication", "indication"):
+        checks.append("שהפעלת Indication תקינה ונשלח אישור קבלה כאשר נדרש")
+    if has_any("read", "characteristic read", "discover"):
+        checks.append("שפעולת קריאה/גילוי מחזירה את הנתונים והמבנה שהתקן מגדיר")
+    if has_any("write", "configure", "set protocol", "change operation mode"):
+        checks.append("שפעולת כתיבה/קונפיגורציה משנה מצב רק לפי הכללים התקניים")
+    if has_any("broadcast"):
+        checks.append("שמידע Broadcast מפורסם בפורמט תקני ובתנאי ההפעלה המתאימים")
+    if has_any("unsupported", "rfu", "invalid"):
+        checks.append("שטיפול בערכים לא נתמכים/שגויים מחזיר תגובה תקנית ובטוחה")
+    if has_any("sequence number", "confirmation"):
+        checks.append("שסידור מנות ו-acknowledgment נשמרים נכון בזרם הדיווח")
+    if has_any("sdp", "sdpr", "sggit"):
+        checks.append("שרשומת SDP משקפת נכון את היכולות והשירותים שהפרופיל מצהיר עליהם")
+
+    checks = unique_strings(checks)
+    subject = choose_scenario_subject_he(normalized)
+    if checks:
+        checks_text = "; ".join(checks[:3])
+        return f"תרחיש שבודק {subject}. בפועל נבדק: {checks_text}.", "verified_rule"
+    return f"תרחיש שבודק {subject} בהתאם לרצף הפעולות והתגובות המוגדר במסמכי TS/TCRL.", "verified_rule"
 
 
-def build_tcid_summary_fields(row: Dict[str, Any]) -> Dict[str, Any]:
+def build_what_tested_he_verified(
+    desc: Any,
+    ts_title: Any,
+    tcid: Any = None,
+    scenario_name_en: Optional[str] = None,
+    scenario_explanation_he: Optional[str] = None,
+) -> str:
+    scenario_name = str(scenario_name_en or "").strip() or build_official_scenario_name_en(desc, ts_title)
+    explanation = str(scenario_explanation_he or "").strip()
+    if not explanation:
+        explanation, _ = build_official_scenario_explanation_he(tcid, scenario_name)
+    return f"הטסט מאמת את התרחיש הרשמי: {scenario_name}.\n{scenario_name}: {explanation}"
+
+
+def build_profile_membership_reason_he(profile: str, row: Dict[str, Any]) -> str:
+    profile_label = str(profile or "").strip() or str((row.get("tcid") or "").split("/", 1)[0] or "הפרופיל")
+    conditions = row.get("conditions") or []
+    if not conditions:
+        return f"הטסט שויך לפרופיל {profile_label} לפי רשומת TCID הרשמית ב-TCRL עבור פרופיל זה."
+
+    capabilities = unique_strings(
+        [
+            str(condition.get("tspc_capability") or condition.get("tspc_name") or "").strip()
+            for condition in conditions
+            if condition
+        ]
+    )
+    if capabilities:
+        preview = ", ".join(capabilities[:2])
+        if len(capabilities) > 2:
+            preview = f"{preview} ועוד {len(capabilities) - 2} יכולות"
+        base = f"הטסט שויך לפרופיל {profile_label} כי נמצא מיפוי רשמי בין היכולות {preview} לבין TCID זה."
+    else:
+        base = f"הטסט שויך לפרופיל {profile_label} כי נמצא מיפוי רשמי של TSPC↔TCID במסמכי TS/TCRL."
+    if len(conditions) > 1:
+        return f"{base} קיימים כמה וריאנטים חלופיים (OR) לאותו TCID."
+    return base
+
+
+def build_profile_membership_sources(row: Dict[str, Any]) -> List[Dict[str, Any]]:
+    sources = collect_what_tested_sources(row)
+    condition_sources = collect_condition_sources(row)
+    return dedupe_sources([*sources, *condition_sources])
+
+
+def build_run_preconditions(row: Dict[str, Any]) -> Dict[str, Any]:
+    conditions = row.get("conditions") or []
+    if not conditions:
+        return {
+            "has_conditions": False,
+            "conditions_he": "",
+            "meaning_he": "",
+            "how_to_meet_he": "",
+            "sources": [],
+        }
+
+    primary = conditions[0] or {}
+    primary_plain = str(primary.get("plain_condition_he") or "").strip() or build_condition_plain_text(primary)
+    if len(conditions) == 1:
+        conditions_he = primary_plain
+    else:
+        group_labels = ["א", "ב", "ג", "ד", "ה", "ו", "ז", "ח"]
+        group_lines = ["קיימות מספר קבוצות תנאים; אם הטסט עומד באחת מקבוצות התנאים הבאות, ניתן להריץ אותו"]
+        for i, cond in enumerate(conditions):
+            plain = str((cond or {}).get("plain_condition_he") or "").strip() or build_condition_plain_text(cond or {})
+            label = group_labels[i] if i < len(group_labels) else str(i + 1)
+            group_lines.append(f"קבוצה {label}: {plain}")
+        conditions_he = "\n".join(group_lines)
+
+    hints = Counter(str(condition.get("condition_hint") or "unknown") for condition in conditions if condition)
+    if hints.get("active_required", 0):
+        meaning_he = "לפחות תנאי חובה אחד פעיל, ולכן הטסט נדרש להרצה בתצורה הזו."
+    elif hints.get("active_optional", 0) or hints.get("conditional", 0):
+        meaning_he = "הטסט תלוי ביכולות אופציונליות/מותנות; מספיק שאחד הווריאנטים מתקיים (OR)."
+    else:
+        meaning_he = "לפי מצב התנאים הנוכחי הטסט לרוב לא ייכלל בהרצה, אלא אם ערכי הקונפיגורציה ישתנו."
+
+    steps: List[str] = []
+    for i, condition in enumerate(conditions, 1):
+        capability = str((condition or {}).get("tspc_capability") or (condition or {}).get("tspc_name") or "יכולת לא מזוהה")
+        item = str((condition or {}).get("tspc_item") or "").strip()
+        expr = str((condition or {}).get("item_expression") or "").strip()
+        target = str((condition or {}).get("value") or "").upper()
+        target_text = "TRUE" if target == "TRUE" else target if target else "TRUE"
+        step_parts = [f"{i}. להגדיר {capability}"]
+        if item:
+            step_parts.append(f"(ICS {item})")
+        step_parts.append(f"לערך {target_text}.")
+        if expr:
+            step_parts.append(f"ביטוי TCMT שצריך להתקיים: {expr}.")
+        step_parts.append(f"סימן עמידה בתנאי: הפרמטר מופיע ב-PTS workspace כ-{target_text}.")
+        steps.append(" ".join(step_parts))
+    how_to_meet_he = "\n".join(unique_strings(steps)).strip()
+    if not how_to_meet_he:
+        how_to_meet_he = "לעדכן את ערכי ה-ICS/TSPC כך שתנאי ה-TCMT של הטסט מתקיימים בפועל."
+
+    sources = collect_condition_sources(row)
+    if not sources:
+        sources = collect_what_tested_sources(row)
+
+    return {
+        "has_conditions": True,
+        "conditions_he": conditions_he,
+        "meaning_he": meaning_he,
+        "how_to_meet_he": how_to_meet_he,
+        "sources": sources,
+    }
+
+
+def build_tcid_summary_fields(row: Dict[str, Any], profile: str = "") -> Dict[str, Any]:
     conditions = row.get("conditions") or []
     runtime_signal = str(row.get("runtime_signal") or "unknown")
     runtime_active = row.get("runtime_active")
@@ -1682,9 +1948,20 @@ def build_tcid_summary_fields(row: Dict[str, Any]) -> Dict[str, Any]:
         status = "unknown"
         status_reason = "אין מספיק מידע תנאי כדי להכריע מצב הפעלה."
 
-    what_tested_he = build_what_tested_he_verified(desc, ts_title)
+    scenario_name_en = build_official_scenario_name_en(desc, ts_title)
+    scenario_explanation_he, scenario_quality = build_official_scenario_explanation_he(row.get("tcid"), scenario_name_en)
+    what_tested_he = build_what_tested_he_verified(
+        desc,
+        ts_title,
+        row.get("tcid"),
+        scenario_name_en=scenario_name_en,
+        scenario_explanation_he=scenario_explanation_he,
+    )
     what_tested_en = build_what_tested_en_official(desc, ts_title)
     what_tested_sources = collect_what_tested_sources(row)
+    profile_membership_reason = build_profile_membership_reason_he(profile, row)
+    profile_membership_sources = build_profile_membership_sources(row)
+    run_preconditions = build_run_preconditions(row)
 
     if not conditions:
         why_relevant = "לא נמצא תנאי TCMT משויך ל-TCID זה."
@@ -1723,10 +2000,23 @@ def build_tcid_summary_fields(row: Dict[str, Any]) -> Dict[str, Any]:
         "summary_status": status,
         "summary_status_reason_he": status_reason,
         "summary_badges": badges,
+        "official_scenario_name_en": scenario_name_en,
+        "official_scenario_explanation_he": scenario_explanation_he,
+        "official_scenario_explanation_sources": [dict(src) for src in what_tested_sources if src],
+        "scenario_explanation_quality": scenario_quality,
+        "profile_membership_reason_he": profile_membership_reason,
+        "profile_membership_sources": [dict(src) for src in profile_membership_sources if src],
+        "run_preconditions": {
+            "has_conditions": bool(run_preconditions.get("has_conditions")),
+            "conditions_he": str(run_preconditions.get("conditions_he") or "").strip(),
+            "meaning_he": str(run_preconditions.get("meaning_he") or "").strip(),
+            "how_to_meet_he": str(run_preconditions.get("how_to_meet_he") or "").strip(),
+            "sources": [dict(src) for src in (run_preconditions.get("sources") or []) if src],
+        },
         "what_tested_he_verified": what_tested_he,
         "what_tested_en_official": what_tested_en,
         "what_tested_sources": what_tested_sources,
-        "translation_quality": "verified_from_mapping",
+        "translation_quality": "verified_manual" if scenario_quality == "verified_manual" else "verified_from_mapping",
     }
 
 
@@ -1964,20 +2254,53 @@ def tcid_mapping_summary_template() -> Dict[str, int]:
 
 
 def validate_tcid_compact_fields(profile: str, rows: List[Dict[str, Any]]) -> None:
+    allowed_quality = {"verified_rule", "verified_manual"}
     for row in rows or []:
+        tcid = row.get("tcid")
         if not row.get("summary_status"):
-            raise ValueError(f"{profile}: row without summary_status for TCID {row.get('tcid')}")
+            raise ValueError(f"{profile}: row without summary_status for TCID {tcid}")
         if not str(row.get("what_tested_he_verified") or "").strip():
-            raise ValueError(f"{profile}: row without what_tested_he_verified for TCID {row.get('tcid')}")
+            raise ValueError(f"{profile}: row without what_tested_he_verified for TCID {tcid}")
         if not str(row.get("what_tested_en_official") or "").strip():
-            raise ValueError(f"{profile}: row without what_tested_en_official for TCID {row.get('tcid')}")
+            raise ValueError(f"{profile}: row without what_tested_en_official for TCID {tcid}")
         sources = row.get("what_tested_sources")
         if not isinstance(sources, list) or not any((src or {}).get("file") for src in sources):
-            raise ValueError(f"{profile}: row without what_tested_sources for TCID {row.get('tcid')}")
+            raise ValueError(f"{profile}: row without what_tested_sources for TCID {tcid}")
+
+        if not str(row.get("official_scenario_name_en") or "").strip():
+            raise ValueError(f"{profile}: row without official_scenario_name_en for TCID {tcid}")
+        if not str(row.get("official_scenario_explanation_he") or "").strip():
+            raise ValueError(f"{profile}: row without official_scenario_explanation_he for TCID {tcid}")
+        scenario_sources = row.get("official_scenario_explanation_sources")
+        if not isinstance(scenario_sources, list) or not any((src or {}).get("file") for src in scenario_sources):
+            raise ValueError(f"{profile}: row without official_scenario_explanation_sources for TCID {tcid}")
+        if row.get("scenario_explanation_quality") not in allowed_quality:
+            raise ValueError(f"{profile}: row with invalid scenario_explanation_quality for TCID {tcid}")
+
+        if not str(row.get("profile_membership_reason_he") or "").strip():
+            raise ValueError(f"{profile}: row without profile_membership_reason_he for TCID {tcid}")
+        membership_sources = row.get("profile_membership_sources")
+        if not isinstance(membership_sources, list) or not any((src or {}).get("file") for src in membership_sources):
+            raise ValueError(f"{profile}: row without profile_membership_sources for TCID {tcid}")
+
+        run_preconditions = row.get("run_preconditions")
+        if not isinstance(run_preconditions, dict):
+            raise ValueError(f"{profile}: row without run_preconditions object for TCID {tcid}")
+        if run_preconditions.get("has_conditions"):
+            if not str(run_preconditions.get("conditions_he") or "").strip():
+                raise ValueError(f"{profile}: run_preconditions without conditions_he for TCID {tcid}")
+            if not str(run_preconditions.get("meaning_he") or "").strip():
+                raise ValueError(f"{profile}: run_preconditions without meaning_he for TCID {tcid}")
+            if not str(run_preconditions.get("how_to_meet_he") or "").strip():
+                raise ValueError(f"{profile}: run_preconditions without how_to_meet_he for TCID {tcid}")
+            pre_sources = run_preconditions.get("sources")
+            if not isinstance(pre_sources, list) or not any((src or {}).get("file") for src in pre_sources):
+                raise ValueError(f"{profile}: run_preconditions without sources for TCID {tcid}")
+
         for condition in row.get("conditions") or []:
             if not str(condition.get("plain_condition_he") or "").strip():
                 raise ValueError(
-                    f"{profile}: condition without plain_condition_he for TCID {row.get('tcid')} map_id={condition.get('map_id')}"
+                    f"{profile}: condition without plain_condition_he for TCID {tcid} map_id={condition.get('map_id')}"
                 )
 
 
@@ -1985,37 +2308,45 @@ def attach_verified_fields_to_tc_rows(
     tc_rows: List[Dict[str, Any]],
     mapped_rows: List[Dict[str, Any]],
     profile: str,
-    manual_hebrew: Optional[Dict[str, str]] = None,
 ) -> None:
+    field_names = [
+        "summary_what_tested_he",
+        "summary_why_relevant_he",
+        "summary_status",
+        "summary_status_reason_he",
+        "summary_badges",
+        "official_scenario_name_en",
+        "official_scenario_explanation_he",
+        "official_scenario_explanation_sources",
+        "scenario_explanation_quality",
+        "profile_membership_reason_he",
+        "profile_membership_sources",
+        "run_preconditions",
+        "what_tested_he_verified",
+        "what_tested_en_official",
+        "what_tested_sources",
+        "translation_quality",
+    ]
     mapped_by_tcid = {str(row.get("tcid") or ""): row for row in mapped_rows or [] if row.get("tcid")}
-    manual_map = manual_hebrew or {}
     for row in tc_rows or []:
         tcid = str(row.get("tcid") or "").strip()
         if not tcid:
             continue
         mapped = mapped_by_tcid.get(tcid)
         if mapped:
-            row["what_tested_he_verified"] = str(mapped.get("what_tested_he_verified") or "").strip()
-            row["what_tested_en_official"] = str(mapped.get("what_tested_en_official") or "").strip()
-            row["what_tested_sources"] = [dict(src) for src in (mapped.get("what_tested_sources") or []) if src]
-            row["translation_quality"] = "verified_from_mapping"
+            for field_name in field_names:
+                if field_name in mapped:
+                    row[field_name] = copy.deepcopy(mapped[field_name])
             continue
 
-        manual_he = str(manual_map.get(tcid) or "").strip()
-        if manual_he:
-            row["what_tested_he_verified"] = manual_he
-            row["what_tested_en_official"] = build_what_tested_en_official(row.get("desc"), row.get("ts_title"))
-            row["what_tested_sources"] = collect_what_tested_sources(row)
-            row["translation_quality"] = "verified_manual"
-            continue
-
-        row["what_tested_he_verified"] = build_what_tested_he_verified(row.get("desc"), row.get("ts_title"))
-        row["what_tested_en_official"] = build_what_tested_en_official(row.get("desc"), row.get("ts_title"))
-        row["what_tested_sources"] = collect_what_tested_sources(row)
-        row["translation_quality"] = "verified_manual"
+        built = build_tcid_summary_fields(row, profile)
+        for field_name in field_names:
+            if field_name in built:
+                row[field_name] = copy.deepcopy(built[field_name])
 
 
 def validate_verified_fields_in_tc_group(group_name: str, rows: List[Dict[str, Any]]) -> None:
+    allowed_quality = {"verified_rule", "verified_manual"}
     for row in rows or []:
         tcid = row.get("tcid")
         if not str(row.get("what_tested_he_verified") or "").strip():
@@ -2025,6 +2356,33 @@ def validate_verified_fields_in_tc_group(group_name: str, rows: List[Dict[str, A
         sources = row.get("what_tested_sources")
         if not isinstance(sources, list) or not any((src or {}).get("file") for src in sources):
             raise ValueError(f"{group_name}: missing what_tested_sources for TCID {tcid}")
+        if not str(row.get("official_scenario_name_en") or "").strip():
+            raise ValueError(f"{group_name}: missing official_scenario_name_en for TCID {tcid}")
+        if not str(row.get("official_scenario_explanation_he") or "").strip():
+            raise ValueError(f"{group_name}: missing official_scenario_explanation_he for TCID {tcid}")
+        scenario_sources = row.get("official_scenario_explanation_sources")
+        if not isinstance(scenario_sources, list) or not any((src or {}).get("file") for src in scenario_sources):
+            raise ValueError(f"{group_name}: missing official_scenario_explanation_sources for TCID {tcid}")
+        if row.get("scenario_explanation_quality") not in allowed_quality:
+            raise ValueError(f"{group_name}: invalid scenario_explanation_quality for TCID {tcid}")
+        if not str(row.get("profile_membership_reason_he") or "").strip():
+            raise ValueError(f"{group_name}: missing profile_membership_reason_he for TCID {tcid}")
+        membership_sources = row.get("profile_membership_sources")
+        if not isinstance(membership_sources, list) or not any((src or {}).get("file") for src in membership_sources):
+            raise ValueError(f"{group_name}: missing profile_membership_sources for TCID {tcid}")
+        run_preconditions = row.get("run_preconditions")
+        if not isinstance(run_preconditions, dict):
+            raise ValueError(f"{group_name}: missing run_preconditions object for TCID {tcid}")
+        if run_preconditions.get("has_conditions"):
+            if not str(run_preconditions.get("conditions_he") or "").strip():
+                raise ValueError(f"{group_name}: run_preconditions missing conditions_he for TCID {tcid}")
+            if not str(run_preconditions.get("meaning_he") or "").strip():
+                raise ValueError(f"{group_name}: run_preconditions missing meaning_he for TCID {tcid}")
+            if not str(run_preconditions.get("how_to_meet_he") or "").strip():
+                raise ValueError(f"{group_name}: run_preconditions missing how_to_meet_he for TCID {tcid}")
+            pre_sources = run_preconditions.get("sources")
+            if not isinstance(pre_sources, list) or not any((src or {}).get("file") for src in pre_sources):
+                raise ValueError(f"{group_name}: run_preconditions missing sources for TCID {tcid}")
 
 
 def build_tcid_first_mapping(
@@ -2177,7 +2535,7 @@ def build_tcid_first_mapping(
         row["runtime_signal"] = runtime_signal_from_conditions(row["conditions"])
         if not row["conditions"]:
             row["unmapped_note"] = "לא נמצאו תנאים משויכים ל-TCID זה מתוך מיפוי TSPC↔TCID."
-        row.update(build_tcid_summary_fields(row))
+        row.update(build_tcid_summary_fields(row, profile))
 
     for tc in tc_rows:
         tcid = tc.get("tcid")
@@ -2202,7 +2560,7 @@ def build_tcid_first_mapping(
             "tcmt_features": [],
             "unmapped_note": "TCID זה נמצא ב-TCRL אך ללא תנאים משויכים ממיפוי TSPC הנוכחי.",
         }
-        rows_by_tcid[tcid].update(build_tcid_summary_fields(rows_by_tcid[tcid]))
+        rows_by_tcid[tcid].update(build_tcid_summary_fields(rows_by_tcid[tcid], profile))
 
     rows = sorted(rows_by_tcid.values(), key=lambda row: row.get("tcid") or "")
     summary = tcid_mapping_summary_template()
@@ -2698,10 +3056,10 @@ def main() -> None:
     attach_verified_fields_to_tc_rows(bas_tc, bas_tcid_rows, "BAS")
     attach_verified_fields_to_tc_rows(hrs_tc, hrs_tcid_rows, "HRS")
     attach_verified_fields_to_tc_rows(hid_tc, hid_tcid_rows, "HID")
-    attach_verified_fields_to_tc_rows(iopt_bas, [], "IOPT/BAS", manual_hebrew=IOPT_VERIFIED_HEBREW)
-    attach_verified_fields_to_tc_rows(iopt_dis, [], "IOPT/DIS", manual_hebrew=IOPT_VERIFIED_HEBREW)
-    attach_verified_fields_to_tc_rows(iopt_hrs, [], "IOPT/HRS", manual_hebrew=IOPT_VERIFIED_HEBREW)
-    attach_verified_fields_to_tc_rows(iopt_hid, [], "IOPT/HID", manual_hebrew=IOPT_VERIFIED_HEBREW)
+    attach_verified_fields_to_tc_rows(iopt_bas, [], "IOPT/BAS")
+    attach_verified_fields_to_tc_rows(iopt_dis, [], "IOPT/DIS")
+    attach_verified_fields_to_tc_rows(iopt_hrs, [], "IOPT/HRS")
+    attach_verified_fields_to_tc_rows(iopt_hid, [], "IOPT/HID")
 
     validate_verified_fields_in_tc_group("tcs.dis", dis_tc)
     validate_verified_fields_in_tc_group("tcs.bas", bas_tc)
@@ -2932,6 +3290,8 @@ def main() -> None:
             "tc_category": "קטגוריית הבדיקה לפי TCRL.",
             "active_date": "תאריך ההפעלה/רלוונטיות של הבדיקה לפי TCRL.",
             "test_desc": "מה הבדיקה מבצעת בפועל לפי TCRL, ובנוסף כותרות/פירושי TS כשזמינים.",
+            "execution_status": "מצב בדיקה ידני/AutoPTS כולל מבצע לכל מסלול. נשמר מקומית בדפדפן (localStorage).",
+            "membership_preconditions": "שיוך הטסט לפרופיל + תנאי הרצה מעשיים (אם קיימים), עם הסבר ומקורות.",
             "mapped_tcids": "בדיקות TCID שמופו ליכולת TSPC הזו, עם פירוט נפתח.",
             "mapping_confidence": "רמת ודאות המיפוי: High כשקיים קשר רשמי ב-TS TCMT, אחרת Unmapped.",
             "mapping_bucket": "שיוך הפריט בסקירה: חובה / אופציונלי / תלוי-תנאי.",

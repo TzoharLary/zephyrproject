@@ -101,11 +101,24 @@ const comparisonState = {
   topic: (DATA.comparison && DATA.comparison.default_filter && DATA.comparison.default_filter.topic) || "ALL",
 };
 
+const RUN_STATUS_STORAGE_KEY = "pts_report_run_status_v1";
+const RUN_STATUS_VALUES = [
+  { value: "not_tested", label: "לא נבדק" },
+  { value: "pass", label: "עבר" },
+  { value: "fail", label: "נכשל" },
+];
+const RUN_STATUS_OWNERS = ["דוד", "עמית", "רעות", "צהר"];
+const RUN_TRACKS = [
+  { key: "manual", label: "ידני ב-PTS" },
+  { key: "autopts", label: "אוטומטי ב-AutoPTS" },
+];
+
 const DRAWER_WIDTH_STORAGE_KEY = "pts_report_glossary_drawer_width";
 const DRAWER_MIN_WIDTH = 300;
 const DRAWER_MAX_WIDTH_CAP = 920;
 
 let tableIdCounter = 0;
+const runStatusState = loadRunStatusState();
 
 function esc(str) {
   return String(str ?? "").replace(/[&<>"']/g, (s) =>
@@ -117,6 +130,100 @@ function esc(str) {
       "'": "&#39;",
     })[s]
   );
+}
+
+function runEntryKey(profileKey, tcid) {
+  const profile = String(profileKey || "GLOBAL").trim() || "GLOBAL";
+  const test = String(tcid || "").trim();
+  return `${profile}::${test}`;
+}
+
+function emptyTrackState() {
+  return { status: "not_tested", owner: "" };
+}
+
+function normalizeTrackState(track) {
+  const normalized = Object.assign({}, emptyTrackState(), track || {});
+  if (!RUN_STATUS_VALUES.some((item) => item.value === normalized.status)) normalized.status = "not_tested";
+  if (!RUN_STATUS_OWNERS.includes(normalized.owner)) normalized.owner = "";
+  return normalized;
+}
+
+function normalizeRunEntry(entry) {
+  const safe = entry || {};
+  return {
+    manual: normalizeTrackState(safe.manual),
+    autopts: normalizeTrackState(safe.autopts),
+  };
+}
+
+function loadRunStatusState() {
+  try {
+    const raw = localStorage.getItem(RUN_STATUS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || !parsed.entries || typeof parsed.entries !== "object") return {};
+    const out = {};
+    Object.entries(parsed.entries).forEach(([key, value]) => {
+      out[String(key)] = normalizeRunEntry(value);
+    });
+    return out;
+  } catch (error) {
+    return {};
+  }
+}
+
+function persistRunStatusState() {
+  try {
+    localStorage.setItem(
+      RUN_STATUS_STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        updated_at: new Date().toISOString(),
+        entries: runStatusState,
+      })
+    );
+  } catch (error) {
+    // Ignore localStorage failures in restricted contexts.
+  }
+}
+
+function getRunEntry(profileKey, tcid) {
+  const key = runEntryKey(profileKey, tcid);
+  if (!runStatusState[key]) runStatusState[key] = normalizeRunEntry({});
+  return runStatusState[key];
+}
+
+function updateRunEntry(profileKey, tcid, track, field, value) {
+  const key = runEntryKey(profileKey, tcid);
+  const current = normalizeRunEntry(runStatusState[key]);
+  const next = Object.assign({}, current);
+  const targetTrack = track === "autopts" ? "autopts" : "manual";
+  const normalizedTrack = normalizeTrackState(next[targetTrack]);
+  if (field === "status") {
+    normalizedTrack.status = RUN_STATUS_VALUES.some((item) => item.value === value) ? value : "not_tested";
+  } else if (field === "owner") {
+    normalizedTrack.owner = RUN_STATUS_OWNERS.includes(value) ? value : "";
+  }
+  next[targetTrack] = normalizedTrack;
+  runStatusState[key] = next;
+  persistRunStatusState();
+}
+
+function syncRunControls(runKey) {
+  const entry = normalizeRunEntry(runStatusState[runKey]);
+  const selectorKey =
+    window.CSS && typeof window.CSS.escape === "function"
+      ? window.CSS.escape(runKey)
+      : String(runKey || "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  document.querySelectorAll(`[data-run-key="${selectorKey}"]`).forEach((element) => {
+    const track = element.getAttribute("data-run-track");
+    const field = element.getAttribute("data-run-field");
+    if (!track || !field) return;
+    const value = track === "autopts" ? entry.autopts : entry.manual;
+    if (field === "status") element.value = value.status;
+    if (field === "owner") element.value = value.owner;
+  });
 }
 
 function glossary(term) {
@@ -773,6 +880,30 @@ function officialWhatTestedEnglish(row) {
   return "No official English test description is available.";
 }
 
+function officialScenarioNameEnglish(row) {
+  if (row && row.official_scenario_name_en) return row.official_scenario_name_en;
+  if (row && row.desc) return row.desc;
+  if (row && row.ts_title) return row.ts_title;
+  return "No official English test description is available.";
+}
+
+function fallbackScenarioExplanation(row) {
+  const scenario = officialScenarioNameEnglish(row);
+  return `תרחיש שבודק שההתנהגות המוגדרת ב-${scenario} מתבצעת בפועל לפי מסמכי TS/TCRL.`;
+}
+
+function officialScenarioExplanationHe(row) {
+  if (row && row.official_scenario_explanation_he) return row.official_scenario_explanation_he;
+  return fallbackScenarioExplanation(row);
+}
+
+function officialScenarioExplanationSources(row) {
+  if (row && Array.isArray(row.official_scenario_explanation_sources) && row.official_scenario_explanation_sources.length) {
+    return uniqueSources(row.official_scenario_explanation_sources);
+  }
+  return whatTestedSources(row);
+}
+
 function whatTestedSources(row) {
   if (row && Array.isArray(row.what_tested_sources) && row.what_tested_sources.length) {
     return uniqueSources(row.what_tested_sources);
@@ -797,13 +928,22 @@ function whatTestedSources(row) {
   return uniqueSources(sources);
 }
 
+function buildWhatTestedLines(row) {
+  const scenarioName = officialScenarioNameEnglish(row);
+  const scenarioExplanation = officialScenarioExplanationHe(row);
+  return {
+    scenarioName,
+    scenarioExplanation,
+    topLine: `הטסט מאמת את התרחיש הרשמי: ${scenarioName}.`,
+    detailLine: `${scenarioName}: ${scenarioExplanation}`,
+  };
+}
+
 function summaryWhatTested(row) {
-  return (
-    (row && row.what_tested_he_verified) ||
-    (row && row.summary_what_tested_he) ||
-    (row && row.desc ? `הטסט מאמת את התרחיש הרשמי: ${row.desc}.` : "") ||
-    "אין תיאור טסט רשמי זמין במקורות."
-  );
+  if (row && row.what_tested_he_verified) return row.what_tested_he_verified;
+  if (row && row.summary_what_tested_he) return row.summary_what_tested_he;
+  const lines = buildWhatTestedLines(row);
+  return `${lines.topLine}\n${lines.detailLine}`;
 }
 
 function summaryWhyRelevant(row) {
@@ -814,6 +954,55 @@ function summaryWhyRelevant(row) {
   const plain = first && (first.plain_condition_he || conditionPlainText(first));
   if (conditions.length === 1) return plain || "נמצא תנאי יחיד עבור TCID זה.";
   return `${plain || "נמצא תנאי ראשי."} קיימות עוד ${conditions.length - 1} אפשרויות הפעלה חלופיות (OR).`;
+}
+
+function profileMembershipData(row) {
+  const reason =
+    (row && row.profile_membership_reason_he) ||
+    "שיוך הטסט מבוסס על רשומת TCID רשמית ב-TCRL ועל התאמות מול TS/ICS כאשר קיימות.";
+  const sources =
+    row && Array.isArray(row.profile_membership_sources) && row.profile_membership_sources.length
+      ? uniqueSources(row.profile_membership_sources)
+      : whatTestedSources(row);
+  return { reason, sources };
+}
+
+function runPreconditionsData(row) {
+  if (row && row.run_preconditions && typeof row.run_preconditions === "object") {
+    return {
+      has_conditions: !!row.run_preconditions.has_conditions,
+      conditions_he: row.run_preconditions.conditions_he || "",
+      meaning_he: row.run_preconditions.meaning_he || "",
+      how_to_meet_he: row.run_preconditions.how_to_meet_he || "",
+      sources: uniqueSources(row.run_preconditions.sources || []),
+    };
+  }
+  const conditions = (row && row.conditions) || [];
+  if (!conditions.length) {
+    return {
+      has_conditions: false,
+      conditions_he: "",
+      meaning_he: "",
+      how_to_meet_he: "",
+      sources: [],
+    };
+  }
+  const first = conditions[0];
+  const firstText = (first && first.plain_condition_he) || conditionPlainText(first);
+  const conditionsText =
+    conditions.length > 1 ? `${firstText} קיימות עוד ${conditions.length - 1} אפשרויות חלופיות (OR).` : firstText;
+  return {
+    has_conditions: true,
+    conditions_he: conditionsText,
+    meaning_he: summaryStatusReason(row),
+    how_to_meet_he: "לעדכן ערכי ICS/TSPC כך שביטוי התנאי עבור הטסט מתקיים.",
+    sources: uniqueSources(
+      conditions.flatMap((condition) => [
+        ...flattenEvidence((condition && condition.tspc_evidence) || []),
+        ...flattenEvidence((condition && condition.relation_evidence) || []),
+      ])
+    ),
+  };
 }
 
 function logicEvalLabel(result) {
@@ -827,13 +1016,12 @@ function buildWhyRelevantRows(row, options) {
   const conditions = (row && row.conditions) || [];
   if (!conditions.length) {
     return [
-      { label: "מצב תנאי מרכזי", value: (row && row.unmapped_note) || "אין תנאים משויכים כרגע." },
+      { label: "הסבר תמציתי", value: summaryWhyRelevant(row) },
       { label: "מסקנה", value: summaryStatusReason(row) },
     ];
   }
 
   const primary = conditions[0] || {};
-  const evalResult = primary && primary.expression_eval && primary.expression_eval.result;
   const evalItems =
     primary && primary.expression_eval && Array.isArray(primary.expression_eval.items) ? primary.expression_eval.items : [];
   const icsValues = evalItems.length
@@ -844,12 +1032,8 @@ function buildWhyRelevantRows(row, options) {
 
   const rows = [
     {
-      label: "מצב יכולת/תנאי",
-      value: primary.plain_condition_he || conditionPlainText(primary),
-    },
-    {
-      label: "תוצאת TCMT",
-      value: `ביטוי TCMT: ${logicEvalLabel(evalResult)}${primary.logic_eval_reason_he ? ` · ${primary.logic_eval_reason_he}` : ""}`,
+      label: "הסבר תמציתי",
+      value: summaryWhyRelevant(row),
     },
     {
       label: "ערכי ICS עיקריים",
@@ -899,15 +1083,20 @@ function renderWhyRelevantStructured(row, options) {
 
 function renderWhatTestedBlock(row, options) {
   const settings = Object.assign({ includeSources: false, compact: false }, options || {});
-  const hebrewText = summaryWhatTested(row);
+  const whatLines = buildWhatTestedLines(row);
   const englishText = officialWhatTestedEnglish(row);
   const quality = (row && row.translation_quality) || "verified_from_mapping";
   const panelId = nextTableId("what-en");
-  const sources = whatTestedSources(row);
+  const sources = officialScenarioExplanationSources(row);
   return `
     <div class="tcid-what-wrap" dir="rtl" data-translation-quality="${esc(quality)}">
       <div class="tcid-what-headline">
-        <div class="tcid-what-he">${esc(hebrewText)}</div>
+        <div class="tcid-what-he">
+          <div class="tcid-what-line tcid-what-line-label">שם התרחיש:</div>
+          <div class="tcid-what-line tcid-what-line-primary">${esc(whatLines.scenarioName)}</div>
+          <div class="tcid-what-line tcid-what-line-label">הסבר:</div>
+          <div class="tcid-what-line tcid-what-line-secondary">${esc(whatLines.scenarioExplanation)}</div>
+        </div>
         <button
           type="button"
           class="what-tested-en-toggle"
@@ -951,6 +1140,62 @@ function displayBadgeText(badge) {
   if (value === "Runtime Active") return "הופיע בצילום הרצה";
   if (value === "Runtime Inactive") return "לא הופיע בצילום הרצה";
   return value;
+}
+
+function renderStatusOptions(selectedValue) {
+  return RUN_STATUS_VALUES.map(
+    (item) => `<option value="${esc(item.value)}" ${selectedValue === item.value ? "selected" : ""}>${esc(item.label)}</option>`
+  ).join("");
+}
+
+function renderOwnerOptions(selectedValue) {
+  return [
+    '<option value="">בחר מבצע</option>',
+    ...RUN_STATUS_OWNERS.map(
+      (owner) => `<option value="${esc(owner)}" ${selectedValue === owner ? "selected" : ""}>${esc(owner)}</option>`
+    ),
+  ].join("");
+}
+
+function renderRunStatusControls(row, options) {
+  const settings = Object.assign({ profileKey: "GLOBAL", compact: false }, options || {});
+  const tcid = row && row.tcid ? row.tcid : "";
+  const runKey = runEntryKey(settings.profileKey, tcid);
+  const entry = getRunEntry(settings.profileKey, tcid);
+  return `
+    <div class="tcid-run-widget ${settings.compact ? "compact" : ""}" data-run-key="${esc(runKey)}">
+      ${RUN_TRACKS.map((track) => {
+        const trackState = track.key === "autopts" ? entry.autopts : entry.manual;
+        return `
+          <div class="tcid-run-row">
+            <div class="tcid-run-track">${esc(track.label)}</div>
+            <label class="tcid-run-field">
+              <span>סטטוס</span>
+              <select
+                class="run-status-select"
+                data-run-key="${esc(runKey)}"
+                data-run-track="${esc(track.key)}"
+                data-run-field="status"
+              >
+                ${renderStatusOptions(trackState.status)}
+              </select>
+            </label>
+            <label class="tcid-run-field">
+              <span>מבצע</span>
+              <select
+                class="run-status-select"
+                data-run-key="${esc(runKey)}"
+                data-run-track="${esc(track.key)}"
+                data-run-field="owner"
+              >
+                ${renderOwnerOptions(trackState.owner)}
+              </select>
+            </label>
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
 }
 
 function getQuickFilterForScope(scope) {
@@ -1042,12 +1287,20 @@ function rowSearchText(row) {
     row && row.desc,
     row && row.ts_title,
     summaryWhatTested(row),
+    row && row.official_scenario_name_en,
+    row && row.official_scenario_explanation_he,
     summaryWhyRelevant(row),
     summaryStatus(row),
     summaryStatusReason(row),
+    row && row.profile_membership_reason_he,
     ...(summaryBadges(row) || []),
     ...((summaryBadges(row) || []).map((badge) => displayBadgeText(badge))),
   ];
+  if (row && row.run_preconditions) {
+    parts.push(row.run_preconditions.conditions_he);
+    parts.push(row.run_preconditions.meaning_he);
+    parts.push(row.run_preconditions.how_to_meet_he);
+  }
   if (row && row.source) {
     parts.push(row.source.file, row.source.sheet, row.source.row, row.source.columns);
   }
@@ -1101,6 +1354,49 @@ function renderTcidMeaningCell(row) {
   }
 
   return `<div class="tcid-test-cell">${lines.join("")}</div>`;
+}
+
+function renderProfileMembershipBlock(row) {
+  const membership = profileMembershipData(row);
+  return `
+    <details class="tcid-inline-details">
+      <summary>על בסיס מה הטסט שייך לפרופיל</summary>
+      <div class="tcid-inline-details-body">
+        <div class="tcid-inline-details-text">${esc(membership.reason)}</div>
+        <div class="small muted">${sourceDetails(membership.sources, "מקורות לשיוך הטסט")}</div>
+      </div>
+    </details>
+  `;
+}
+
+function renderRunPreconditionsBlock(row) {
+  const pre = runPreconditionsData(row);
+  if (!pre.has_conditions) {
+    return `
+      <div class="tcid-inline-details tcid-inline-details-empty">
+        <div class="tcid-inline-details-title">תנאי הרצה</div>
+        <div class="small muted">לא הוגדרו תנאי הרצה משויכים לטסט זה.</div>
+      </div>
+    `;
+  }
+  return `
+    <details class="tcid-inline-details">
+      <summary>תנאי הרצה (פתח פירוט)</summary>
+      <div class="tcid-inline-details-body">
+        <div class="tcid-pre-grid">
+          <div class="tcid-pre-item">
+            <div class="tcid-pre-label">תנאי הרצה</div>
+            <div class="tcid-pre-value">${esc(pre.conditions_he || "-")}</div>
+          </div>
+          <div class="tcid-pre-item">
+            <div class="tcid-pre-label">איך עומדים בהם (מה עושים בפועל)</div>
+            <div class="tcid-pre-value">${esc(pre.how_to_meet_he || "-")}</div>
+          </div>
+        </div>
+        <div class="small muted">${sourceDetails(pre.sources || [], "מקורות לתנאי ההרצה")}</div>
+      </div>
+    </details>
+  `;
 }
 
 function renderMappedTcidsCell(mappedTcids, unmappedReason) {
@@ -1390,7 +1686,7 @@ function renderTcidCompactLegend() {
 }
 
 function renderTcidExpandedDetails(row, options) {
-  const settings = Object.assign({ bucket: null }, options || {});
+  const settings = Object.assign({ bucket: null, profileKey: "GLOBAL" }, options || {});
   const conditionSources = (row.conditions || []).flatMap((condition) => [
     ...flattenEvidence(condition.tspc_evidence || []),
     ...flattenEvidence(condition.relation_evidence || []),
@@ -1419,6 +1715,7 @@ function renderTcidExpandedDetails(row, options) {
     .join("");
   const statusValue = summaryStatus(row);
   const statusReason = summaryStatusReason(row);
+  const runStatusWidget = renderRunStatusControls(row, { profileKey: settings.profileKey, compact: false });
 
   return `
     <div class="tcid-expand-panel">
@@ -1431,8 +1728,12 @@ function renderTcidExpandedDetails(row, options) {
         ${renderWhyRelevantStructured(row, { includeDetails: true })}
       </div>
       <div class="tcid-expand-section">
-        <h4>תנאי הפעלה מלאים (TCMT/ICS)</h4>
-        ${renderTcidConditionsCell(row, settings)}
+        <h4>תנאי הרצה מעשיים</h4>
+        ${renderRunPreconditionsBlock(row)}
+      </div>
+      <div class="tcid-expand-section">
+        <h4>על בסיס מה הטסט שייך לפרופיל</h4>
+        ${renderProfileMembershipBlock(row)}
       </div>
       <div class="tcid-expand-section">
         <h4>פרטים מתקדמים</h4>
@@ -1445,6 +1746,8 @@ function renderTcidExpandedDetails(row, options) {
           <div><b>תגיות:</b> ${badges || '<span class="muted">אין תגיות</span>'}</div>
           <div><b>מזהי מיפוי:</b> ${mapIds.length ? mapIds.map((id) => `<code>${esc(id)}</code>`).join(" ") : "-"}</div>
         </div>
+        <div class="tcid-expand-run-status">${runStatusWidget}</div>
+        <div class="tcid-expand-conditions">${renderTcidConditionsCell(row, settings)}</div>
       </div>
       <div class="tcid-expand-section tcid-expand-sources">
         <h4>מקורות מלאים</h4>
@@ -1454,18 +1757,21 @@ function renderTcidExpandedDetails(row, options) {
   `;
 }
 
-function renderTcidCompactRow(row, settings, expandId) {
+function renderTcidCompactRow(row, settings) {
   const statusValue = summaryStatus(row);
   const statusReason = summaryStatusReason(row);
   const badges = (summaryBadges(row) || [])
     .map((badge) => `<span class="pill tcid-inline-badge">${esc(displayBadgeText(badge))}</span>`)
     .join("");
+  const runStatusWidget = renderRunStatusControls(row, { profileKey: settings.profileKey || "GLOBAL", compact: true });
+  const membershipBlock = renderProfileMembershipBlock(row);
+  const pre = runPreconditionsData(row);
+  const preconditionsBlock = pre.has_conditions ? renderRunPreconditionsBlock(row) : "";
 
   return `
     <article
       class="tcid-row-card"
       data-searchable
-      data-expand-target="${esc(expandId)}"
       data-search-text="${esc(rowSearchText(row))}"
     >
       <div class="tcid-row-head">
@@ -1475,12 +1781,6 @@ function renderTcidCompactRow(row, settings, expandId) {
         </div>
         <div class="tcid-compact-status">
           ${renderTcidStatusPill(statusValue, statusReason)}
-          <button
-            type="button"
-            class="tcid-expand-toggle"
-            data-target="${esc(expandId)}"
-            aria-expanded="false"
-          >הצג פירוט</button>
         </div>
       </div>
       <div class="tcid-row-grid">
@@ -1488,24 +1788,22 @@ function renderTcidCompactRow(row, settings, expandId) {
           <h4>מה הטסט בודק</h4>
           ${renderWhatTestedBlock(row, { includeSources: false, compact: true })}
         </section>
-        <section class="tcid-row-block">
-          <h4>למה רלוונטי עכשיו</h4>
-          ${renderWhyRelevantStructured(row)}
-        </section>
         <section class="tcid-row-block tcid-row-block-status">
-          <h4>סטטוס נוכחי</h4>
+          <h4>סטטוס וניהול הרצה</h4>
           <div class="small muted">${esc(statusReason)}</div>
+          ${runStatusWidget}
         </section>
       </div>
-      <div class="tcid-expand-slot" id="${esc(expandId)}" hidden>
-        ${renderTcidExpandedDetails(row, settings)}
+      <div class="tcid-row-collapsibles">
+        ${membershipBlock}
+        ${preconditionsBlock}
       </div>
     </article>
   `;
 }
 
 function renderTcidMappingTable(title, rows, options) {
-  const settings = Object.assign({ collapsed: false, bucket: null, scope: "overview" }, options || {});
+  const settings = Object.assign({ collapsed: false, bucket: null, scope: "overview", profileKey: "GLOBAL" }, options || {});
   if (!rows || !rows.length) return `<div class="muted">אין נתוני TCID להצגה עבור ${esc(title)}.</div>`;
   const visibleRows = settings.bucket
     ? rows.filter((row) => (row.conditions || []).some((condition) => condition.bucket === settings.bucket))
@@ -1516,18 +1814,12 @@ function renderTcidMappingTable(title, rows, options) {
 
   const tableId = nextTableId("tcid-map-table");
   const cards = filteredRows
-    .map((row, index) => {
-      const expandId = `${tableId}-expand-${index + 1}`;
-      return renderTcidCompactRow(row, settings, expandId);
-    })
+    .map((row) => renderTcidCompactRow(row, settings))
     .join("");
 
   const table = `
     ${renderTcidCompactLegend()}
     ${renderTcidQuickFilters(settings.scope, visibleRows)}
-    <div class="tcid-table-hint small">
-      קודם רואים החלטה תמציתית. פירוט טכני מלא נפתח בלחיצה על "הצג פירוט".
-    </div>
     <div class="tcid-cards" id="${esc(tableId)}">
       ${
         cards ||
@@ -1636,25 +1928,78 @@ function renderTsProfileSummary(profileId) {
     ? revisionNotes.map((note) => `<li>${esc(note.text || "")}</li>`).join("")
     : '<li class="muted">לא נמצאו הערות Revision לחיתוך זה.</li>';
 
+  const groupPreview = groups.length ? groups.slice(0, 10).join(" | ") : "-";
+  const summaryFields = [
+    {
+      label: "גרסת מסמך TS",
+      value: meta.Revision || "-",
+      help: "מזהה הגרסה הרשמי של מסמך ה-TS שעליו מבוסס הפענוח בעמוד זה.",
+    },
+    {
+      label: "תאריך גרסה",
+      value: meta["Revision Date"] || meta["Version Date"] || "-",
+      help: "התאריך שבו פורסמה או עודכנה גרסת ה-TS שממנה נלקחו הנתונים.",
+    },
+    {
+      label: "פורסם במסגרת TCRL",
+      value: meta["Published during TCRL"] || "-",
+      help: "מחזור ה-TCRL שבו גרסת ה-TS הזו פורסמה רשמית.",
+    },
+    {
+      label: "מספר שורות TCMT",
+      value: String(tcmt.row_count || 0),
+      help: "כמה שורות מיפוי TCMT נמצאו במסמך TS עבור הפרופיל.",
+    },
+    {
+      label: "TCID שמופו ב-TCMT",
+      value: String(tcmt.mapped_tcid_count || 0),
+      help: "כמה מזהי טסט (TCID) חוברו בפועל דרך טבלת ה-TCMT.",
+    },
+    {
+      label: "שורות TCMT לא חד-משמעיות",
+      value: String(tcmt.rows_with_unknown_eval || 0),
+      help: "כמה שורות TCMT לא הוכרעו באופן מלא לפי ערכי הביטוי שנקראו.",
+    },
+    {
+      label: "כותרות טסט שחולצו",
+      value: String(ts.tcid_titles_count || 0),
+      help: "מספר כותרות הטסט שחולצו אוטומטית מתוך מסמך ה-TS.",
+    },
+    {
+      label: "פורמט מזהה TCID",
+      value: convention.format_hint || "-",
+      help: "התבנית הרשמית של מזהה טסט כפי שה-TS מתאר.",
+    },
+    {
+      label: "דוגמת TCID מהמסמך",
+      value: convention.example_tcid || "-",
+      help: "דוגמה ממסמך ה-TS שעוזרת להבין איך נראה מזהה תקני אמיתי.",
+    },
+    {
+      label: "קבוצות בדיקה שזוהו",
+      value: `${groups.length} (${groupPreview})`,
+      help: "קבוצות בדיקה שזוהו מה-TS; הערך כולל כמות ותצוגת דוגמה מקוצרת.",
+    },
+  ];
+
   return `
     <div class="card span-12 ts-summary-card">
-      <h3>TS Summary (${esc(profileId)})</h3>
+      <h3>תקציר TS (${esc(profileId)})</h3>
       <div class="ts-summary-grid">
-        <div><b>Revision:</b> ${esc(meta.Revision || "-")}</div>
-        <div><b>Revision Date:</b> ${esc(meta["Revision Date"] || meta["Version Date"] || "-")}</div>
-        <div><b>Published during TCRL:</b> ${esc(meta["Published during TCRL"] || "-")}</div>
-        <div><b>TCMT Rows:</b> ${esc(String(tcmt.row_count || 0))}</div>
-        <div><b>TCMT mapped TCIDs:</b> ${esc(String(tcmt.mapped_tcid_count || 0))}</div>
-        <div><b>TS Titles extracted:</b> ${esc(String(ts.tcid_titles_count || 0))}</div>
-      </div>
-      <div class="small" style="margin-top:8px;">
-        <b>TCID Convention:</b> ${esc(convention.example_tcid || convention.format_hint || "-")}
-      </div>
-      <div class="small" style="margin-top:8px;">
-        <b>Test Groups (${groups.length}):</b> ${esc(groups.slice(0, 10).join(" | ") || "-")}
+        ${summaryFields
+          .map(
+            (field) => `
+              <article class="ts-summary-field">
+                <div class="ts-summary-label">${esc(field.label)}</div>
+                <div class="ts-summary-value">${esc(field.value)}</div>
+                <div class="ts-summary-help">${esc(field.help)}</div>
+              </article>
+            `
+          )
+          .join("")}
       </div>
       <details class="small ts-revision-details">
-        <summary>Revision Notes (TSE)</summary>
+        <summary>הערות גרסה (Revision Notes / TSE)</summary>
         <ul class="src-list">${notes}</ul>
       </details>
       <div class="small muted">${sourceDetails(source, "מקור TS")}</div>
@@ -1728,10 +2073,9 @@ function renderOverviewDetails() {
       <details class="notice small overview-help-box">
         <summary><b>איך לקרוא את המסך הזה</b></summary>
         <ul class="src-list">
-          <li><b>מה הטסט בודק:</b> מה נבדק בפועל מתוך מסמכי התקן.</li>
-          <li><b>למה רלוונטי עכשיו:</b> הסיבה שהבדיקה מופיעה לפי תנאי הקונפיגורציה.</li>
+          <li><b>מה הטסט בודק:</b> שם התרחיש והסבר מו נבדק בפועל מתוך מסמכי התקן.</li>
           <li><b>סטטוס:</b> הערכה אם הטסט צפוי לרוץ כרגע.</li>
-          <li><b>הצג פירוט:</b> פותח תנאי TCMT/ICS, מקורות ופרטים מתקדמים.</li>
+          <li><b>תנאי הרצה:</b> תנאי TCMT/ICS שצריכים להתקיים כדי להריץ את הטסט.</li>
         </ul>
       </details>
       ${conditionalNotice}
@@ -1744,6 +2088,7 @@ function renderOverviewDetails() {
                   collapsed: false,
                   bucket: overviewState.bucket,
                   scope: "overview",
+                  profileKey: summaryEntry.profile,
                 })
               : renderMappingTable(`מיפוי ${summaryEntry.profile} (${bucket.label})`, visible, {
                   collapsed: false,
@@ -1917,7 +2262,7 @@ function renderIcsReferences(title, refs) {
 }
 
 function renderTcTable(title, rows, options) {
-  const settings = Object.assign({ collapsed: true }, options || {});
+  const settings = Object.assign({ collapsed: true, profileKey: "GLOBAL" }, options || {});
   if (!rows || !rows.length) return `<div class="muted">אין בדיקות TCID להצגה עבור ${esc(title)}.</div>`;
 
   const columns = [
@@ -1925,6 +2270,8 @@ function renderTcTable(title, rows, options) {
     { label: "סוג בדיקה", key: "tc_category", technical: "Category" },
     { label: "תאריך רלוונטיות", key: "active_date", technical: "Active Date" },
     { label: "מה הטסט בודק (עברית מאומתת)", key: "test_desc" },
+    { label: "סטטוס הרצה (ידני/AutoPTS)", key: "execution_status" },
+    { label: "שיוך ותנאי הרצה", key: "membership_preconditions" },
     { label: "מקור", key: "source" },
   ];
   const tableId = nextTableId("tc-table");
@@ -1932,12 +2279,17 @@ function renderTcTable(title, rows, options) {
   const body = rows
     .map((row) => {
       const src = sourceDetails(whatTestedSources(row), "מקור לניסוח ולרשומת TCID");
+      const runStatus = renderRunStatusControls(row, { profileKey: settings.profileKey, compact: true });
+      const membership = renderProfileMembershipBlock(row);
+      const preconditions = runPreconditionsData(row).has_conditions ? renderRunPreconditionsBlock(row) : "";
       return `
       <tr data-searchable>
         <td><code>${esc(row.tcid || "")}</code></td>
         <td>${esc(row.category || "")}</td>
         <td>${esc(row.active_date || "")}</td>
         <td>${renderWhatTestedBlock(row, { includeSources: false })}</td>
+        <td>${runStatus}</td>
+        <td><div class="tcid-table-collapsible">${membership}${preconditions}</div></td>
         <td>${src}</td>
       </tr>
     `;
@@ -1972,6 +2324,85 @@ function renderTcTable(title, rows, options) {
   `;
 }
 
+function runtimeProfileDelta(profileId) {
+  const snapshots = runtimeHistoryEntries();
+  if (!snapshots.length) return null;
+  const latest = snapshots[0];
+  const previous = snapshots.length > 1 ? snapshots[1] : null;
+  if (!previous) {
+    return {
+      latest,
+      previous: null,
+      added: [],
+      removed: [],
+    };
+  }
+  const latestSet = new Set(runtimeProfileTcids(profileId, latest));
+  const previousSet = new Set(runtimeProfileTcids(profileId, previous));
+  const added = Array.from(latestSet).filter((tcid) => !previousSet.has(tcid)).sort((a, b) => a.localeCompare(b));
+  const removed = Array.from(previousSet).filter((tcid) => !latestSet.has(tcid)).sort((a, b) => a.localeCompare(b));
+  return { latest, previous, added, removed };
+}
+
+function renderProfileRuntimeDeltaCard(profileId) {
+  const delta = runtimeProfileDelta(profileId);
+  if (!delta) {
+    return `
+      <div class="card span-12 profile-delta-card">
+        <h3>שינויי קונפיגורציה והשפעה על סט ההרצה</h3>
+        <div class="small muted">לא נטען Snapshot Runtime, לכן כרגע אין בסיס לחישוב Delta עבור ${esc(profileId)}.</div>
+      </div>
+    `;
+  }
+  if (!delta.previous) {
+    return `
+      <div class="card span-12 profile-delta-card">
+        <h3>שינויי קונפיגורציה והשפעה על סט ההרצה</h3>
+        <div class="small muted">נמצא Snapshot יחיד בלבד. כדי לחשב Added/Removed צריך לפחות שני Snapshots בהיסטוריה.</div>
+      </div>
+    `;
+  }
+
+  const addedCount = delta.added.length;
+  const removedCount = delta.removed.length;
+  const latestTime = formatExactRuntimeTime(delta.latest.generated_at);
+  const previousTime = formatExactRuntimeTime(delta.previous.generated_at);
+
+  const addedRows = delta.added.length
+    ? delta.added.map((tcid) => `<li><code>${esc(tcid)}</code></li>`).join("")
+    : '<li class="muted">לא נוספו TCID.</li>';
+  const removedRows = delta.removed.length
+    ? delta.removed.map((tcid) => `<li><code>${esc(tcid)}</code></li>`).join("")
+    : '<li class="muted">לא הוסרו TCID.</li>';
+
+  return `
+    <div class="card span-12 profile-delta-card">
+      <h3>שינויי קונפיגורציה והשפעה על סט ההרצה</h3>
+      <div class="small muted">השוואה בין שני Snapshots אחרונים עבור ${esc(profileId)} בלבד.</div>
+      <div class="profile-delta-grid">
+        <div class="profile-delta-kpi">
+          <div class="profile-delta-label">נוספו</div>
+          <div class="profile-delta-value">${esc(String(addedCount))}</div>
+        </div>
+        <div class="profile-delta-kpi">
+          <div class="profile-delta-label">הוסרו</div>
+          <div class="profile-delta-value">${esc(String(removedCount))}</div>
+        </div>
+      </div>
+      <div class="small">Snapshot חדש: <code>${esc(latestTime)}</code></div>
+      <div class="small">Snapshot קודם: <code>${esc(previousTime)}</code></div>
+      <details class="profile-delta-details">
+        <summary>TCID שנוספו (${esc(String(addedCount))})</summary>
+        <ul class="src-list">${addedRows}</ul>
+      </details>
+      <details class="profile-delta-details">
+        <summary>TCID שהוסרו (${esc(String(removedCount))})</summary>
+        <ul class="src-list">${removedRows}</ul>
+      </details>
+    </div>
+  `;
+}
+
 function renderProfilePanel(profileId, tableKey, tcGroups, icsGroups) {
   const profile = profileById(profileId);
   const rows = (DATA.tspc_tables && DATA.tspc_tables[tableKey]) || [];
@@ -1990,7 +2421,7 @@ function renderProfilePanel(profileId, tableKey, tcGroups, icsGroups) {
   const tcBlocks = (tcGroups || [])
     .map((group) => {
       const dataRows = (DATA.tcs && DATA.tcs[group.key]) || [];
-      return renderTcTable(group.title, dataRows, { collapsed: true });
+      return renderTcTable(group.title, dataRows, { collapsed: true, profileKey: profileId });
     })
     .join("");
 
@@ -2019,6 +2450,7 @@ function renderProfilePanel(profileId, tableKey, tcGroups, icsGroups) {
       </div>
 
       ${renderTsProfileSummary(profileId)}
+      ${renderProfileRuntimeDeltaCard(profileId)}
 
       <div class="card span-4">
         <p class="kpi">${split.mandatory.length}</p>
@@ -2062,6 +2494,7 @@ function renderProfilePanel(profileId, tableKey, tcGroups, icsGroups) {
                 collapsed: false,
                 bucket: null,
                 scope: profileId,
+                profileKey: profileId,
               })
             : renderMappingTable(`מיפוי מאוחד TSPC↔TCID עבור ${profileId}`, mappingRows, {
                 collapsed: false,
@@ -2115,10 +2548,10 @@ function renderIoptPanel() {
         </details>
       </div>
 
-      <div class="card span-12">${renderTcTable("בדיקות שילוב לפרופיל BAS (IOPT/BAS)", (DATA.tcs && DATA.tcs.iopt_bas) || [], { collapsed: true })}</div>
-      <div class="card span-12">${renderTcTable("בדיקות שילוב לפרופיל DIS (IOPT/DIS)", (DATA.tcs && DATA.tcs.iopt_dis) || [], { collapsed: true })}</div>
-      <div class="card span-12">${renderTcTable("בדיקות שילוב לפרופיל HRS (IOPT/HRS)", (DATA.tcs && DATA.tcs.iopt_hrs) || [], { collapsed: true })}</div>
-      <div class="card span-12">${renderTcTable("בדיקות שילוב לפרופיל HID (IOPT/HID)", (DATA.tcs && DATA.tcs.iopt_hid) || [], { collapsed: true })}</div>
+      <div class="card span-12">${renderTcTable("בדיקות שילוב לפרופיל BAS (IOPT/BAS)", (DATA.tcs && DATA.tcs.iopt_bas) || [], { collapsed: true, profileKey: "IOPT/BAS" })}</div>
+      <div class="card span-12">${renderTcTable("בדיקות שילוב לפרופיל DIS (IOPT/DIS)", (DATA.tcs && DATA.tcs.iopt_dis) || [], { collapsed: true, profileKey: "IOPT/DIS" })}</div>
+      <div class="card span-12">${renderTcTable("בדיקות שילוב לפרופיל HRS (IOPT/HRS)", (DATA.tcs && DATA.tcs.iopt_hrs) || [], { collapsed: true, profileKey: "IOPT/HRS" })}</div>
+      <div class="card span-12">${renderTcTable("בדיקות שילוב לפרופיל HID (IOPT/HID)", (DATA.tcs && DATA.tcs.iopt_hid) || [], { collapsed: true, profileKey: "IOPT/HID" })}</div>
     </div>
   `;
 }
@@ -2682,19 +3115,6 @@ function applySearch() {
     const text = explicit || String(element.innerText || "").toLowerCase();
     const isMatch = !query || text.includes(query);
     element.style.display = isMatch ? "" : "none";
-
-    if (!isMatch && element.hasAttribute("data-expand-target")) {
-      const expandTarget = element.getAttribute("data-expand-target");
-      if (expandTarget) {
-        const expanded = document.getElementById(expandTarget);
-        if (expanded) expanded.setAttribute("hidden", "");
-        const toggle = element.querySelector(".tcid-expand-toggle");
-        if (toggle) {
-          toggle.setAttribute("aria-expanded", "false");
-          toggle.textContent = "הצג פירוט";
-        }
-      }
-    }
   });
 }
 
@@ -2867,25 +3287,6 @@ function bindGlobalEvents() {
       return;
     }
 
-    const expandBtn = event.target && event.target.closest ? event.target.closest(".tcid-expand-toggle") : null;
-    if (expandBtn) {
-      const targetId = expandBtn.getAttribute("data-target");
-      if (!targetId) return;
-      const target = document.getElementById(targetId);
-      if (!target) return;
-      const isOpen = !target.hasAttribute("hidden");
-      if (isOpen) {
-        target.setAttribute("hidden", "");
-        expandBtn.setAttribute("aria-expanded", "false");
-        expandBtn.textContent = "הצג פירוט";
-      } else {
-        target.removeAttribute("hidden");
-        expandBtn.setAttribute("aria-expanded", "true");
-        expandBtn.textContent = "הסתר פירוט";
-      }
-      return;
-    }
-
     const viewBtn = event.target && event.target.closest ? event.target.closest(".mapping-view-btn") : null;
     if (viewBtn) {
       const scope = viewBtn.getAttribute("data-mapping-scope");
@@ -2929,6 +3330,21 @@ function bindGlobalEvents() {
     helpRow.removeAttribute("hidden");
     button.setAttribute("aria-expanded", "true");
     button.textContent = "הסתר הסבר עמודות";
+  });
+
+  document.addEventListener("change", (event) => {
+    const control = event.target && event.target.closest ? event.target.closest(".run-status-select") : null;
+    if (!control) return;
+
+    const runKey = control.getAttribute("data-run-key");
+    const track = control.getAttribute("data-run-track");
+    const field = control.getAttribute("data-run-field");
+    if (!runKey || !track || !field) return;
+
+    const [profileKey, ...tcidParts] = runKey.split("::");
+    const tcid = tcidParts.join("::");
+    updateRunEntry(profileKey, tcid, track, field, control.value || "");
+    syncRunControls(runKey);
   });
 
   const openSourcesBtn = document.getElementById("openSourcesBtn");
