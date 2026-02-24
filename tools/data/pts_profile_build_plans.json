@@ -1,0 +1,338 @@
+{
+  "DIS": {
+    "profile": "DIS",
+    "objective_he": "מינימום builds כדי לאפשר הרצה ידנית של כלל קבוצות הטסטים ב-PTS לפרופיל DIS",
+    "minimum_build_count": 1,
+    "minimum_metric": "minimal_build_variants",
+    "source_policy": "Bluetooth SIG + Zephyr official only",
+    "manual_pts_only": true,
+    "generic_command_templates": {
+      "build": "west build -b <BOARD> <SAMPLE_PATH> -d <BUILD_DIR> [-- -D... ]",
+      "flash": "west flash -d <BUILD_DIR> [--dev-id <SERIAL>]"
+    },
+    "example_board_presets": [
+      {
+        "id": "ti_r53",
+        "label": "TI CC2340R53 LaunchPad",
+        "board": "lp_em_cc2340r53/cc2340r53"
+      }
+    ],
+    "builds": [
+      {
+        "id": "dis_base",
+        "title_he": "DIS בסיסי מלא (manual PTS)",
+        "sample_path": "zephyr/samples/bluetooth/peripheral_dis",
+        "build_dir": "build_pts_dis_base",
+        "build_kind": "sample_default",
+        "why_needed_he": "Build בסיסי ממוקד DIS עם sample ייעודי של Zephyr לבדיקות PTS ידניות.",
+        "config_strategy_he": "שימוש ב-prj.conf של sample כבסיס, ללא overlay נוסף בגרסה הראשונה.",
+        "config_changes": [
+          {
+            "type": "sample_default",
+            "path": "zephyr/samples/bluetooth/peripheral_dis/prj.conf",
+            "note_he": "נקודת בסיס רשמית של Zephyr עבור DIS"
+          }
+        ],
+        "commands": {
+          "generic": {
+            "build": "west build -b <BOARD> zephyr/samples/bluetooth/peripheral_dis -d build_pts_dis_base",
+            "flash": "west flash -d build_pts_dis_base --dev-id <SERIAL>"
+          },
+          "examples": [
+            {
+              "preset_id": "ti_r53",
+              "build": "west build -b lp_em_cc2340r53/cc2340r53 zephyr/samples/bluetooth/peripheral_dis -d build_pts_dis_base",
+              "flash": "west flash -d build_pts_dis_base --dev-id <SERIAL>"
+            }
+          ]
+        },
+        "coverage": {
+          "mode": "all_profile_tcids"
+        },
+        "coverage_display": {
+          "groups_he": [
+            "כל טסטי DIS לפי TCRL (בכפוף ל-ICS/IXIT שתוגדר ב-PTS וליכולות sample זה)"
+          ]
+        },
+        "limitations_he": [
+          "לא מבטיח Pass/Fail בפועל; מציג build בסיסי להרצה ידנית ב-PTS.",
+          "טסטים שתלויים באפשרויות DIS אופציונליות מעבר לקונפיגורציה הנוכחית עשויים לדרוש variant נוסף."
+        ],
+        "sources": [
+          {
+            "file": "docs/profiles/DIS/Test_Suite_TS.pdf",
+            "note": "TS רשמי"
+          },
+          {
+            "file": "docs/profiles/DIS/Test_Case_Reference_List_TCRL",
+            "note": "TCRL רשמי"
+          },
+          {
+            "file": "docs/profiles/DIS/Implementation_Conformance_Statement_ICS.pdf",
+            "note": "ICS רשמי"
+          },
+          {
+            "file": "zephyr/samples/bluetooth/peripheral_dis/README.rst",
+            "note": "Sample רשמי של Zephyr"
+          },
+          {
+            "file": "zephyr/samples/bluetooth/peripheral_dis/prj.conf",
+            "note": "קונפיגורציה בסיסית"
+          }
+        ]
+      }
+    ]
+  },
+  "BAS": {
+    "profile": "BAS",
+    "objective_he": "מינימום builds כדי לאפשר הרצה ידנית של כלל קבוצות הטסטים ב-PTS לפרופיל BAS",
+    "minimum_build_count": 1,
+    "minimum_metric": "minimal_build_variants",
+    "source_policy": "Bluetooth SIG + Zephyr official only",
+    "manual_pts_only": true,
+    "generic_command_templates": {
+      "build": "west build -b <BOARD> <SAMPLE_PATH> -d <BUILD_DIR> [-- -D... ]",
+      "flash": "west flash -d <BUILD_DIR> [--dev-id <SERIAL>]"
+    },
+    "example_board_presets": [
+      {
+        "id": "ti_r53",
+        "label": "TI CC2340R53 LaunchPad",
+        "board": "lp_em_cc2340r53/cc2340r53"
+      }
+    ],
+    "builds": [
+      {
+        "id": "bas_peripheral_hr_base",
+        "title_he": "BAS דרך Peripheral HR (manual PTS)",
+        "sample_path": "zephyr/samples/bluetooth/peripheral_hr",
+        "build_dir": "build_pts_bas_peripheral_hr",
+        "build_kind": "sample_default",
+        "why_needed_he": "ל-Zephyr אין sample BAS ייעודי; Peripheral HR מפעיל BAS ומהווה בסיס פרקטי להרצה ידנית.",
+        "config_strategy_he": "שימוש ב-prj.conf של peripheral_hr כבסיס; ייתכן צורך ב-variant נוסף לתכונות BAS אופציונליות.",
+        "config_changes": [
+          {
+            "type": "sample_default",
+            "path": "zephyr/samples/bluetooth/peripheral_hr/prj.conf",
+            "note_he": "כולל BAS ו-HRS בקונפיגורציה הבסיסית"
+          }
+        ],
+        "commands": {
+          "generic": {
+            "build": "west build -b <BOARD> zephyr/samples/bluetooth/peripheral_hr -d build_pts_bas_peripheral_hr",
+            "flash": "west flash -d build_pts_bas_peripheral_hr --dev-id <SERIAL>"
+          },
+          "examples": [
+            {
+              "preset_id": "ti_r53",
+              "build": "west build -b lp_em_cc2340r53/cc2340r53 zephyr/samples/bluetooth/peripheral_hr -d build_pts_bas_peripheral_hr",
+              "flash": "west flash -d build_pts_bas_peripheral_hr --dev-id <SERIAL>"
+            }
+          ]
+        },
+        "coverage": {
+          "mode": "all_profile_tcids"
+        },
+        "coverage_display": {
+          "groups_he": [
+            "כל טסטי BAS לפי TCRL (בכפוף ל-ICS/IXIT וליכולות sample זה)"
+          ]
+        },
+        "limitations_he": [
+          "sample זה כולל גם HRS/DIS; הוא נבחר כבסיס BAS כי אין sample BAS ייעודי.",
+          "טסטים שתלויים ביכולות BAS אופציונליות עשויים לדרוש variant קונפיגורציה."
+        ],
+        "sources": [
+          {
+            "file": "docs/profiles/BAS/Test_Suite_TS.pdf",
+            "note": "TS רשמי"
+          },
+          {
+            "file": "docs/profiles/BAS/Test_Case_Reference_List_TCRL",
+            "note": "TCRL רשמי"
+          },
+          {
+            "file": "docs/profiles/BAS/Implementation_Conformance_Statement_ICS.pdf",
+            "note": "ICS רשמי"
+          },
+          {
+            "file": "zephyr/samples/bluetooth/peripheral_hr/README.rst",
+            "note": "Sample רשמי של Zephyr (HR + BAS)"
+          },
+          {
+            "file": "zephyr/samples/bluetooth/peripheral_hr/prj.conf",
+            "note": "קונפיגורציה בסיסית"
+          }
+        ]
+      }
+    ]
+  },
+  "HRS": {
+    "profile": "HRS",
+    "objective_he": "מינימום builds כדי לאפשר הרצה ידנית של כלל קבוצות הטסטים ב-PTS לפרופיל HRS",
+    "minimum_build_count": 1,
+    "minimum_metric": "minimal_build_variants",
+    "source_policy": "Bluetooth SIG + Zephyr official only",
+    "manual_pts_only": true,
+    "generic_command_templates": {
+      "build": "west build -b <BOARD> <SAMPLE_PATH> -d <BUILD_DIR> [-- -D... ]",
+      "flash": "west flash -d <BUILD_DIR> [--dev-id <SERIAL>]"
+    },
+    "example_board_presets": [
+      {
+        "id": "ti_r53",
+        "label": "TI CC2340R53 LaunchPad",
+        "board": "lp_em_cc2340r53/cc2340r53"
+      }
+    ],
+    "builds": [
+      {
+        "id": "hrs_peripheral_hr_base",
+        "title_he": "HRS בסיסי דרך Peripheral HR (manual PTS)",
+        "sample_path": "zephyr/samples/bluetooth/peripheral_hr",
+        "build_dir": "build_pts_hrs_peripheral_hr",
+        "build_kind": "sample_default",
+        "why_needed_he": "sample ייעודי ל-Heart Rate ב-Zephyr, מתאים כבסיס להרצת HRS ידנית ב-PTS.",
+        "config_strategy_he": "שימוש ב-prj.conf של sample, ללא overlay בגרסה הראשונה.",
+        "config_changes": [
+          {
+            "type": "sample_default",
+            "path": "zephyr/samples/bluetooth/peripheral_hr/prj.conf",
+            "note_he": "נקודת בסיס רשמית עבור HRS"
+          }
+        ],
+        "commands": {
+          "generic": {
+            "build": "west build -b <BOARD> zephyr/samples/bluetooth/peripheral_hr -d build_pts_hrs_peripheral_hr",
+            "flash": "west flash -d build_pts_hrs_peripheral_hr --dev-id <SERIAL>"
+          },
+          "examples": [
+            {
+              "preset_id": "ti_r53",
+              "build": "west build -b lp_em_cc2340r53/cc2340r53 zephyr/samples/bluetooth/peripheral_hr -d build_pts_hrs_peripheral_hr",
+              "flash": "west flash -d build_pts_hrs_peripheral_hr --dev-id <SERIAL>"
+            }
+          ]
+        },
+        "coverage": {
+          "mode": "all_profile_tcids"
+        },
+        "coverage_display": {
+          "groups_he": [
+            "כל טסטי HRS לפי TCRL (בכפוף ל-ICS/IXIT וליכולות sample זה)"
+          ]
+        },
+        "limitations_he": [
+          "לא מבטיח Pass/Fail בפועל; זהו build בסיסי להרצה ידנית.",
+          "טסטים שתלויים באפשרויות HRS אופציונליות עשויים לדרוש variant נוסף."
+        ],
+        "sources": [
+          {
+            "file": "docs/profiles/HRS/Test_Suite_TS.pdf",
+            "note": "TS רשמי"
+          },
+          {
+            "file": "docs/profiles/HRS/Test_Case_Reference_List_TCRL",
+            "note": "TCRL רשמי"
+          },
+          {
+            "file": "docs/profiles/HRS/Implementation_Conformance_Statement_ICS.pdf",
+            "note": "ICS רשמי"
+          },
+          {
+            "file": "zephyr/samples/bluetooth/peripheral_hr/README.rst",
+            "note": "Sample רשמי של Zephyr"
+          },
+          {
+            "file": "zephyr/samples/bluetooth/peripheral_hr/prj.conf",
+            "note": "קונפיגורציה בסיסית"
+          }
+        ]
+      }
+    ]
+  },
+  "HID": {
+    "profile": "HID",
+    "objective_he": "מינימום builds כדי לאפשר הרצה ידנית של כלל קבוצות הטסטים ב-PTS לפרופיל HID/HOGP",
+    "minimum_build_count": 1,
+    "minimum_metric": "minimal_build_variants",
+    "source_policy": "Bluetooth SIG + Zephyr official only",
+    "manual_pts_only": true,
+    "generic_command_templates": {
+      "build": "west build -b <BOARD> <SAMPLE_PATH> -d <BUILD_DIR> [-- -D... ]",
+      "flash": "west flash -d <BUILD_DIR> [--dev-id <SERIAL>]"
+    },
+    "example_board_presets": [
+      {
+        "id": "ti_r53",
+        "label": "TI CC2340R53 LaunchPad",
+        "board": "lp_em_cc2340r53/cc2340r53"
+      }
+    ],
+    "builds": [
+      {
+        "id": "hogp_peripheral_hids_base",
+        "title_he": "HOGP בסיסי דרך Peripheral HIDS (manual PTS)",
+        "sample_path": "zephyr/samples/bluetooth/peripheral_hids",
+        "build_dir": "build_pts_hogp_hids_base",
+        "build_kind": "sample_default",
+        "why_needed_he": "sample Zephyr ייעודי ל-HIDS/HoG כבסיס להרצת בדיקות HOGP ידניות.",
+        "config_strategy_he": "שימוש ב-prj.conf של sample; תכונות HOGP אופציונליות עשויות לדרוש variants נוספים בהמשך.",
+        "config_changes": [
+          {
+            "type": "sample_default",
+            "path": "zephyr/samples/bluetooth/peripheral_hids/prj.conf",
+            "note_he": "נקודת בסיס רשמית עבור HIDS/HoG"
+          }
+        ],
+        "commands": {
+          "generic": {
+            "build": "west build -b <BOARD> zephyr/samples/bluetooth/peripheral_hids -d build_pts_hogp_hids_base",
+            "flash": "west flash -d build_pts_hogp_hids_base --dev-id <SERIAL>"
+          },
+          "examples": [
+            {
+              "preset_id": "ti_r53",
+              "build": "west build -b lp_em_cc2340r53/cc2340r53 zephyr/samples/bluetooth/peripheral_hids -d build_pts_hogp_hids_base",
+              "flash": "west flash -d build_pts_hogp_hids_base --dev-id <SERIAL>"
+            }
+          ]
+        },
+        "coverage": {
+          "mode": "all_profile_tcids"
+        },
+        "coverage_display": {
+          "groups_he": [
+            "כל טסטי HOGP/HID לפי TCRL (בכפוף ל-ICS/IXIT וליכולות sample זה)"
+          ]
+        },
+        "limitations_he": [
+          "לא מבטיח Pass/Fail; מציג build בסיסי להרצה ידנית ב-PTS.",
+          "טסטים אופציונליים/תלוויי-קונפיגורציה ב-HOGP עשויים לדרוש variants נוספים."
+        ],
+        "sources": [
+          {
+            "file": "docs/profiles/HID/Test_Suite_TS.pdf",
+            "note": "TS רשמי (HOGP)"
+          },
+          {
+            "file": "docs/profiles/HID/Test_Case_Reference_List_TCRL",
+            "note": "TCRL רשמי"
+          },
+          {
+            "file": "docs/profiles/HID/Implementation_Conformance_Statement_ICS.pdf",
+            "note": "ICS רשמי"
+          },
+          {
+            "file": "zephyr/samples/bluetooth/peripheral_hids/README.rst",
+            "note": "Sample רשמי של Zephyr"
+          },
+          {
+            "file": "zephyr/samples/bluetooth/peripheral_hids/prj.conf",
+            "note": "קונפיגורציה בסיסית"
+          }
+        ]
+      }
+    ]
+  }
+}

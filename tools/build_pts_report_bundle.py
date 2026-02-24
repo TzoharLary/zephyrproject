@@ -59,11 +59,13 @@ OUT_HTML = OUT_DIR / "index.html"
 OUT_CSS = OUT_DIR / "assets" / "report.css"
 OUT_JS = OUT_DIR / "assets" / "report.js"
 OUT_DATA = OUT_DIR / "data" / "report-data.js"
+OUT_RUN_STATUS_STATE = OUT_DIR / "data" / "run-status-state.json"
 
 TEMPLATE_DIR = Path(__file__).parent / "templates" / "pts_report_he"
 TEMPLATE_HTML = TEMPLATE_DIR / "index.html"
 TEMPLATE_CSS = TEMPLATE_DIR / "report.css"
 TEMPLATE_JS = TEMPLATE_DIR / "report.js"
+BUILD_PLAN_MANIFEST = Path("tools/data/pts_profile_build_plans.json")
 RUNTIME_ACTIVE_EXPORT_DEFAULT = Path("tools/runtime_active_tcids.json")
 RUNTIME_ACTIVE_HISTORY_DIR_DEFAULT = Path("tools/runtime_history")
 
@@ -2931,6 +2933,227 @@ def build_comparison(data: Dict, official_sources: Dict[str, Dict]) -> Dict[str,
     }
 
 
+def load_profile_build_plans_manifest(path: Path = BUILD_PLAN_MANIFEST) -> Dict[str, Any]:
+    if not path.exists():
+        raise FileNotFoundError(f"Build plan manifest not found: {path}")
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError(f"Build plan manifest must be a JSON object: {path}")
+    return raw
+
+
+def resolve_build_plan_coverage(profile: str, build: Dict[str, Any], profile_tc_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    coverage = build.get("coverage") or {}
+    if not isinstance(coverage, dict):
+        raise ValueError(f"Build {profile}/{build.get('id')}: coverage must be an object")
+
+    mode = str(coverage.get("mode") or "").strip()
+    all_rows = [row for row in (profile_tc_rows or []) if row.get("tcid")]
+    all_tcids = {str(row["tcid"]) for row in all_rows}
+
+    if mode == "all_profile_tcids":
+        resolved = sorted(all_tcids)
+        return {"tcids": resolved, "unknown_tcid_refs": []}
+
+    if mode == "explicit_tcid_list":
+        listed = coverage.get("tcids")
+        if not isinstance(listed, list):
+            raise ValueError(f"Build {profile}/{build.get('id')}: coverage.tcids must be a list for explicit_tcid_list")
+        normalized = [str(tcid).strip() for tcid in listed if str(tcid).strip()]
+        unknown = sorted({tcid for tcid in normalized if tcid not in all_tcids})
+        resolved = sorted(set(normalized) - set(unknown))
+        return {"tcids": resolved, "unknown_tcid_refs": unknown}
+
+    if mode == "selector":
+        selector = coverage.get("selector") or {}
+        if not isinstance(selector, dict):
+            raise ValueError(f"Build {profile}/{build.get('id')}: coverage.selector must be an object")
+
+        prefix = str(selector.get("tcid_prefix") or "").strip()
+        categories_raw = selector.get("category_in") or []
+        if categories_raw and not isinstance(categories_raw, list):
+            raise ValueError(f"Build {profile}/{build.get('id')}: coverage.selector.category_in must be a list")
+        categories = {str(cat).strip() for cat in categories_raw if str(cat).strip()}
+
+        regex_text = str(selector.get("tcid_regex") or "").strip()
+        pattern = re.compile(regex_text) if regex_text else None
+
+        resolved_set: Set[str] = set()
+        for row in all_rows:
+            tcid = str(row.get("tcid") or "")
+            if not tcid:
+                continue
+            if prefix and not tcid.startswith(prefix):
+                continue
+            if categories and str(row.get("category") or "") not in categories:
+                continue
+            if pattern and not pattern.search(tcid):
+                continue
+            resolved_set.add(tcid)
+
+        return {"tcids": sorted(resolved_set), "unknown_tcid_refs": []}
+
+    raise ValueError(
+        f"Build {profile}/{build.get('id')}: unsupported coverage.mode={mode!r} "
+        "(allowed: all_profile_tcids, explicit_tcid_list, selector)"
+    )
+
+
+def validate_profile_build_plans(
+    manifest: Dict[str, Any], profile_tcs_map: Dict[str, List[Dict[str, Any]]]
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    required_profiles = ("DIS", "BAS", "HRS", "HID")
+    missing = [p for p in required_profiles if p not in manifest]
+    extra = [p for p in manifest.keys() if p not in required_profiles]
+    if missing:
+        raise ValueError(f"Build plan manifest missing profiles: {', '.join(missing)}")
+    if extra:
+        raise ValueError(f"Build plan manifest has unsupported profiles: {', '.join(extra)}")
+
+    normalized_plans: Dict[str, Any] = {}
+    validations: Dict[str, Any] = {}
+
+    for profile in required_profiles:
+        tc_rows = profile_tcs_map.get(profile) or []
+        tcid_rows = [row for row in tc_rows if row.get("tcid")]
+        all_tcid_set = {str(row["tcid"]) for row in tcid_rows}
+
+        plan = copy.deepcopy(manifest[profile])
+        if not isinstance(plan, dict):
+            raise ValueError(f"Build plan for {profile} must be an object")
+        if str(plan.get("profile") or "") != profile:
+            raise ValueError(f"Build plan {profile}: field 'profile' must equal {profile}")
+
+        templates = plan.get("generic_command_templates") or {}
+        if not isinstance(templates, dict) or not templates.get("build") or not templates.get("flash"):
+            raise ValueError(f"Build plan {profile}: generic_command_templates.build/flash are required")
+
+        presets = plan.get("example_board_presets") or []
+        if not isinstance(presets, list) or not presets:
+            raise ValueError(f"Build plan {profile}: example_board_presets must be a non-empty list")
+        preset_ids = set()
+        for preset in presets:
+            if not isinstance(preset, dict):
+                raise ValueError(f"Build plan {profile}: each example_board_preset must be an object")
+            preset_id = str(preset.get("id") or "").strip()
+            board_id = str(preset.get("board") or "").strip()
+            if not preset_id or not board_id:
+                raise ValueError(f"Build plan {profile}: example_board_preset requires id and board")
+            preset_ids.add(preset_id)
+
+        builds = plan.get("builds") or []
+        if not isinstance(builds, list) or not builds:
+            raise ValueError(f"Build plan {profile}: builds must be a non-empty list")
+        if plan.get("minimum_build_count") != len(builds):
+            raise ValueError(
+                f"Build plan {profile}: minimum_build_count={plan.get('minimum_build_count')} "
+                f"does not match builds count={len(builds)}"
+            )
+
+        coverage_union: Set[str] = set()
+        coverage_hits: Counter[str] = Counter()
+        unknown_tcid_refs: Set[str] = set()
+
+        for build in builds:
+            if not isinstance(build, dict):
+                raise ValueError(f"Build plan {profile}: each build must be an object")
+
+            build_id = str(build.get("id") or "").strip() or "<missing-id>"
+
+            sample_path = Path(str(build.get("sample_path") or ""))
+            if not sample_path or str(sample_path) == ".":
+                raise ValueError(f"Build {profile}/{build_id}: sample_path is required")
+            if not sample_path.exists():
+                raise FileNotFoundError(f"Build {profile}/{build_id}: sample_path not found: {sample_path}")
+
+            commands = build.get("commands") or {}
+            generic_cmds = (commands.get("generic") or {}) if isinstance(commands, dict) else {}
+            if not isinstance(generic_cmds, dict) or not generic_cmds.get("build"):
+                raise ValueError(f"Build {profile}/{build_id}: commands.generic.build is required")
+            if not generic_cmds.get("flash"):
+                raise ValueError(f"Build {profile}/{build_id}: commands.generic.flash is required")
+
+            for cfg in build.get("config_changes") or []:
+                if not isinstance(cfg, dict):
+                    raise ValueError(f"Build {profile}/{build_id}: config_changes items must be objects")
+                cfg_path = str(cfg.get("path") or "").strip()
+                if not cfg_path:
+                    continue
+                cfg_fs_path = Path(cfg_path)
+                if not cfg_fs_path.exists():
+                    raise FileNotFoundError(f"Build {profile}/{build_id}: config_changes path not found: {cfg_path}")
+
+            examples = (commands.get("examples") or []) if isinstance(commands, dict) else []
+            if examples and not isinstance(examples, list):
+                raise ValueError(f"Build {profile}/{build_id}: commands.examples must be a list")
+            for ex in examples:
+                if not isinstance(ex, dict):
+                    raise ValueError(f"Build {profile}/{build_id}: commands.examples item must be an object")
+                preset_id = str(ex.get("preset_id") or "").strip()
+                if preset_id and preset_id not in preset_ids:
+                    raise ValueError(f"Build {profile}/{build_id}: unknown preset_id in commands.examples: {preset_id}")
+
+            resolved = resolve_build_plan_coverage(profile, build, tc_rows)
+            resolved_tcids = [str(tcid) for tcid in (resolved.get("tcids") or [])]
+            build_unknown = [str(tcid) for tcid in (resolved.get("unknown_tcid_refs") or [])]
+            if build_unknown:
+                raise ValueError(
+                    f"Build {profile}/{build_id}: unknown TCIDs in coverage definition: {', '.join(sorted(set(build_unknown)))}"
+                )
+
+            resolved_set = set(resolved_tcids)
+            coverage_union.update(resolved_set)
+            for tcid in resolved_set:
+                coverage_hits[tcid] += 1
+            unknown_tcid_refs.update(build_unknown)
+
+            build["coverage_resolved"] = {
+                "mode": (build.get("coverage") or {}).get("mode"),
+                "tcids": sorted(resolved_set),
+                "tcid_count": len(resolved_set),
+                "total_profile_tcids": len(all_tcid_set),
+                "covers_all_profile_tcids": resolved_set == all_tcid_set,
+            }
+
+        uncovered_tcids = sorted(all_tcid_set - coverage_union)
+        overlap_tcids = sorted([tcid for tcid, count in coverage_hits.items() if count > 1])
+        notes = []
+        if uncovered_tcids:
+            notes.append(
+                f"{profile}: {len(uncovered_tcids)} TCIDs are not covered by the declared minimum builds."
+            )
+        if overlap_tcids:
+            notes.append(f"{profile}: {len(overlap_tcids)} TCIDs are covered by more than one build variant.")
+
+        validations[profile] = {
+            "profile": profile,
+            "total_profile_tcids": len(all_tcid_set),
+            "covered_tcid_count": len(coverage_union),
+            "uncovered_tcid_count": len(uncovered_tcids),
+            "uncovered_tcids": uncovered_tcids,
+            "unknown_tcid_refs": sorted(unknown_tcid_refs),
+            "overlap_tcid_count": len(overlap_tcids),
+            "overlap_tcids": overlap_tcids,
+            "coverage_complete": len(uncovered_tcids) == 0,
+            "notes": notes,
+        }
+        normalized_plans[profile] = plan
+
+    return normalized_plans, validations
+
+
+def ensure_run_status_state_file(path: Path = OUT_RUN_STATUS_STATE) -> None:
+    if path.exists():
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    seed = {
+        "version": 1,
+        "updated_at": None,
+        "entries": {},
+    }
+    path.write_text(json.dumps(seed, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
 def main() -> None:
     profile_sources = resolve_profile_sources()
     validate_profile_sources(profile_sources)
@@ -3069,6 +3292,16 @@ def main() -> None:
     validate_verified_fields_in_tc_group("tcs.iopt_dis", iopt_dis)
     validate_verified_fields_in_tc_group("tcs.iopt_hrs", iopt_hrs)
     validate_verified_fields_in_tc_group("tcs.iopt_hid", iopt_hid)
+
+    profile_build_plans, profile_build_plan_validation = validate_profile_build_plans(
+        load_profile_build_plans_manifest(),
+        {
+            "DIS": dis_tc,
+            "BAS": bas_tc,
+            "HRS": hrs_tc,
+            "HID": hid_tc,
+        },
+    )
 
     ics_refs = find_ics_refs()
 
@@ -3398,6 +3631,8 @@ def main() -> None:
             "iopt_hrs": iopt_hrs,
             "iopt_hid": iopt_hid,
         },
+        "profile_build_plans": profile_build_plans,
+        "profile_build_plan_validation": profile_build_plan_validation,
         "notes": {
             "hid_ics_missing": [
                 "TSPC_IOPT_1_14",
@@ -3424,6 +3659,7 @@ def main() -> None:
     OUT_CSS.parent.mkdir(parents=True, exist_ok=True)
     OUT_JS.parent.mkdir(parents=True, exist_ok=True)
     OUT_DATA.parent.mkdir(parents=True, exist_ok=True)
+    ensure_run_status_state_file()
 
     data_js = "window.REPORT_DATA = " + json.dumps(data, ensure_ascii=False) + ";\n"
     OUT_DATA.write_text(data_js, encoding="utf-8")
