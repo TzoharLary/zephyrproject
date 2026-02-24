@@ -54,6 +54,12 @@ const PROFILE_PANEL_CONFIG = {
   },
 };
 
+const MAPPING_VIEW_META = {
+  tcid: { label: "TCID-first" },
+  tspc: { label: "TSPC-first" },
+  builds: { label: "Builds-min" },
+};
+
 const overviewState = {
   profile: "DIS",
   bucket: "mandatory",
@@ -102,6 +108,9 @@ const comparisonState = {
 };
 
 const RUN_STATUS_STORAGE_KEY = "pts_report_run_status_v1";
+const RUN_STATUS_FILE_API_PATH = "api/run-status";
+const RUN_STATUS_FILE_FALLBACK_PATH = "data/run-status-state.json";
+const RUN_STATUS_SCHEMA_VERSION = 1;
 const RUN_STATUS_VALUES = [
   { value: "not_tested", label: "לא נבדק" },
   { value: "pass", label: "עבר" },
@@ -118,7 +127,15 @@ const DRAWER_MIN_WIDTH = 300;
 const DRAWER_MAX_WIDTH_CAP = 920;
 
 let tableIdCounter = 0;
-const runStatusState = loadRunStatusState();
+let runStatusState = loadRunStatusState();
+const runStatusPersistenceState = {
+  mode: "localStorage",
+  fileApiAvailable: false,
+  lastError: "",
+  saveTimer: null,
+  saveInFlight: false,
+  pendingSave: false,
+};
 
 function esc(str) {
   return String(str ?? "").replace(/[&<>"']/g, (s) =>
@@ -161,31 +178,177 @@ function loadRunStatusState() {
   try {
     const raw = localStorage.getItem(RUN_STATUS_STORAGE_KEY);
     if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || !parsed.entries || typeof parsed.entries !== "object") return {};
-    const out = {};
-    Object.entries(parsed.entries).forEach(([key, value]) => {
-      out[String(key)] = normalizeRunEntry(value);
-    });
-    return out;
+    return normalizeRunStatusPayload(JSON.parse(raw)).entries;
   } catch (error) {
     return {};
   }
 }
 
-function persistRunStatusState() {
+function runStatusPayloadSnapshot() {
+  return {
+    version: RUN_STATUS_SCHEMA_VERSION,
+    updated_at: new Date().toISOString(),
+    entries: runStatusState,
+  };
+}
+
+function normalizeRunStatusPayload(raw) {
+  if (!raw || typeof raw !== "object") {
+    return { version: RUN_STATUS_SCHEMA_VERSION, updated_at: null, entries: {} };
+  }
+  const entriesIn = raw.entries && typeof raw.entries === "object" ? raw.entries : {};
+  const out = {};
+  Object.entries(entriesIn).forEach(([key, value]) => {
+    out[String(key)] = normalizeRunEntry(value);
+  });
+  const version = Number.isFinite(Number(raw.version)) ? Number(raw.version) : RUN_STATUS_SCHEMA_VERSION;
+  const updatedAt = raw.updated_at ? String(raw.updated_at) : null;
+  return { version, updated_at: updatedAt, entries: out };
+}
+
+function persistRunStatusStateLocal() {
   try {
-    localStorage.setItem(
-      RUN_STATUS_STORAGE_KEY,
-      JSON.stringify({
-        version: 1,
-        updated_at: new Date().toISOString(),
-        entries: runStatusState,
-      })
-    );
+    localStorage.setItem(RUN_STATUS_STORAGE_KEY, JSON.stringify(runStatusPayloadSnapshot()));
   } catch (error) {
     // Ignore localStorage failures in restricted contexts.
   }
+}
+
+function applyRunStatusEntries(entries) {
+  const next = {};
+  Object.entries(entries || {}).forEach(([key, value]) => {
+    next[String(key)] = normalizeRunEntry(value);
+  });
+  runStatusState = next;
+}
+
+function syncAllRunControls() {
+  const seen = new Set();
+  document.querySelectorAll(".run-status-select[data-run-key]").forEach((element) => {
+    const key = String(element.getAttribute("data-run-key") || "");
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    syncRunControls(key);
+  });
+}
+
+function rerenderRunStatusPanels() {
+  rerenderOverviewPanel();
+  Object.keys(PROFILE_PANEL_CONFIG).forEach((profileId) => rerenderProfilePanel(profileId));
+  rerenderRuntimePanel();
+  applySearch();
+}
+
+function handleRunStatusLoadedPayload(payload, sourceMode) {
+  const normalized = normalizeRunStatusPayload(payload);
+  applyRunStatusEntries(normalized.entries);
+  persistRunStatusStateLocal();
+  runStatusPersistenceState.mode = sourceMode || runStatusPersistenceState.mode;
+  if (sourceMode === "file") {
+    runStatusPersistenceState.fileApiAvailable = true;
+    runStatusPersistenceState.lastError = "";
+  }
+  syncAllRunControls();
+  rerenderRunStatusPanels();
+}
+
+async function loadRunStatusStateFromFileApi() {
+  const response = await fetch(RUN_STATUS_FILE_API_PATH, {
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(`run-status api GET failed (${response.status})`);
+  }
+  return await response.json();
+}
+
+async function loadRunStatusStateFromFileFallback() {
+  const response = await fetch(RUN_STATUS_FILE_FALLBACK_PATH, {
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(`run-status file GET failed (${response.status})`);
+  }
+  return await response.json();
+}
+
+async function bootstrapRunStatusPersistence() {
+  try {
+    const payload = await loadRunStatusStateFromFileApi();
+    handleRunStatusLoadedPayload(payload, "file");
+    return;
+  } catch (error) {
+    runStatusPersistenceState.lastError = error && error.message ? String(error.message) : "file api unavailable";
+  }
+
+  try {
+    const payload = await loadRunStatusStateFromFileFallback();
+    handleRunStatusLoadedPayload(payload, "file-readonly");
+    return;
+  } catch (error) {
+    // Keep localStorage state as final fallback.
+  }
+
+  syncAllRunControls();
+}
+
+async function persistRunStatusStateToFile() {
+  const payload = runStatusPayloadSnapshot();
+  const response = await fetch(RUN_STATUS_FILE_API_PATH, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new Error(`run-status api PUT failed (${response.status})`);
+  }
+  const result = await response.json().catch(() => ({}));
+  runStatusPersistenceState.mode = "file";
+  runStatusPersistenceState.fileApiAvailable = true;
+  runStatusPersistenceState.lastError = "";
+  return result;
+}
+
+function flushRunStatusStateToFileSoon() {
+  if (runStatusPersistenceState.saveInFlight) {
+    runStatusPersistenceState.pendingSave = true;
+    return;
+  }
+
+  runStatusPersistenceState.saveInFlight = true;
+  persistRunStatusStateToFile()
+    .catch((error) => {
+      runStatusPersistenceState.lastError = error && error.message ? String(error.message) : "save failed";
+      runStatusPersistenceState.fileApiAvailable = false;
+      // Silent fallback: state still persists in localStorage.
+      if (window.console && typeof window.console.warn === "function") {
+        console.warn("Run-status file persistence unavailable, keeping localStorage fallback.", error);
+      }
+    })
+    .finally(() => {
+      runStatusPersistenceState.saveInFlight = false;
+      if (runStatusPersistenceState.pendingSave) {
+        runStatusPersistenceState.pendingSave = false;
+        scheduleRunStatusFilePersist();
+      }
+    });
+}
+
+function scheduleRunStatusFilePersist() {
+  if (runStatusPersistenceState.saveTimer) {
+    clearTimeout(runStatusPersistenceState.saveTimer);
+  }
+  runStatusPersistenceState.saveTimer = setTimeout(() => {
+    runStatusPersistenceState.saveTimer = null;
+    flushRunStatusStateToFileSoon();
+  }, 200);
+}
+
+function persistRunStatusState() {
+  persistRunStatusStateLocal();
+  scheduleRunStatusFilePersist();
 }
 
 function getRunEntry(profileKey, tcid) {
@@ -391,6 +554,14 @@ function profileMappingSummary(profileId) {
 function profileTcs(profileId) {
   const key = String(profileId || "").toLowerCase();
   return (DATA.tcs && DATA.tcs[key]) || [];
+}
+
+function profileBuildPlan(profileId) {
+  return (DATA.profile_build_plans && DATA.profile_build_plans[profileId]) || null;
+}
+
+function profileBuildPlanValidation(profileId) {
+  return (DATA.profile_build_plan_validation && DATA.profile_build_plan_validation[profileId]) || null;
 }
 
 function runtimeSnapshot() {
@@ -1511,33 +1682,34 @@ function renderMappingTable(title, rows, options) {
   `;
 }
 
-function renderMappingViewToggle(scope, view) {
+function renderMappingViewToggle(scope, view, allowedViews) {
+  const views = Array.isArray(allowedViews) && allowedViews.length ? allowedViews : ["tcid", "tspc"];
   return `
-    <div class="mapping-view-toggle" role="group" aria-label="בחירת תצוגת מיפוי">
+    <div class="mapping-view-toggle" data-view-count="${esc(String(views.length))}" role="group" aria-label="בחירת תצוגה">
+      ${views
+        .map((viewKey) => {
+          const meta = MAPPING_VIEW_META[viewKey] || { label: viewKey };
+          const active = view === viewKey;
+          return `
       <button
         type="button"
-        class="mapping-view-btn ${view === "tcid" ? "active" : ""}"
+        class="mapping-view-btn ${active ? "active" : ""}"
         data-mapping-scope="${esc(scope)}"
-        data-mapping-view="tcid"
-        aria-pressed="${view === "tcid" ? "true" : "false"}"
-      >TCID-first</button>
-      <button
-        type="button"
-        class="mapping-view-btn ${view === "tspc" ? "active" : ""}"
-        data-mapping-scope="${esc(scope)}"
-        data-mapping-view="tspc"
-        aria-pressed="${view === "tspc" ? "true" : "false"}"
-      >TSPC-first</button>
+        data-mapping-view="${esc(viewKey)}"
+        aria-pressed="${active ? "true" : "false"}"
+      >${esc(meta.label)}</button>`;
+        })
+        .join("")}
     </div>
   `;
 }
 
-function renderMappingControls(scope, view) {
+function renderMappingControls(scope, view, allowedViews) {
   return `
-    <section class="mapping-controls" aria-label="בקרות תצוגת מיפוי">
+    <section class="mapping-controls" aria-label="בקרות תצוגה">
       <div class="mapping-control-group">
-        <div class="mapping-control-label">תצוגת מיפוי</div>
-        ${renderMappingViewToggle(scope, view)}
+        <div class="mapping-control-label">תצוגה</div>
+        ${renderMappingViewToggle(scope, view, allowedViews)}
       </div>
     </section>
   `;
@@ -2407,6 +2579,248 @@ function renderProfileRuntimeDeltaCard(profileId) {
   `;
 }
 
+function renderBuildsMinCommandBlock(title, command) {
+  if (!command) return "";
+  return `
+    <div class="builds-min-command-row">
+      <div class="small muted">${esc(title)}</div>
+      <pre class="builds-min-command"><code>${esc(command)}</code></pre>
+    </div>
+  `;
+}
+
+function renderBuildsMinBuildCard(build, plan, validation) {
+  const resolved = (build && build.coverage_resolved) || {};
+  const tcids = Array.isArray(resolved.tcids) ? resolved.tcids : [];
+  const commands = (build && build.commands) || {};
+  const generic = commands.generic || {};
+  const examples = Array.isArray(commands.examples) ? commands.examples : [];
+  const presets = Array.isArray(plan && plan.example_board_presets) ? plan.example_board_presets : [];
+  const presetById = Object.fromEntries(presets.map((preset) => [preset.id, preset]));
+  const coverageGroups = Array.isArray(build && build.coverage_display && build.coverage_display.groups_he)
+    ? build.coverage_display.groups_he
+    : [];
+  const limitations = Array.isArray(build && build.limitations_he) ? build.limitations_he : [];
+  const configChanges = Array.isArray(build && build.config_changes) ? build.config_changes : [];
+  const configSources = configChanges
+    .filter((cfg) => cfg && cfg.path)
+    .map((cfg) => ({ file: cfg.path, note: cfg.note_he || "קובץ קונפיגורציה" }));
+  const totalProfileTcids =
+    (validation && validation.total_profile_tcids) != null
+      ? validation.total_profile_tcids
+      : profileTcs((plan && plan.profile) || "").length;
+  const coversAll = !!resolved.covers_all_profile_tcids;
+
+  const examplesHtml = examples.length
+    ? examples
+        .map((example) => {
+          const preset = presetById[example.preset_id] || null;
+          const presetLabel = preset ? `${preset.label} (${preset.board})` : example.preset_id || "Example";
+          return `
+          <details class="builds-min-example-details">
+            <summary>${esc(presetLabel)}</summary>
+            ${renderBuildsMinCommandBlock("build", example.build)}
+            ${renderBuildsMinCommandBlock("flash", example.flash)}
+          </details>
+        `;
+        })
+        .join("")
+    : '<div class="small muted">אין presets זמינים עבור build זה.</div>';
+
+  const tcidPreview = tcids.slice(0, 12);
+  const tcidRemainder = tcids.length - tcidPreview.length;
+
+  return `
+    <article class="builds-min-build-card" data-searchable>
+      <div class="builds-min-build-head">
+        <div>
+          <h4>${esc((build && build.title_he) || (build && build.id) || "Build")}</h4>
+          <div class="small muted">
+            <span class="pill ${coversAll ? "mandatory" : "optional"}">${
+              coversAll ? "מכסה את כל ה-TCID בפרופיל" : "כיסוי חלקי / תלוי הגדרה"
+            }</span>
+            <span class="pill">coverage: ${esc(String(tcids.length))}/${esc(String(totalProfileTcids))} TCID</span>
+            <span class="pill">mode: ${esc(String(resolved.mode || ((build && build.coverage && build.coverage.mode) || "-")))}</span>
+          </div>
+        </div>
+        <div class="builds-min-build-id"><code>${esc((build && build.id) || "-")}</code></div>
+      </div>
+
+      <div class="builds-min-grid">
+        <div class="builds-min-item">
+          <div class="builds-min-label">Sample</div>
+          <div class="builds-min-value"><code>${esc((build && build.sample_path) || "-")}</code></div>
+        </div>
+        <div class="builds-min-item">
+          <div class="builds-min-label">Build dir</div>
+          <div class="builds-min-value"><code>${esc((build && build.build_dir) || "-")}</code></div>
+        </div>
+        <div class="builds-min-item">
+          <div class="builds-min-label">למה צריך את build זה</div>
+          <div class="builds-min-value">${esc((build && build.why_needed_he) || "-")}</div>
+        </div>
+        <div class="builds-min-item">
+          <div class="builds-min-label">אסטרטגיית קונפיגורציה</div>
+          <div class="builds-min-value">${esc((build && build.config_strategy_he) || "-")}</div>
+        </div>
+      </div>
+
+      <details class="builds-min-section" open>
+        <summary>פקודות build/flash (גנרי + דוגמה ל-TI R53)</summary>
+        <div class="builds-min-section-body">
+          <div class="builds-min-subtitle">פקודות גנריות</div>
+          ${renderBuildsMinCommandBlock("build", generic.build)}
+          ${renderBuildsMinCommandBlock("flash", generic.flash)}
+          <div class="builds-min-subtitle">Presets / דוגמאות</div>
+          ${examplesHtml}
+        </div>
+      </details>
+
+      <details class="builds-min-section">
+        <summary>כיסוי וקבוצות טסטים</summary>
+        <div class="builds-min-section-body">
+          ${
+            coverageGroups.length
+              ? `<ul class="src-list">${coverageGroups.map((group) => `<li>${esc(group)}</li>`).join("")}</ul>`
+              : '<div class="small muted">אין ניסוח קבוצות coverage במניפסט.</div>'
+          }
+          <div class="small muted" style="margin-top:8px;">TCIDs מכוסים לפי חישוב הגנרטור: ${esc(String(tcids.length))}</div>
+          ${
+            tcids.length
+              ? `
+            <details class="builds-min-tcid-preview">
+              <summary>רשימת TCID מכוסים (${esc(String(tcids.length))})</summary>
+              <div class="small ltr builds-min-tcid-list">${esc(tcidPreview.join(", "))}${
+                  tcidRemainder > 0 ? ` ... (+${tcidRemainder})` : ""
+                }</div>
+            </details>
+          `
+              : '<div class="small muted">לא חושב כיסוי TCID עבור build זה.</div>'
+          }
+        </div>
+      </details>
+
+      <details class="builds-min-section">
+        <summary>קבצי קונפיגורציה ומקורות</summary>
+        <div class="builds-min-section-body">
+          <div class="builds-min-subtitle">קבצי config רלוונטיים</div>
+          ${
+            configChanges.length
+              ? `<ul class="src-list">${configChanges
+                  .map(
+                    (cfg) =>
+                      `<li><code>${esc(cfg.path || "-")}</code>${
+                        cfg.type ? ` · <span class="muted">${esc(cfg.type)}</span>` : ""
+                      }${cfg.note_he ? ` · ${esc(cfg.note_he)}` : ""}</li>`
+                  )
+                  .join("")}</ul>`
+              : '<div class="small muted">לא הוגדרו config_changes.</div>'
+          }
+          <div class="small muted">${sourceDetails(configSources, "מקורות לקונפיגורציה")}</div>
+          <div class="builds-min-subtitle">מקורות רשמיים לבחירה</div>
+          <div class="small muted">${sourceDetails((build && build.sources) || [], "מקורות ל-build זה")}</div>
+        </div>
+      </details>
+
+      ${
+        limitations.length
+          ? `
+        <details class="builds-min-section">
+          <summary>מגבלות והסתייגויות</summary>
+          <div class="builds-min-section-body">
+            <ul class="src-list">${limitations.map((line) => `<li>${esc(line)}</li>`).join("")}</ul>
+          </div>
+        </details>
+      `
+          : ""
+      }
+    </article>
+  `;
+}
+
+function renderProfileBuildsPanel(profileId) {
+  const plan = profileBuildPlan(profileId);
+  const validation = profileBuildPlanValidation(profileId);
+  if (!plan) {
+    return `
+      <div class="builds-min-wrap">
+        <div class="warning">
+          <b>Builds-min</b><br>
+          אין כרגע נתוני build plan זמינים עבור ${esc(profileId)}.
+        </div>
+      </div>
+    `;
+  }
+
+  const builds = Array.isArray(plan.builds) ? plan.builds : [];
+  const totalTcids =
+    validation && validation.total_profile_tcids != null ? validation.total_profile_tcids : profileTcs(profileId).length;
+  const coveredTcids = validation && validation.covered_tcid_count != null ? validation.covered_tcid_count : 0;
+  const complete = !!(validation && validation.coverage_complete);
+  const validationClass = complete ? "success" : "warning";
+  const notes = Array.isArray(validation && validation.notes) ? validation.notes : [];
+  const uncoveredTcids = Array.isArray(validation && validation.uncovered_tcids) ? validation.uncovered_tcids : [];
+  const overlapTcids = Array.isArray(validation && validation.overlap_tcids) ? validation.overlap_tcids : [];
+  const unknownRefs = Array.isArray(validation && validation.unknown_tcid_refs) ? validation.unknown_tcid_refs : [];
+
+  return `
+    <div class="builds-min-wrap">
+      <div class="builds-min-summary ${validationClass}">
+        <h3>Builds-min עבור ${esc(profileId)}</h3>
+        <p class="small" style="margin:6px 0 8px;">
+          מינימום builds/צריבות הדרושים כדי לאפשר הרצה ידנית של כלל קבוצות הטסטים בפרופיל ב-PTS.
+        </p>
+        <div class="builds-min-summary-grid">
+          <div class="builds-min-summary-kpi"><span>מינימום builds</span><b>${esc(String(plan.minimum_build_count || builds.length))}</b></div>
+          <div class="builds-min-summary-kpi"><span>כיסוי TCID</span><b>${esc(String(coveredTcids))}/${esc(String(totalTcids))}</b></div>
+          <div class="builds-min-summary-kpi"><span>manual PTS</span><b>${plan.manual_pts_only ? "כן" : "לא"}</b></div>
+          <div class="builds-min-summary-kpi"><span>Policy</span><b>${esc(plan.minimum_metric || "-")}</b></div>
+        </div>
+        <div class="small muted" style="margin-top:8px;">
+          <b>מקור אמת:</b> ${esc(plan.source_policy || "Bluetooth SIG + Zephyr official only")}
+        </div>
+        ${plan.objective_he ? `<div class="small muted" style="margin-top:4px;">${esc(plan.objective_he)}</div>` : ""}
+      </div>
+
+      <div class="builds-min-validation ${validationClass}">
+        <b>תוצאת ולידציה של הגנרטור</b>
+        <div class="small" style="margin-top:6px;">
+          coverage_complete: <code>${esc(String(complete))}</code> ·
+          uncovered: <code>${esc(String(validation && validation.uncovered_tcid_count != null ? validation.uncovered_tcid_count : 0))}</code> ·
+          overlap: <code>${esc(String(validation && validation.overlap_tcid_count != null ? validation.overlap_tcid_count : 0))}</code> ·
+          unknown refs: <code>${esc(String(unknownRefs.length))}</code>
+        </div>
+        ${notes.length ? `<ul class="src-list" style="margin-top:8px;">${notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}
+        ${
+          uncoveredTcids.length
+            ? `<details class="builds-min-tcid-preview"><summary>TCID לא מכוסים (${esc(
+                String(uncoveredTcids.length)
+              )})</summary><div class="small ltr builds-min-tcid-list">${esc(uncoveredTcids.join(", "))}</div></details>`
+            : ""
+        }
+        ${
+          overlapTcids.length
+            ? `<details class="builds-min-tcid-preview"><summary>TCID עם overlap (${esc(
+                String(overlapTcids.length)
+              )})</summary><div class="small ltr builds-min-tcid-list">${esc(overlapTcids.join(", "))}</div></details>`
+            : ""
+        }
+      </div>
+
+      <div class="builds-min-template-note small muted">
+        תבנית פקודות גנרית: <code>${esc(
+          (plan.generic_command_templates && plan.generic_command_templates.build) || "-"
+        )}</code> ·
+        <code>${esc((plan.generic_command_templates && plan.generic_command_templates.flash) || "-")}</code>
+      </div>
+
+      <div class="builds-min-cards">
+        ${builds.map((build) => renderBuildsMinBuildCard(build, plan, validation)).join("")}
+      </div>
+    </div>
+  `;
+}
+
 function renderProfilePanel(profileId, tableKey, tcGroups, icsGroups) {
   const profile = profileById(profileId);
   const rows = (DATA.tspc_tables && DATA.tspc_tables[tableKey]) || [];
@@ -2470,7 +2884,7 @@ function renderProfilePanel(profileId, tableKey, tcGroups, icsGroups) {
       </div>
 
       <div class="card span-12">
-        ${renderMappingControls(profileId, mappingView)}
+        ${renderMappingControls(profileId, mappingView, ["tcid", "tspc", "builds"])}
         ${
           mappingView === "tcid"
             ? `
@@ -2483,6 +2897,8 @@ function renderProfilePanel(profileId, tableKey, tcGroups, icsGroups) {
                 </ul>
               </details>
             `
+            : mappingView === "builds"
+            ? `${renderProfileBuildsPanel(profileId)}`
             : `
               <div class="mapping-kpi-row">
                 <div class="mapping-kpi"><b>#TSPC</b><span>${esc(String(mappingSummary.totals ? mappingSummary.totals.tspc_count : rows.length))}</span></div>
@@ -2500,6 +2916,8 @@ function renderProfilePanel(profileId, tableKey, tcGroups, icsGroups) {
                 scope: profileId,
                 profileKey: profileId,
               })
+            : mappingView === "builds"
+            ? ""
             : renderMappingTable(`מיפוי מאוחד TSPC↔TCID עבור ${profileId}`, mappingRows, {
                 collapsed: false,
                 showBucket: true,
@@ -3295,9 +3713,10 @@ function bindGlobalEvents() {
     if (viewBtn) {
       const scope = viewBtn.getAttribute("data-mapping-scope");
       const view = viewBtn.getAttribute("data-mapping-view");
-      if (!scope || (view !== "tcid" && view !== "tspc")) return;
+      if (!scope || !view) return;
 
       if (scope === "overview") {
+        if (view !== "tcid" && view !== "tspc") return;
         mappingViewState.overview = view;
         overviewState.expanded = false;
         rerenderOverviewPanel();
@@ -3305,6 +3724,7 @@ function bindGlobalEvents() {
       }
 
       if (PROFILE_PANEL_CONFIG[scope]) {
+        if (view !== "tcid" && view !== "tspc" && view !== "builds") return;
         mappingViewState.profiles[scope] = view;
         rerenderProfilePanel(scope);
       }
@@ -3422,3 +3842,4 @@ fillPanels();
 bindGlobalEvents();
 initGlossaryDrawerWidthControls();
 activatePanel("overview");
+bootstrapRunStatusPersistence();
