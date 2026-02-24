@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>מרכז AutoPTS + Group B</title>
+  <link rel="stylesheet" href="assets/report.css" />
+</head>
+<body>
+  <div class="hub-shell">
+    <header class="hub-topbar">
+      <a class="back-link" href="../index.html">חזרה לדשבורד הראשי</a>
+      <div class="hub-topbar-title">
+        <h1>מרכז AutoPTS + Group B</h1>
+        <p>תצוגת ידע מסונתזת להכנה למימוש BPS / WSS / ScPS, עם עקיבות מלאה למקורות.</p>
+      </div>
+      <div class="hub-topbar-meta">
+        <div><span>מקור נתונים</span><code>data/hub-data.js</code></div>
+        <div><span>שפה</span><strong>עברית</strong></div>
+      </div>
+    </header>
+
+    <div class="hub-toolbar">
+      <input id="hubSearchInput" type="search" placeholder="חיפוש חופשי בתוך הטאב הפעיל..." />
+      <button id="hubClearSearchBtn" type="button">נקה חיפוש</button>
+      <button id="hubOpenSourcesBtn" type="button">פתח מקורות בעמוד</button>
+      <button id="hubCloseSourcesBtn" type="button">סגור מקורות בעמוד</button>
+    </div>
+
+    <div class="hub-layout">
+      <aside class="hub-sidebar">
+        <section class="hub-sidebar-card">
+          <h2>ניווט ראשי</h2>
+          <nav id="hubTopTabsNav" class="hub-top-tabs-nav" aria-label="ניווט ראשי"></nav>
+        </section>
+        <section class="hub-sidebar-card">
+          <h2>מטרת העל (הקשר)</h2>
+          <p class="muted">מימוש מלא ל־<code>BPS</code>, <code>WSS</code>, <code>ScPS</code>. העמוד הזה מממש שכבת הכנה ומחקר.</p>
+        </section>
+        <section class="hub-sidebar-card">
+          <h2>סטטוס מהיר</h2>
+          <div id="hubQuickStatus"></div>
+        </section>
+      </aside>
+
+      <main class="hub-content">
+        <section id="hubTab-overview" class="hub-panel active" data-top-tab="overview"><div id="hubOverviewContent"></div></section>
+        <section id="hubTab-autopts" class="hub-panel" data-top-tab="autopts"><div id="hubAutoptsContent"></div></section>
+        <section id="hubTab-BPS" class="hub-panel" data-top-tab="BPS"><div id="hubProfileBPSContent"></div></section>
+        <section id="hubTab-WSS" class="hub-panel" data-top-tab="WSS"><div id="hubProfileWSSContent"></div></section>
+        <section id="hubTab-SCPS" class="hub-panel" data-top-tab="SCPS"><div id="hubProfileSCPSContent"></div></section>
+        <section id="hubTab-sources" class="hub-panel" data-top-tab="sources"><div id="hubSourcesContent"></div></section>
+      </main>
+    </div>
+  </div>
+
+  <script src="data/hub-data.js"></script>
+  <script src="assets/report.js"></script>
+</body>
+</html>

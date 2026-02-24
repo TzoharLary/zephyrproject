@@ -1,0 +1,35 @@
+{
+  "generated_at": "2026-02-24",
+  "profiles": [
+    {
+      "profile_id": "BPS",
+      "ui_label": "BPS",
+      "display_name_he": "שירות לחץ דם",
+      "spec_query": "Blood Pressure Service",
+      "spec_dir": "docs/Profiles/BPS",
+      "group_b_logic_md": "tools/templates/pts_report_he/Group_B_data/Logic/BPS.md",
+      "group_b_structure_md": "tools/templates/pts_report_he/Group_B_data/Structure/BPS.md",
+      "aliases": ["BLS", "Blood Pressure Service", "Blood Pressure"]
+    },
+    {
+      "profile_id": "WSS",
+      "ui_label": "WSS",
+      "display_name_he": "שירות משקל",
+      "spec_query": "Weight Scale Service",
+      "spec_dir": "docs/Profiles/WSS",
+      "group_b_logic_md": "tools/templates/pts_report_he/Group_B_data/Logic/WSS.md",
+      "group_b_structure_md": "tools/templates/pts_report_he/Group_B_data/Structure/WSS.md",
+      "aliases": ["Weight Scale Service", "Weight Scale"]
+    },
+    {
+      "profile_id": "SCPS",
+      "ui_label": "ScPS",
+      "display_name_he": "שירות פרמטרי סריקה",
+      "spec_query": "Scan Parameters Service",
+      "spec_dir": "docs/Profiles/SCPS",
+      "group_b_logic_md": "tools/templates/pts_report_he/Group_B_data/Logic/SCPS.md",
+      "group_b_structure_md": "tools/templates/pts_report_he/Group_B_data/Structure/SCPS.md",
+      "aliases": ["ScPS", "Scan Parameters Service", "Scan Parameters"]
+    }
+  ]
+}

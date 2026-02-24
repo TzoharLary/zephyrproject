@@ -14,6 +14,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from autopts_guide_data import build_autopts_guide_data, enforce_autopts_guide_source_policy
+from group_b_hub_data import build_group_b_hub_data, enforce_group_b_hub_source_policy
+
 
 WORKSPACE_PQW6 = Path("auto-pts/autopts/workspaces/zephyr/zephyr-master/zephyr-master.pqw6")
 PTSCONTROL_PY = Path("auto-pts/autopts/ptscontrol.py")
@@ -61,10 +64,20 @@ OUT_JS = OUT_DIR / "assets" / "report.js"
 OUT_DATA = OUT_DIR / "data" / "report-data.js"
 OUT_RUN_STATUS_STATE = OUT_DIR / "data" / "run-status-state.json"
 
+HUB_OUT_DIR = OUT_DIR / "autopts"
+HUB_OUT_HTML = HUB_OUT_DIR / "index.html"
+HUB_OUT_CSS = HUB_OUT_DIR / "assets" / "report.css"
+HUB_OUT_JS = HUB_OUT_DIR / "assets" / "report.js"
+HUB_OUT_DATA = HUB_OUT_DIR / "data" / "hub-data.js"
+
 TEMPLATE_DIR = Path(__file__).parent / "templates" / "pts_report_he"
 TEMPLATE_HTML = TEMPLATE_DIR / "index.html"
 TEMPLATE_CSS = TEMPLATE_DIR / "report.css"
 TEMPLATE_JS = TEMPLATE_DIR / "report.js"
+HUB_TEMPLATE_DIR = TEMPLATE_DIR / "autopts"
+HUB_TEMPLATE_HTML = HUB_TEMPLATE_DIR / "index.html"
+HUB_TEMPLATE_CSS = HUB_TEMPLATE_DIR / "report.css"
+HUB_TEMPLATE_JS = HUB_TEMPLATE_DIR / "report.js"
 BUILD_PLAN_MANIFEST = Path("tools/data/pts_profile_build_plans.json")
 RUNTIME_ACTIVE_EXPORT_DEFAULT = Path("tools/runtime_active_tcids.json")
 RUNTIME_ACTIVE_HISTORY_DIR_DEFAULT = Path("tools/runtime_history")
@@ -837,6 +850,11 @@ def source_ref(file: str, line: Optional[int]) -> Dict[str, Optional[str]]:
 
 def iter_source_files(obj):
     if isinstance(obj, dict):
+        if "auto_pts_guide" in obj and isinstance(obj.get("auto_pts_guide"), dict):
+            # AutoPTS panel intentionally indexes multiple bundled workspaces (.pqw6/.pts/.bqw);
+            # legacy workspace consistency validation below applies only to the main PTS report data.
+            obj = {k: v for k, v in obj.items() if k != "auto_pts_guide"}
+
         f = obj.get("file")
         if isinstance(f, str):
             yield f
@@ -3652,26 +3670,52 @@ def main() -> None:
 
     data["official_sources"] = official_sources
     data["comparison"] = build_comparison(data, data["official_sources"])
+    data["auto_pts_guide"] = build_autopts_guide_data(Path("."))
+    hub_data = build_group_b_hub_data(Path("."), autopts_guide=data["auto_pts_guide"])
 
     enforce_workspace_source_consistency(data)
+    enforce_autopts_guide_source_policy(data)
+    enforce_group_b_hub_source_policy(hub_data)
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     OUT_CSS.parent.mkdir(parents=True, exist_ok=True)
     OUT_JS.parent.mkdir(parents=True, exist_ok=True)
     OUT_DATA.parent.mkdir(parents=True, exist_ok=True)
     ensure_run_status_state_file()
+    HUB_OUT_DIR.mkdir(parents=True, exist_ok=True)
+    HUB_OUT_CSS.parent.mkdir(parents=True, exist_ok=True)
+    HUB_OUT_JS.parent.mkdir(parents=True, exist_ok=True)
+    HUB_OUT_DATA.parent.mkdir(parents=True, exist_ok=True)
 
     data_js = "window.REPORT_DATA = " + json.dumps(data, ensure_ascii=False) + ";\n"
     OUT_DATA.write_text(data_js, encoding="utf-8")
+    hub_data_js = "window.AUTOPTS_HUB_DATA = " + json.dumps(hub_data, ensure_ascii=False) + ";\n"
+    HUB_OUT_DATA.write_text(hub_data_js, encoding="utf-8")
 
     OUT_CSS.write_text(read_template_or_fallback(TEMPLATE_CSS, CSS_CONTENT), encoding="utf-8")
     OUT_JS.write_text(read_template_or_fallback(TEMPLATE_JS, JS_CONTENT), encoding="utf-8")
     OUT_HTML.write_text(read_template_or_fallback(TEMPLATE_HTML, HTML_TEMPLATE), encoding="utf-8")
+    HUB_OUT_CSS.write_text(
+        read_template_or_fallback(HUB_TEMPLATE_CSS, "/* hub css template missing */\nbody{font-family:sans-serif;}"),
+        encoding="utf-8",
+    )
+    HUB_OUT_JS.write_text(
+        read_template_or_fallback(HUB_TEMPLATE_JS, "console.error('hub js template missing');\n"),
+        encoding="utf-8",
+    )
+    HUB_OUT_HTML.write_text(
+        read_template_or_fallback(HUB_TEMPLATE_HTML, "<!doctype html><html><body>hub template missing</body></html>\n"),
+        encoding="utf-8",
+    )
 
     print(f"WROTE {OUT_HTML}")
     print(f"WROTE {OUT_CSS}")
     print(f"WROTE {OUT_JS}")
     print(f"WROTE {OUT_DATA}")
+    print(f"WROTE {HUB_OUT_HTML}")
+    print(f"WROTE {HUB_OUT_CSS}")
+    print(f"WROTE {HUB_OUT_JS}")
+    print(f"WROTE {HUB_OUT_DATA}")
 
 
 CSS_CONTENT = """

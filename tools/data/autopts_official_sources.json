@@ -1,0 +1,94 @@
+{
+  "whitelist_domains": [
+    "docs.zephyrproject.org",
+    "bluetooth.com",
+    "qualification.bluetooth.com",
+    "support.bluetooth.com",
+    "pts.bluetooth.com"
+  ],
+  "entries": [
+    {
+      "id": "zephyr_autopts_linux",
+      "title": "AutoPTS on Linux (Zephyr Project Documentation)",
+      "url": "https://docs.zephyrproject.org/latest/connectivity/bluetooth/autopts/autopts-linux.html",
+      "domain": "docs.zephyrproject.org",
+      "retrieved_at": "2026-02-24",
+      "used_for_sections": [
+        "quickstart",
+        "architecture",
+        "troubleshooting"
+      ],
+      "notes": "Official Zephyr setup guide for AutoPTS on Linux + Windows split setups."
+    },
+    {
+      "id": "zephyr_autopts_win10",
+      "title": "AutoPTS on Windows 10 (Zephyr Project Documentation)",
+      "url": "https://docs.zephyrproject.org/latest/connectivity/bluetooth/autopts/autopts-win10.html",
+      "domain": "docs.zephyrproject.org",
+      "retrieved_at": "2026-02-24",
+      "used_for_sections": [
+        "quickstart",
+        "troubleshooting"
+      ],
+      "notes": "Official Zephyr Windows-focused AutoPTS setup guide."
+    },
+    {
+      "id": "bluetooth_pts_download",
+      "title": "Bluetooth PTS Download Portal",
+      "url": "https://pts.bluetooth.com/download",
+      "domain": "pts.bluetooth.com",
+      "retrieved_at": "2026-02-24",
+      "used_for_sections": [
+        "overview",
+        "quickstart",
+        "official_sources"
+      ],
+      "notes": "Official Bluetooth SIG PTS download portal."
+    },
+    {
+      "id": "bluetooth_pts_release_notes",
+      "title": "Bluetooth Profile Tuning Suite (PTS) Release Notes",
+      "url": "https://www.bluetooth.com/develop-with-bluetooth/qualification-listing/pts-release-notes/",
+      "domain": "bluetooth.com",
+      "retrieved_at": "2026-02-24",
+      "used_for_sections": [
+        "official_sources"
+      ],
+      "notes": "Official SIG page for PTS release notes."
+    },
+    {
+      "id": "bluetooth_qualification_listing",
+      "title": "Qualification Listing - Bluetooth SIG",
+      "url": "https://www.bluetooth.com/develop-with-bluetooth/qualification-listing/",
+      "domain": "bluetooth.com",
+      "retrieved_at": "2026-02-24",
+      "used_for_sections": [
+        "official_sources"
+      ],
+      "notes": "Official qualification listing hub referenced by auto-pts workspace tutorial context."
+    },
+    {
+      "id": "bluetooth_qualification_workspace",
+      "title": "Bluetooth Qualification Process",
+      "url": "https://qualification.bluetooth.com/",
+      "domain": "qualification.bluetooth.com",
+      "retrieved_at": "2026-02-24",
+      "used_for_sections": [
+        "official_sources",
+        "quickstart"
+      ],
+      "notes": "Official Bluetooth Qualification Process / Launch Studio workspace flow."
+    },
+    {
+      "id": "bluetooth_support_home",
+      "title": "Bluetooth Support",
+      "url": "https://support.bluetooth.com/",
+      "domain": "support.bluetooth.com",
+      "retrieved_at": "2026-02-24",
+      "used_for_sections": [
+        "official_sources"
+      ],
+      "notes": "Official Bluetooth SIG support portal."
+    }
+  ]
+}

@@ -1,0 +1,75 @@
+{
+  "generated_at": "2026-02-24",
+  "methods": [
+    {
+      "id": "uuid_service_match",
+      "label_he": "זיהוי לפי UUID של שירות",
+      "description_he": "התאמת UUID של השירות למקור כדי לזהות שהמימוש/מסמך שייך לפרופיל המבוקש.",
+      "risk_notes_he": "יכול לזהות שייכות לשירות, אבל לא בהכרח את כל התנהגות הלוגיקה.",
+      "example_he": "חיפוש UUID של BPS בתוך קוד/דוגמה."
+    },
+    {
+      "id": "uuid_characteristic_match",
+      "label_he": "זיהוי לפי UUID של מאפיין",
+      "description_he": "התאמת UUID של characteristics/descriptor כדי להבין אילו שדות והתנהגויות קיימים במימוש.",
+      "risk_notes_he": "מזהה נוכחות מבנית, לא תמיד את הרצף התפעולי.",
+      "example_he": "איתור Measurement characteristic ו-CCC."
+    },
+    {
+      "id": "api_call_sequence_analysis",
+      "label_he": "ניתוח רצף קריאות API",
+      "description_he": "קריאת זרימת הפונקציות והקריאות כדי להבין שלבי init, publish, notify/indicate ותגובה לאירועים.",
+      "risk_notes_he": "דורש הבנה של הקשר runtime; רצף חלקי עלול להטעות.",
+      "example_he": "init -> register callbacks -> send measurement."
+    },
+    {
+      "id": "state_machine_flow_read",
+      "label_he": "קריאת flow של state machine",
+      "description_he": "זיהוי מצבים, תנאי מעבר וטריגרים מתוך קוד או מסמכי מימוש.",
+      "risk_notes_he": "לא תמיד state machine מפורש; לעתים מוסק מדגלים ותנאים.",
+      "example_he": "מעבר ממצב idle למצב reporting לפי enable של CCC."
+    },
+    {
+      "id": "callback_registration_pattern",
+      "label_he": "דפוס רישום callbacks",
+      "description_he": "זיהוי callbacks/handlers שנרשמים לשירות כדי להבין נקודות הרחבה והתנהגות runtime.",
+      "risk_notes_he": "Callback registration לבדו לא מסביר payload/validation.",
+      "example_he": "callback ל-write/ccc_changed/read."
+    },
+    {
+      "id": "data_model_struct_mapping",
+      "label_he": "מיפוי מבנה נתונים (struct)",
+      "description_he": "מיפוי structs/containers לשדות פרוטוקול/characteristics כדי להסיק מבנה מימוש.",
+      "risk_notes_he": "שמות שדות פנימיים אינם תמיד מיפוי ישיר למסמך.",
+      "example_he": "struct measurement כולל timestamp/flags/status."
+    },
+    {
+      "id": "notification_indication_enable_flow",
+      "label_he": "ניתוח enable ל-notify/indicate",
+      "description_he": "זיהוי רצף ההפעלה של CCC וההתנהגות לאחר enable של notifications/indications.",
+      "risk_notes_he": "התנהגות בפועל תלויה גם ב-client וב-timing.",
+      "example_he": "בדיקה מה קורה אחרי כתיבת CCC."
+    },
+    {
+      "id": "ccc_handling_pattern",
+      "label_he": "דפוס טיפול ב-CCC",
+      "description_he": "זיהוי דרך הטיפול ב-Client Characteristic Configuration לצורך gating של שליחת נתונים.",
+      "risk_notes_he": "לא תמיד מכסה כל ולידציה/שגיאה.",
+      "example_he": "בדיקה האם השירות חוסם send ללא enable."
+    },
+    {
+      "id": "profile_similarity_inference",
+      "label_he": "הסקה מדמיון לפרופילים דומים",
+      "description_he": "הסקת מבנה/לוגיקה מפרופילים דומים כאשר אין מימוש ישיר מלא.",
+      "risk_notes_he": "הסקה בלבד; דורש סימון ודאות נמוכה/בינונית ואימות נוסף.",
+      "example_he": "דמיון בין WSS/BPS עבור measurement + timestamp + flags."
+    },
+    {
+      "id": "vendor_sample_structure_pattern",
+      "label_he": "דפוס מבנה מדוגמאות vendor",
+      "description_he": "זיהוי ארגון קבצים/מודולים/הפרדת אחריות מתוך SDK vendor כדי לבנות מבנה יעד.",
+      "risk_notes_he": "מבנה SDK מסוים לא בהכרח מתאים 1:1 למימוש היעד.",
+      "example_he": "הפרדת service callbacks, data model ו-app glue."
+    }
+  ]
+}

@@ -107,6 +107,15 @@ const comparisonState = {
   topic: (DATA.comparison && DATA.comparison.default_filter && DATA.comparison.default_filter.topic) || "ALL",
 };
 
+const autoPtsPanelState = {
+  cliGroup: "ALL",
+  cliVisibility: "public",
+  cliText: "",
+  profileStack: "ALL",
+  profileClass: "ALL",
+  profileText: "",
+};
+
 const RUN_STATUS_STORAGE_KEY = "pts_report_run_status_v1";
 const RUN_STATUS_FILE_API_PATH = "api/run-status";
 const RUN_STATUS_FILE_FALLBACK_PATH = "data/run-status-state.json";
@@ -408,9 +417,18 @@ function sourceRef(source) {
   return `<code>${esc(`${source.file}${line}`)}</code>`;
 }
 
+function sourceUrlRef(source) {
+  if (!source || !source.url) return "";
+  const title = source.title ? esc(source.title) : esc(source.url);
+  return `<a href="${esc(source.url)}" target="_blank" rel="noopener">${title}</a>`;
+}
+
 function renderSourceItem(source) {
-  if (!source || !source.file) return "";
-  const parts = [sourceRef(source)];
+  if (!source || (!source.file && !source.url)) return "";
+  const parts = [];
+  if (source.file) parts.push(sourceRef(source));
+  if (source.url) parts.push(sourceUrlRef(source));
+  if (source.retrieved_at) parts.push(`<span class="ltr"><code>retrieved:${esc(source.retrieved_at)}</code></span>`);
   if (source.sheet) parts.push(`<span class="ltr"><code>sheet:${esc(source.sheet)}</code></span>`);
   if (source.row != null) parts.push(`<span class="ltr"><code>row:${esc(source.row)}</code></span>`);
   if (source.columns) parts.push(`<span class="ltr"><code>cols:${esc(source.columns)}</code></span>`);
@@ -420,7 +438,7 @@ function renderSourceItem(source) {
 }
 
 function sourceDetails(items, label = "הצג מקור מדויק") {
-  const safe = (items || []).filter((item) => item && item.file);
+  const safe = (items || []).filter((item) => item && (item.file || item.url));
   if (!safe.length) return '<span class="muted">אין מקור זמין</span>';
   const body = safe.map((item) => `<li>${renderSourceItem(item)}</li>`).join("");
   return `<details class="src-details"><summary>${esc(label)}</summary><ul class="src-list">${body}</ul></details>`;
@@ -3350,6 +3368,808 @@ function renderRuntimePanel() {
   `;
 }
 
+function autoPtsGuide() {
+  return DATA.auto_pts_guide || {};
+}
+
+function autoPtsTagPills(tags) {
+  const items = Array.isArray(tags) ? tags : [];
+  if (!items.length) return '<span class="muted">-</span>';
+  return items.map((tag) => `<span class="pill autopts-tag">${esc(tag)}</span>`).join(" ");
+}
+
+function autoPtsSubnav(items) {
+  const links = (items || [])
+    .map(
+      (item) =>
+        `<a class="autopts-subnav-link" href="#${esc(item.id)}" data-autopts-jump="${esc(item.id)}">${esc(item.label)}</a>`
+    )
+    .join("");
+  return `
+    <div class="card span-12 autopts-subnav-card">
+      <h3>ניווט פנימי</h3>
+      <div class="autopts-subnav-links">${links}</div>
+    </div>
+  `;
+}
+
+function autoPtsSection(id, title, intro, body, sources, options = {}) {
+  const searchable = options.searchable === false ? "" : ' data-searchable="true"';
+  return `
+    <section id="${esc(id)}" class="card span-12 autopts-section"${searchable}>
+      <div class="autopts-section-head">
+        <h3>${esc(title)}</h3>
+        ${intro ? `<p class="small muted">${esc(intro)}</p>` : ""}
+      </div>
+      <div class="autopts-section-body">${body || ""}</div>
+      <div class="autopts-section-sources">${sourceDetails(sources || [], "מקורות לסעיף")}</div>
+    </section>
+  `;
+}
+
+function autoPtsSummaryStat(title, value, note) {
+  return `
+    <div class="autopts-stat">
+      <div class="autopts-stat-title">${esc(title)}</div>
+      <div class="autopts-stat-value">${esc(String(value ?? "-"))}</div>
+      ${note ? `<div class="autopts-stat-note">${esc(note)}</div>` : ""}
+    </div>
+  `;
+}
+
+function renderAutoPtsOverviewSection(guide) {
+  const overview = guide.overview || {};
+  const defaults = overview.defaults || {};
+  const launchers = Array.isArray(overview.launchers) ? overview.launchers : [];
+  const launchersRows = launchers
+    .map(
+      (item) => `
+      <tr data-searchable="true" data-search-text="${esc(`${item.script || ""} ${item.kind || ""} ${item.stack || ""} ${item.summary || ""}`)}">
+        <td><code>${esc(item.script || "")}</code></td>
+        <td>${esc(item.kind || "-")}</td>
+        <td>${esc(item.stack || "-")}</td>
+        <td>${esc(item.summary || "-")}</td>
+        <td>${sourceDetails(item.sources || [], "מקור")}</td>
+      </tr>`
+    )
+    .join("");
+  const keyPoints = (overview.key_points || []).map((p) => `<li data-searchable="true">${esc(p)}</li>`).join("");
+  const body = `
+    <div class="autopts-hero">
+      <p>${esc(overview.summary || "No overview summary available.")}</p>
+      <div class="autopts-stat-grid">
+        ${autoPtsSummaryStat("Launchers", launchers.length, "client/server/bot entrypoints")}
+        ${autoPtsSummaryStat("Server Port", defaults.server_port ?? "-", "default from autopts/config.py")}
+        ${autoPtsSummaryStat("Client Port", defaults.client_port ?? "-", "default from autopts/config.py")}
+        ${autoPtsSummaryStat("Stacks", Object.keys(overview.stack_summary || {}).length, "derived from ptsprojects __all__")}
+      </div>
+    </div>
+    <div class="grid">
+      <div class="card span-6" data-searchable="true">
+        <h4>מה זה AutoPTS (תכל'ס)</h4>
+        <ul class="src-list">${keyPoints || '<li class="muted">No key points extracted.</li>'}</ul>
+      </div>
+      <div class="card span-6" data-searchable="true">
+        <h4>Project Meta</h4>
+        <div class="autopts-kv-list">
+          <div><span>name</span><code>${esc(((overview.project_meta || {}).name || "-"))}</code></div>
+          <div><span>version</span><code>${esc(String((overview.project_meta || {}).version || "-"))}</code></div>
+          <div><span>pyproject</span><code>${esc(((overview.project_meta || {}).path || "-"))}</code></div>
+        </div>
+      </div>
+      <div class="card span-12">
+        <h4>Entry Scripts / Launchers</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Script</th><th>Kind</th><th>Stack</th><th>Summary</th><th>Source</th></tr></thead>
+            <tbody>${launchersRows || '<tr><td colspan="5" class="muted">No launcher data.</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+  return autoPtsSection("autopts-sec-overview", "AutoPTS Overview", "מבט-על: מה זה, איך הוא בנוי, ומה ה-entrypoints שלו.", body, overview.sources || []);
+}
+
+function renderAutoPtsArchitectureSection(guide) {
+  const arch = guide.architecture || {};
+  const componentCards = (arch.components || [])
+    .map(
+      (c) => `
+      <div class="card span-6 autopts-mini-card" data-searchable="true" data-search-text="${esc(`${c.name || ""} ${c.platform || ""} ${c.role || ""}`)}">
+        <h4>${esc(c.name || "-")}</h4>
+        <p class="small muted">${esc(c.platform || "-")}</p>
+        <p>${esc(c.role || "-")}</p>
+        ${sourceDetails(c.sources || [], "מקורות component")}
+      </div>`
+    )
+    .join("");
+  const flows = (arch.flows || []).map((flow) => `<li data-searchable="true">${esc(flow)}</li>`).join("");
+  const body = `
+    <div class="grid">
+      ${componentCards || '<div class="card span-12 muted">No architecture components.</div>'}
+      <div class="card span-12">
+        <h4>Data / Control Flows</h4>
+        <ol class="src-list">${flows || '<li class="muted">No flows extracted.</li>'}</ol>
+      </div>
+    </div>
+  `;
+  return autoPtsSection("autopts-sec-architecture", "Architecture", "PTS server/client/IUT/BTP roles and main control flow.", body, arch.sources || []);
+}
+
+function renderAutoPtsQuickstartSection(guide) {
+  const qs = guide.quickstart || {};
+  const scenarios = (qs.scenarios || [])
+    .map((sc) => {
+      const commands = (sc.commands || [])
+        .map(
+          (cmd) => `
+          <div class="autopts-command-row" data-searchable="true" data-search-text="${esc(`${sc.title || ""} ${cmd.when || ""} ${cmd.command || ""}`)}">
+            <div class="autopts-command-when">${esc(cmd.when || "")}</div>
+            <pre><code>${esc(cmd.command || "")}</code></pre>
+          </div>`
+        )
+        .join("");
+      const notes = (sc.notes || []).map((n) => `<li>${esc(n)}</li>`).join("");
+      return `
+        <details class="autopts-detail card span-12" data-searchable="true" open>
+          <summary>
+            <span>${esc(sc.title || "-")}</span>
+            <span class="muted">${esc(sc.summary || "")}</span>
+          </summary>
+          <div class="autopts-detail-body">
+            ${commands || '<p class="muted">No commands</p>'}
+            ${notes ? `<ul class="src-list">${notes}</ul>` : ""}
+            ${sourceDetails(sc.sources || [], "מקורות scenario")}
+          </div>
+        </details>`;
+    })
+    .join("");
+  return autoPtsSection(
+    "autopts-sec-quickstart",
+    "Quick Start",
+    "תרחישי הפעלה נפוצים לפי stack/use case, עם פקודות לדוגמה ומקורות.",
+    `<div class="grid">${scenarios || '<div class="card span-12 muted">No quickstart scenarios.</div>'}</div>`,
+    qs.sources || []
+  );
+}
+
+function renderAutoPtsCliSection(guide) {
+  const cli = guide.cli || {};
+  const groups = cli.group_labels || {};
+  const rowsAll = Array.isArray(cli.arguments) ? cli.arguments : [];
+  const rows = rowsAll.filter((row) => {
+    if (autoPtsPanelState.cliVisibility === "public" && row.hidden) return false;
+    if (autoPtsPanelState.cliVisibility === "hidden" && !row.hidden) return false;
+    if (autoPtsPanelState.cliGroup !== "ALL" && row.group !== autoPtsPanelState.cliGroup) return false;
+    const q = String(autoPtsPanelState.cliText || "").trim().toLowerCase();
+    if (!q) return true;
+    const text = [
+      row.name,
+      ...(row.flags || []),
+      row.help || "",
+      row.group || "",
+      row.default == null ? "" : String(row.default),
+    ]
+      .join(" ")
+      .toLowerCase();
+    return text.includes(q);
+  });
+
+  const rowHtml = rows
+    .map((row) => {
+      const flags = (row.flags || []).length ? (row.flags || []).map((f) => `<code>${esc(f)}</code>`).join(" ") : "<span class='muted'>-</span>";
+      const choices = Array.isArray(row.choices) ? row.choices.join(", ") : row.choices == null ? "" : String(row.choices);
+      return `
+      <tr class="autopts-cli-row" data-searchable="true" data-search-text="${esc(`${row.name} ${(row.flags || []).join(" ")} ${row.help || ""}`)}">
+        <td><code>${esc(row.name || "")}</code></td>
+        <td>${flags}</td>
+        <td><span class="pill">${esc((groups && groups[row.group]) || row.group || "-")}</span></td>
+        <td>${row.hidden ? '<span class="pill conditional">hidden</span>' : row.positional ? '<span class="pill optional">positional</span>' : '<span class="pill mandatory">public</span>'}</td>
+        <td>${esc(row.action || "-")}</td>
+        <td>${esc(row.nargs == null ? "-" : String(row.nargs))}</td>
+        <td>${esc(choices || "-")}</td>
+        <td>${esc(row.help || "-")}</td>
+        <td>${sourceDetails(row.sources || [], "מקור")}</td>
+      </tr>`;
+    })
+    .join("");
+
+  const groupOptions = [
+    `<option value="ALL"${autoPtsPanelState.cliGroup === "ALL" ? " selected" : ""}>All groups</option>`,
+    ...Object.keys(groups).map(
+      (key) =>
+        `<option value="${esc(key)}"${autoPtsPanelState.cliGroup === key ? " selected" : ""}>${esc(groups[key])}</option>`
+    ),
+  ].join("");
+
+  const summary = cli.summary || {};
+  const body = `
+    <div class="autopts-filter-bar">
+      <label>Group
+        <select id="autoptsCliGroupFilter">${groupOptions}</select>
+      </label>
+      <label>Visibility
+        <select id="autoptsCliVisibilityFilter">
+          <option value="public"${autoPtsPanelState.cliVisibility === "public" ? " selected" : ""}>Public only</option>
+          <option value="ALL"${autoPtsPanelState.cliVisibility === "ALL" ? " selected" : ""}>All</option>
+          <option value="hidden"${autoPtsPanelState.cliVisibility === "hidden" ? " selected" : ""}>Hidden only</option>
+        </select>
+      </label>
+      <label class="grow">Local search
+        <input id="autoptsCliTextFilter" type="search" value="${esc(autoPtsPanelState.cliText || "")}" placeholder="flags, help, dest..." />
+      </label>
+    </div>
+    <div class="autopts-stat-grid compact">
+      ${autoPtsSummaryStat("Total args", summary.total || 0, "")}
+      ${autoPtsSummaryStat("Public", summary.public || 0, "")}
+      ${autoPtsSummaryStat("Hidden", summary.hidden || 0, "")}
+      ${autoPtsSummaryStat("Showing", rows.length, "after local filters")}
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>dest</th><th>flags</th><th>group</th><th>visibility</th><th>action</th><th>nargs</th><th>choices</th><th>help</th><th>source</th></tr></thead>
+        <tbody>${rowHtml || '<tr><td colspan="9" class="muted">No CLI args after filters.</td></tr>'}</tbody>
+      </table>
+    </div>
+  `;
+  return autoPtsSection("autopts-sec-cli", "CLI Reference", "AST-derived inventory from auto-pts/cliparser.py.", body, cli.sources || []);
+}
+
+function renderAutoPtsExecutionSection(guide) {
+  const flow = guide.execution_flow || {};
+  const notes = guide.selection_notes || {};
+  const stepCards = (flow.steps || [])
+    .map(
+      (step) => `
+      <details class="autopts-detail card span-12" data-searchable="true" open>
+        <summary>
+          <span>${esc(step.title || step.id || "-")}</span>
+          <span class="muted">${esc(step.summary || "")}</span>
+        </summary>
+        <div class="autopts-detail-body">
+          <div class="autopts-kv-list">
+            <div><span>Functions</span><span>${esc((step.functions || []).join(", ") || "-")}</span></div>
+            <div><span>Preconditions</span><span>${esc((step.preconditions || []).join(" | ") || "-")}</span></div>
+            <div><span>Outputs</span><span>${esc((step.outputs || []).join(" | ") || "-")}</span></div>
+            <div><span>Failure points</span><span>${esc((step.failure_points || []).join(" | ") || "-")}</span></div>
+          </div>
+          ${sourceDetails(step.sources || [], "מקורות step")}
+        </div>
+      </details>`
+    )
+    .join("");
+  const pipeline = (notes.pipeline || []).map((x) => `<li data-searchable="true">${esc(x)}</li>`).join("");
+  const body = `
+    <div class="card span-12">
+      <h4>Selection / Execution Pipeline (short version)</h4>
+      <ol class="src-list">${pipeline || '<li class="muted">No pipeline notes.</li>'}</ol>
+      ${sourceDetails(notes.sources || [], "מקורות pipeline")}
+    </div>
+    <div class="grid">${stepCards || '<div class="card span-12 muted">No execution flow steps.</div>'}</div>
+  `;
+  return autoPtsSection("autopts-sec-flow", "Execution Flow", "From CLI parsing to cleanup, including how testcase selection is resolved.", body, flow.sources || []);
+}
+
+function renderAutoPtsThreeLayersSection(guide) {
+  const sec = guide.test_support_3_layers || {};
+  const layers = sec.layers || {};
+  const code = layers.code_support || {};
+  const ws = layers.bundled_workspaces || {};
+  const runtime = layers.exact_runtime || {};
+
+  const topProfilesRows = (code.top_explicit_profiles || [])
+    .map(
+      (row) => `
+      <tr data-searchable="true" data-search-text="${esc(`${row.stack} ${row.profile} ${row.classification}`)}">
+        <td>${esc(row.stack || "-")}</td>
+        <td>${esc(row.profile || "-")}</td>
+        <td><span class="pill">${esc(row.classification || "-")}</span></td>
+        <td>${esc(String(row.explicit_tcid_count ?? 0))}</td>
+        <td>${esc(String(row.explicit_lt_helper_count ?? 0))}</td>
+        <td>${sourceDetails(row.sources || [], "מקור")}</td>
+      </tr>`
+    )
+    .join("");
+  const runtimeCommands = (runtime.commands || [])
+    .map(
+      (cmd) => `
+      <details class="autopts-detail" data-searchable="true" open>
+        <summary>${esc(cmd.title || "-")} <span class="muted">(${esc(cmd.platform || "-")})</span></summary>
+        <div class="autopts-detail-body">
+          <pre><code>${esc(cmd.command || "")}</code></pre>
+          ${sourceDetails(cmd.sources || [], "מקורות command")}
+        </div>
+      </details>`
+    )
+    .join("");
+  const rules = (runtime.filtering_rules || [])
+    .map(
+      (rule) => `
+      <div class="autopts-rule" data-searchable="true">
+        <strong>${esc(rule.rule || "-")}</strong>
+        <p>${esc(rule.detail || "-")}</p>
+        ${sourceDetails(rule.sources || [], "מקור rule")}
+      </div>`
+    )
+    .join("");
+  const limits = (ws.limitations || []).map((t) => `<li>${esc(t)}</li>`).join("");
+  const body = `
+    <div class="autopts-three-layers">
+      <div class="autopts-layer-card">
+        <div class="autopts-layer-head"><span class="pill mandatory">${esc(code.label || "Code-derived")}</span></div>
+        <p class="small muted">Support inventory from code modules (<code>test_cases</code>, <code>set_pixits</code>, WID handlers, explicit TCIDs).</p>
+        <div class="autopts-kv-list">
+          <div><span>rows</span><code>${esc(String(((code.summary || {}).rows) || 0))}</code></div>
+          <div><span>by stack</span><span>${esc(JSON.stringify((code.summary || {}).by_stack || {}))}</span></div>
+          <div><span>by classification</span><span>${esc(JSON.stringify((code.summary || {}).by_classification || {}))}</span></div>
+        </div>
+        ${sourceDetails(code.sources || [], "מקורות layer")}
+      </div>
+      <div class="autopts-layer-card">
+        <div class="autopts-layer-head"><span class="pill optional">${esc(ws.label || "Workspace-derived")}</span></div>
+        <p class="small muted">Bundled workspaces inventory (<code>.pqw6</code>/<code>.pts</code>/<code>.bqw</code>) with project/PICS/PIXIT metadata.</p>
+        <div class="autopts-kv-list">
+          <div><span>workspace files</span><code>${esc(String(((ws.summary || {}).workspace_files) || 0))}</code></div>
+          <div><span>formats</span><span>${esc(JSON.stringify((ws.summary || {}).formats || {}))}</span></div>
+          <div><span>total projects</span><code>${esc(String(((ws.summary || {}).total_projects) || 0))}</code></div>
+        </div>
+        <ul class="src-list">${limits || '<li class="muted">No limitations listed.</li>'}</ul>
+        ${sourceDetails(ws.sources || [], "מקורות layer")}
+      </div>
+      <div class="autopts-layer-card">
+        <div class="autopts-layer-head"><span class="pill conditional">${esc(runtime.label || "PTS runtime required")}</span></div>
+        <p class="small muted">Exact active testcase list requires Windows + PTS COM runtime tools.</p>
+        <div>${autoPtsTagPills(runtime.platform_requirements || [])}</div>
+        ${sourceDetails(runtime.sources || [], "מקורות layer")}
+      </div>
+    </div>
+    <div class="card span-12">
+      <h4>Code Layer: Profiles with many explicit TCID overrides</h4>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>stack</th><th>profile</th><th>classification</th><th>explicit TCIDs</th><th>LT helpers</th><th>source</th></tr></thead>
+          <tbody>${topProfilesRows || '<tr><td colspan="6" class="muted">No rows.</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card span-12">
+      <h4>Exact Runtime Layer: Commands</h4>
+      ${runtimeCommands || '<p class="muted">No commands.</p>'}
+      <div class="autopts-rule-list">${rules || ""}</div>
+    </div>
+  `;
+  return autoPtsSection("autopts-sec-three-layers", "Which Tests AutoPTS Can Run (3 Layers)", "Distinguish code support, bundled workspaces, and exact runtime lists.", body, sec.sources || []);
+}
+
+function renderAutoPtsProfilesSection(guide) {
+  const stacks = guide.stacks || {};
+  const inv = guide.profiles_inventory || {};
+  const rowsAll = Array.isArray(inv.rows) ? inv.rows : [];
+  const rows = rowsAll.filter((row) => {
+    if (autoPtsPanelState.profileStack !== "ALL" && row.stack !== autoPtsPanelState.profileStack) return false;
+    if (autoPtsPanelState.profileClass !== "ALL" && row.classification !== autoPtsPanelState.profileClass) return false;
+    const q = String(autoPtsPanelState.profileText || "").trim().toLowerCase();
+    if (!q) return true;
+    const text = `${row.stack} ${row.profile} ${row.module} ${row.classification}`.toLowerCase();
+    return text.includes(q);
+  });
+  const stackOptions = [
+    `<option value="ALL"${autoPtsPanelState.profileStack === "ALL" ? " selected" : ""}>All stacks</option>`,
+    ...((stacks.rows || []).map(
+      (r) => `<option value="${esc(r.stack)}"${autoPtsPanelState.profileStack === r.stack ? " selected" : ""}>${esc(r.stack)}</option>`
+    )),
+  ].join("");
+  const classOptions = [
+    `<option value="ALL"${autoPtsPanelState.profileClass === "ALL" ? " selected" : ""}>All classifications</option>`,
+    ...Array.from(new Set(rowsAll.map((r) => r.classification))).sort().map(
+      (c) => `<option value="${esc(c)}"${autoPtsPanelState.profileClass === c ? " selected" : ""}>${esc(c)}</option>`
+    ),
+  ].join("");
+  const stackCards = (stacks.rows || [])
+    .map(
+      (r) => `
+      <div class="card span-4 autopts-mini-card" data-searchable="true" data-search-text="${esc(`${r.stack} ${(r.profiles || []).join(" ")}`)}">
+        <h4>${esc(r.stack)}</h4>
+        <div class="autopts-stat-value">${esc(String(r.profile_count || 0))}</div>
+        <p class="small muted">${esc((r.profiles || []).join(", "))}</p>
+        ${sourceDetails(r.sources || [], "מקור")}
+      </div>`
+    )
+    .join("");
+  const profileRows = rows
+    .map(
+      (r) => `
+      <tr class="autopts-profile-row" data-searchable="true" data-search-text="${esc(`${r.stack} ${r.profile} ${r.module} ${r.classification}`)}">
+        <td>${esc(r.stack || "-")}</td>
+        <td>${esc(r.profile || "-")}</td>
+        <td><code>${esc(r.module || "-")}</code></td>
+        <td><span class="pill">${esc(r.classification || "-")}</span></td>
+        <td>${r.has_test_cases ? "yes" : "no"}</td>
+        <td>${r.has_set_pixits ? "yes" : "no"}</td>
+        <td>${esc((r.workspace_project_calls || []).join(", ") || "-")}</td>
+        <td>${esc(String(r.explicit_tcid_count || 0))}</td>
+        <td>${esc(String(r.explicit_lt_helper_count || 0))}</td>
+        <td>${r.project_wid_dispatcher ? "yes" : "no"}</td>
+        <td>${esc(String(r.project_wid_handlers_count || 0))}</td>
+        <td>${esc(String(r.generic_wid_handlers_count || 0))}</td>
+        <td>${sourceDetails(r.sources || [], "מקור")}</td>
+      </tr>`
+    )
+    .join("");
+  const body = `
+    <div class="grid">${stackCards || '<div class="card span-12 muted">No stack rows.</div>'}</div>
+    <div class="autopts-filter-bar">
+      <label>Stack<select id="autoptsProfileStackFilter">${stackOptions}</select></label>
+      <label>Classification<select id="autoptsProfileClassFilter">${classOptions}</select></label>
+      <label class="grow">Local search<input id="autoptsProfileTextFilter" type="search" value="${esc(autoPtsPanelState.profileText || "")}" placeholder="stack/profile/module/classification..." /></label>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>stack</th><th>profile</th><th>module</th><th>classification</th><th>test_cases()</th><th>set_pixits()</th><th>workspace calls</th><th>explicit TCIDs</th><th>LT helpers</th><th>project wid dispatcher</th><th>project WID handlers</th><th>generic WID handlers</th><th>source</th></tr></thead>
+        <tbody>${profileRows || '<tr><td colspan="13" class="muted">No profile rows after filters.</td></tr>'}</tbody>
+      </table>
+    </div>
+  `;
+  return autoPtsSection("autopts-sec-profiles", "Stacks / Profiles Support Matrix", "Code-derived support matrix across Zephyr, Mynewt, and BlueZ profile modules.", body, inv.sources || []);
+}
+
+function renderAutoPtsWorkspacesSection(guide) {
+  const sec = guide.workspaces_inventory || {};
+  const rows = (sec.rows || [])
+    .map((r) => {
+      const projNames = (r.projects || []).map((p) => p.name).filter(Boolean);
+      return `
+      <tr data-searchable="true" data-search-text="${esc(`${r.path} ${projNames.join(" ")}`)}">
+        <td><code>${esc(r.path || "")}</code></td>
+        <td>${esc(r.format || "-")}</td>
+        <td>${esc(String(r.project_count || 0))}</td>
+        <td>${esc(String(r.pics_rows || 0))}</td>
+        <td>${esc(String(r.pixit_rows || 0))}</td>
+        <td>${esc(projNames.join(", ") || "-")}</td>
+        <td>${sourceDetails(r.sources || [], "מקור")}</td>
+      </tr>`;
+    })
+    .join("");
+  const body = `
+    <div class="card span-12">
+      <p class="small muted">${esc(sec.note || "")}</p>
+      <div class="autopts-kv-list">
+        <div><span>workspace files</span><code>${esc(String(((sec.summary || {}).workspace_files) || 0))}</code></div>
+        <div><span>formats</span><span>${esc(JSON.stringify((sec.summary || {}).formats || {}))}</span></div>
+        <div><span>total projects</span><code>${esc(String(((sec.summary || {}).total_projects) || 0))}</code></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>workspace file</th><th>format</th><th>projects</th><th>PICS rows</th><th>PIXIT rows</th><th>project names</th><th>source</th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="7" class="muted">No bundled workspace files found.</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  return autoPtsSection("autopts-sec-workspaces", "Bundled Workspaces", "Inventory of bundled .pqw6/.pts/.bqw files and extracted project metadata.", body, sec.sources || []);
+}
+
+function renderAutoPtsWidBtpToolsSection(guide) {
+  const wid = guide.wid_inventory || {};
+  const generic = (wid.generic && wid.generic.rows) || [];
+  const widRows = generic
+    .slice(0, 20)
+    .map(
+      (r) => `
+      <tr data-searchable="true" data-search-text="${esc(`${r.service} ${r.module} ${r.wid_handler_count}`)}">
+        <td>${esc(r.service || "-")}</td>
+        <td><code>${esc(r.module || "-")}</code></td>
+        <td>${esc(String(r.wid_handler_count || 0))}</td>
+        <td>${sourceDetails(r.sources || [], "מקור")}</td>
+      </tr>`
+    )
+    .join("");
+  const btp = guide.btp_inventory || {};
+  const btpRows = (btp.code_modules || [])
+    .slice(0, 20)
+    .map(
+      (r) => `
+      <tr data-searchable="true">
+        <td><code>${esc(r.module || "-")}</code></td>
+        <td>${esc(String(r.function_count || 0))}</td>
+        <td>${sourceDetails(r.sources || [], "מקור")}</td>
+      </tr>`
+    )
+    .join("");
+  const tools = guide.tools_inventory || {};
+  const toolSummary = tools.summary || {};
+  const body = `
+    <div class="grid">
+      <div class="card span-6">
+        <h4>WID / MMI Internals</h4>
+        <div class="autopts-kv-list">
+          <div><span>generic services</span><code>${esc(String((((wid.generic || {}).summary || {}).services) || 0))}</code></div>
+          <div><span>total WID handlers</span><code>${esc(String((((wid.generic || {}).summary || {}).total_wid_handlers) || 0))}</code></div>
+          <div><span>--wid_run</span><code>${esc(((wid.wid_run || {}).flag) || "--wid_run")}</code></div>
+        </div>
+        ${(wid.wid_usage_tool && wid.wid_usage_tool.command) ? `<pre><code>${esc(wid.wid_usage_tool.command)}</code></pre>` : ""}
+        ${sourceDetails((wid.wid_usage_tool || {}).sources || [], "מקורות WID tooling")}
+      </div>
+      <div class="card span-6">
+        <h4>BTP Inventory</h4>
+        <div class="autopts-kv-list">
+          <div><span>code modules</span><code>${esc(String((btp.summary || {}).code_modules || 0))}</code></div>
+          <div><span>doc specs</span><code>${esc(String((btp.summary || {}).doc_specs || 0))}</code></div>
+          <div><span>total functions</span><code>${esc(String((btp.summary || {}).total_code_functions || 0))}</code></div>
+        </div>
+        ${sourceDetails(btp.sources || [], "מקורות BTP")}
+      </div>
+      <div class="card span-12">
+        <h4>Top generic WID handler modules (sample)</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>service</th><th>module</th><th>WID handlers</th><th>source</th></tr></thead>
+            <tbody>${widRows || '<tr><td colspan="4" class="muted">No WID rows.</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card span-12">
+        <h4>BTP code modules (sample)</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>module</th><th>functions</th><th>source</th></tr></thead>
+            <tbody>${btpRows || '<tr><td colspan="3" class="muted">No BTP rows.</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card span-12">
+        <h4>AutoPTS tools inventory</h4>
+        <div class="autopts-kv-list">
+          <div><span>scripts</span><code>${esc(String(toolSummary.scripts || 0))}</code></div>
+          <div><span>categories</span><span>${esc(JSON.stringify(toolSummary.categories || {}))}</span></div>
+        </div>
+        ${sourceDetails(tools.sources || [], "מקורות tools inventory")}
+      </div>
+    </div>
+  `;
+  return autoPtsSection("autopts-sec-wid-btp-tools", "WID / BTP / Tools", "Internal protocol + handler layers and supporting AutoPTS tools.", body, (wid.sources || []).concat(btp.sources || [], tools.sources || []));
+}
+
+function renderAutoPtsLogsSection(guide) {
+  const sec = guide.logs_and_outputs || {};
+  const rows = (sec.rows || [])
+    .map(
+      (r) => `
+      <tr data-searchable="true" data-search-text="${esc(`${r.key} ${r.expr} ${r.description}`)}">
+        <td><code>${esc(r.key || "-")}</code></td>
+        <td><code>${esc(r.expr || "-")}</code></td>
+        <td>${esc(r.description || "-")}</td>
+        <td>${sourceDetails(r.sources || [], "מקור")}</td>
+      </tr>`
+    )
+    .join("");
+  const body = `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>FILE_PATHS key</th><th>expression</th><th>meaning</th><th>source</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="4" class="muted">No FILE_PATHS rows extracted.</td></tr>'}</tbody>
+      </table>
+    </div>
+  `;
+  return autoPtsSection("autopts-sec-logs", "Logs / Outputs / Artifacts", "Paths and outputs derived from autopts/config.py FILE_PATHS.", body, sec.sources || []);
+}
+
+function renderAutoPtsTroubleshootingSection(guide) {
+  const sec = guide.troubleshooting || {};
+  const items = (sec.items || [])
+    .map(
+      (item) => `
+      <details class="autopts-detail card span-12" data-searchable="true">
+        <summary>
+          <span>${esc(item.title || "-")}</span>
+          <span>${autoPtsTagPills(item.tags || [])}</span>
+        </summary>
+        <div class="autopts-detail-body">
+          <div class="autopts-kv-list">
+            <div><span>Symptom</span><span>${esc(item.symptom || "-")}</span></div>
+            <div><span>Why</span><span>${esc(item.why || "-")}</span></div>
+            <div><span>Fix</span><span>${esc((item.fix || []).join(" | ") || "-")}</span></div>
+          </div>
+          ${sourceDetails(item.sources || [], "מקורות issue")}
+        </div>
+      </details>`
+    )
+    .join("");
+  return autoPtsSection("autopts-sec-troubleshooting", "Troubleshooting / Gotchas", "Common failure modes from code paths plus official setup references.", `<div class="grid">${items || '<div class="card span-12 muted">No troubleshooting items.</div>'}</div>`, sec.sources || []);
+}
+
+function renderAutoPtsExtendingSection(guide) {
+  const sec = guide.extending_autopts || {};
+  const steps = (sec.steps || [])
+    .map(
+      (step, idx) => `
+      <details class="autopts-detail card span-12" data-searchable="true" open>
+        <summary>
+          <span>${idx + 1}. ${esc(step.title || step.id || "-")}</span>
+          <span class="muted">${esc(step.summary || "")}</span>
+        </summary>
+        <div class="autopts-detail-body">
+          <p><strong>Files:</strong> ${esc((step.key_files || []).join(", ") || "-")}</p>
+          ${sourceDetails(step.sources || [], "מקורות step")}
+        </div>
+      </details>`
+    )
+    .join("");
+  return autoPtsSection("autopts-sec-extending", "Extending AutoPTS", "How to add profile/test support based on the in-repo tutorial.", `<div class="grid">${steps || '<div class="card span-12 muted">No extending steps.</div>'}</div>`, sec.sources || []);
+}
+
+function renderAutoPtsOfficialSourcesSection(guide) {
+  const sec = guide.official_sources || {};
+  const entries = (sec.entries || [])
+    .map(
+      (e) => `
+      <tr data-searchable="true" data-search-text="${esc(`${e.title} ${e.url} ${e.domain}`)}">
+        <td>${sourceUrlRef(e) || esc(e.title || "-")}</td>
+        <td><code>${esc(e.domain || "-")}</code></td>
+        <td><code>${esc(e.retrieved_at || "-")}</code></td>
+        <td>${esc((e.used_for_sections || []).join(", ") || "-")}</td>
+        <td>${esc(e.notes || "-")}</td>
+        <td>${sourceDetails(e.sources || [], "מקור manifest")}</td>
+      </tr>`
+    )
+    .join("");
+  const whitelist = autoPtsTagPills(sec.whitelist_domains || []);
+  const body = `
+    <div class="card span-12">
+      <p class="small muted">Whitelisted domains only:</p>
+      <div>${whitelist}</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>source</th><th>domain</th><th>retrieved</th><th>used for</th><th>notes</th><th>source</th></tr></thead>
+          <tbody>${entries || '<tr><td colspan="6" class="muted">No official source entries.</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  return autoPtsSection("autopts-sec-official-sources", "Official Sources (Whitelisted)", "External references used by this panel (official sources only).", body, sec.sources || []);
+}
+
+function renderAutoPtsSourcesIndexSection(guide) {
+  const idx = guide.sources_index || {};
+  const known = guide.known_limits || {};
+  const localRows = (idx.local || [])
+    .slice(0, 80)
+    .map(
+      (r) => `
+      <tr data-searchable="true">
+        <td><code>${esc(r.file || "-")}${r.line ? `:${esc(String(r.line))}` : ""}</code></td>
+        <td>${esc(String(r.count || 0))}</td>
+      </tr>`
+    )
+    .join("");
+  const webRows = (idx.web || [])
+    .map(
+      (r) => `
+      <tr data-searchable="true">
+        <td>${sourceUrlRef(r) || esc(r.url || "-")}</td>
+        <td><code>${esc(r.retrieved_at || "-")}</code></td>
+        <td>${esc(String(r.count || 0))}</td>
+      </tr>`
+    )
+    .join("");
+  const limits = (known.items || [])
+    .map(
+      (item) => `
+      <div class="autopts-rule" data-searchable="true">
+        <strong>${esc(item.title || "-")}</strong>
+        <p>${esc(item.detail || "-")}</p>
+        <div>${autoPtsTagPills(item.tags || [])}</div>
+        ${sourceDetails(item.sources || [], "מקור limitation")}
+      </div>`
+    )
+    .join("");
+  const body = `
+    <div class="grid">
+      <div class="card span-6">
+        <h4>Sources Index Summary</h4>
+        <div class="autopts-kv-list">
+          <div><span>Local sources</span><code>${esc(String(((idx.summary || {}).local_sources) || 0))}</code></div>
+          <div><span>Web sources</span><code>${esc(String(((idx.summary || {}).web_sources) || 0))}</code></div>
+        </div>
+      </div>
+      <div class="card span-6">
+        <h4>Known Limits</h4>
+        <div class="autopts-rule-list">${limits || '<p class="muted">No known limits.</p>'}</div>
+      </div>
+      <div class="card span-12">
+        <h4>Local Sources (top 80)</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>file[:line]</th><th>refs</th></tr></thead>
+            <tbody>${localRows || '<tr><td colspan="2" class="muted">No local sources indexed.</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card span-12">
+        <h4>Web Sources</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>url</th><th>retrieved</th><th>refs</th></tr></thead>
+            <tbody>${webRows || '<tr><td colspan="3" class="muted">No web sources indexed.</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+  return autoPtsSection("autopts-sec-sources-index", "Sources Index / Limits", "Traceability index plus explicit limits for this generated AutoPTS panel.", body, (known.sources || []).concat(idx.sources || []));
+}
+
+function renderAutoPtsPanel() {
+  const guide = autoPtsGuide();
+  if (!guide || !Object.keys(guide).length) {
+    return `
+      <div class="grid">
+        <div class="card span-12">
+          <h2 class="section-title">AutoPTS</h2>
+          <p class="muted">No <code>auto_pts_guide</code> data found in <code>data/report-data.js</code>. Rebuild the dashboard bundle.</p>
+        </div>
+      </div>
+    `;
+  }
+
+  const subnavItems = [
+    { id: "autopts-sec-overview", label: "סקירה" },
+    { id: "autopts-sec-architecture", label: "ארכיטקטורה" },
+    { id: "autopts-sec-quickstart", label: "Quick Start" },
+    { id: "autopts-sec-cli", label: "CLI" },
+    { id: "autopts-sec-flow", label: "Execution Flow" },
+    { id: "autopts-sec-three-layers", label: "3 שכבות טסטים" },
+    { id: "autopts-sec-profiles", label: "Stacks/Profiles" },
+    { id: "autopts-sec-workspaces", label: "Workspaces" },
+    { id: "autopts-sec-wid-btp-tools", label: "WID/BTP/Tools" },
+    { id: "autopts-sec-logs", label: "Logs/Outputs" },
+    { id: "autopts-sec-troubleshooting", label: "Troubleshooting" },
+    { id: "autopts-sec-extending", label: "Extending" },
+    { id: "autopts-sec-official-sources", label: "Official Sources" },
+    { id: "autopts-sec-sources-index", label: "Sources Index" },
+  ];
+
+  const meta = guide.meta || {};
+  const header = `
+    <div class="card span-12 autopts-header-card" data-searchable="true">
+      <h2 class="section-title">AutoPTS - Guide & Internal Map</h2>
+      <p class="section-intro">
+        כיסוי מקיף לשימוש ב-<code>auto-pts</code>, להבנת מנגנון הריצה, ולזיהוי מה הוא יודע להריץ.
+        כל הנתונים כאן נבנים אוטומטית מהקוד/מסמכים בריפו + מקורות רשמיים מאושרים בלבד.
+      </p>
+      <div class="autopts-kv-list">
+        <div><span>generated</span><code>${esc((meta.generated_date || "-"))}</code></div>
+        <div><span>builder</span><code>${esc((((meta.builder_integration || {}).builder_script) || "-"))}</code></div>
+        <div><span>templates</span><code>${esc((((meta.builder_integration || {}).templates_dir) || "-"))}</code></div>
+        <div><span>official sources</span><code>${esc(String((((meta.scan_summary || {}).official_sources_count) || 0)))} </code></div>
+      </div>
+      ${sourceDetails(meta.sources || [], "מקורות meta")}
+    </div>
+  `;
+
+  return `
+    <div class="grid autopts-grid">
+      ${header}
+      ${autoPtsSubnav(subnavItems)}
+      ${renderAutoPtsOverviewSection(guide)}
+      ${renderAutoPtsArchitectureSection(guide)}
+      ${renderAutoPtsQuickstartSection(guide)}
+      ${renderAutoPtsCliSection(guide)}
+      ${renderAutoPtsExecutionSection(guide)}
+      ${renderAutoPtsThreeLayersSection(guide)}
+      ${renderAutoPtsProfilesSection(guide)}
+      ${renderAutoPtsWorkspacesSection(guide)}
+      ${renderAutoPtsWidBtpToolsSection(guide)}
+      ${renderAutoPtsLogsSection(guide)}
+      ${renderAutoPtsTroubleshootingSection(guide)}
+      ${renderAutoPtsExtendingSection(guide)}
+      ${renderAutoPtsOfficialSourcesSection(guide)}
+      ${renderAutoPtsSourcesIndexSection(guide)}
+    </div>
+  `;
+}
+
 function renderSourcesPanel() {
   const workspaceFile = DATA.meta && DATA.meta.workspace && DATA.meta.workspace.file;
   const formula = DATA.meta && DATA.meta.tspc_formula;
@@ -3427,11 +4247,20 @@ function rerenderRuntimePanel() {
   applySearch();
 }
 
+function rerenderAutoPtsPanel() {
+  const root = document.getElementById("autoptsContent");
+  if (!root) return;
+  root.innerHTML = renderAutoPtsPanel();
+  bindAutoPtsActions();
+  applySearch();
+}
+
 function fillPanels() {
   const overview = document.getElementById("overviewContent");
   const iopt = document.getElementById("ioptContent");
   const runtime = document.getElementById("runtimeContent");
   const comparison = document.getElementById("comparisonContent");
+  const autopts = document.getElementById("autoptsContent");
   const sources = document.getElementById("sourcesContent");
   const glossaryDrawerContent = document.getElementById("glossaryDrawerContent");
 
@@ -3446,12 +4275,14 @@ function fillPanels() {
   if (iopt) iopt.innerHTML = renderIoptPanel();
   if (runtime) runtime.innerHTML = renderRuntimePanel();
   if (comparison) comparison.innerHTML = renderComparisonPanel();
+  if (autopts) autopts.innerHTML = renderAutoPtsPanel();
   if (sources) sources.innerHTML = renderSourcesPanel();
   if (glossaryDrawerContent) glossaryDrawerContent.innerHTML = renderGlossaryDrawerContent();
 
   bindOverviewActions();
   bindRuntimeActions();
   bindComparisonActions();
+  bindAutoPtsActions();
 }
 
 function bindOverviewActions() {
@@ -3522,6 +4353,71 @@ function bindRuntimeActions() {
       rerenderRuntimePanel();
     });
   }
+}
+
+function bindAutoPtsActions() {
+  const cliGroup = document.getElementById("autoptsCliGroupFilter");
+  const cliVisibility = document.getElementById("autoptsCliVisibilityFilter");
+  const cliText = document.getElementById("autoptsCliTextFilter");
+  const profileStack = document.getElementById("autoptsProfileStackFilter");
+  const profileClass = document.getElementById("autoptsProfileClassFilter");
+  const profileText = document.getElementById("autoptsProfileTextFilter");
+
+  if (cliGroup) {
+    cliGroup.addEventListener("change", () => {
+      autoPtsPanelState.cliGroup = cliGroup.value || "ALL";
+      rerenderAutoPtsPanel();
+    });
+  }
+
+  if (cliVisibility) {
+    cliVisibility.addEventListener("change", () => {
+      autoPtsPanelState.cliVisibility = cliVisibility.value || "public";
+      rerenderAutoPtsPanel();
+    });
+  }
+
+  if (cliText) {
+    cliText.addEventListener("input", () => {
+      autoPtsPanelState.cliText = cliText.value || "";
+      rerenderAutoPtsPanel();
+    });
+  }
+
+  if (profileStack) {
+    profileStack.addEventListener("change", () => {
+      autoPtsPanelState.profileStack = profileStack.value || "ALL";
+      rerenderAutoPtsPanel();
+    });
+  }
+
+  if (profileClass) {
+    profileClass.addEventListener("change", () => {
+      autoPtsPanelState.profileClass = profileClass.value || "ALL";
+      rerenderAutoPtsPanel();
+    });
+  }
+
+  if (profileText) {
+    profileText.addEventListener("input", () => {
+      autoPtsPanelState.profileText = profileText.value || "";
+      rerenderAutoPtsPanel();
+    });
+  }
+
+  document.querySelectorAll("[data-autopts-jump]").forEach((link) => {
+    link.addEventListener("click", (event) => {
+      const id = link.getAttribute("data-autopts-jump");
+      if (!id) return;
+      const target = document.getElementById(id);
+      if (!target) return;
+      event.preventDefault();
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (history && history.replaceState) {
+        history.replaceState(null, "", `#${id}`);
+      }
+    });
+  });
 }
 
 function getActivePanel() {
