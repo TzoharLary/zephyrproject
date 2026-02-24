@@ -1,0 +1,2486 @@
+{
+  "version": 1,
+  "updated_at": "2026-02-24T12:41:01.130429+00:00",
+  "entries": {
+    "DIS::DIS/SR/SGGIT/SER/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "DIS::DIS/SR/SGGIT/SER/BV-02-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "DIS::DIS/SR/SGGIT/CHA/BV-01-C": {
+      "manual": {
+        "status": "pass",
+        "owner": "צהר"
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "DIS::DIS/SR/SGGIT/CHA/BV-02-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "DIS::DIS/SR/SGGIT/CHA/BV-03-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "DIS::DIS/SR/SGGIT/CHA/BV-04-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "DIS::DIS/SR/SGGIT/CHA/BV-05-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "DIS::DIS/SR/SGGIT/CHA/BV-06-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "DIS::DIS/SR/SGGIT/CHA/BV-07-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "DIS::DIS/SR/SGGIT/CHA/BV-08-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "DIS::DIS/SR/SGGIT/CHA/BV-09-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "DIS::DIS/SR/SGGIT/CHA/BV-10-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "DIS::DIS/SR/SGGIT/SDP/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/BR/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/BR/BV-02-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CBR/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CIN/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CIN/BV-02-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CIN/BV-03-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CIN/BV-04-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CIN/BV-05-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CIN/BV-06-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CIN/BV-07-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CIN/BV-08-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CIN/BV-09-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CIN/BV-10-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CIN/BV-11-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CN/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CN/BV-02-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CN/BV-03-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CN/BV-04-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CN/BV-05-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CN/BV-06-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CN/BV-07-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CN/BV-08-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CN/BV-09-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CN/BV-10-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CN/BV-11-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CN/BV-12-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CN/BV-13-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CN/BV-14-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CN/BV-15-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CN/BV-16-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CN/BV-17-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CN/BV-18-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CN/BV-19-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CN/BV-20-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CN/BV-21-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CN/BV-22-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CN/BV-23-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CN/BV-24-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CN/BV-25-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CN/BV-26-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CN/BV-27-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CN/BV-28-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CN/BV-29-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CN/BV-30-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CON/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CON/BV-02-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CON/BV-03-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CON/BV-04-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CON/BV-05-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CON/BV-06-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CR/BV-02-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CR/BV-03-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CR/BV-04-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CR/BV-05-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CR/BV-06-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CR/BV-07-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CR/BV-08-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CR/BV-09-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CR/BV-10-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CR/BV-11-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/CR/BV-12-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/DES/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-02-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-03-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-04-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-05-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-06-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-07-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-08-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-09-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-10-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-11-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-12-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-13-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-14-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-15-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-16-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-17-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-18-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-19-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-20-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-21-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-22-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-23-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-24-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-25-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-26-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-27-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-28-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-29-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-30-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-31-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-32-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-33-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-34-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-35-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-36-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-37-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-38-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-39-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-40-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-41-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-42-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-43-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-44-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-45-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-46-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-47-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-48-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-49-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-50-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-51-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-52-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-53-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/IND/BV-54-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/SGGIT/CHA/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/SGGIT/CHA/BV-02-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/SGGIT/CHA/BV-03-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/SGGIT/CHA/BV-04-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/SGGIT/CHA/BV-05-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/SGGIT/CHA/BV-06-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/SGGIT/CHA/BV-07-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/SGGIT/CHA/BV-08-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/SGGIT/CHA/BV-09-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/SGGIT/CHA/BV-10-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/SGGIT/CHA/BV-11-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/SGGIT/CHA/BV-12-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/SGGIT/CHA/BV-13-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/SGGIT/CHA/BV-14-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/SGGIT/CHA/BV-15-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/SGGIT/CHA/BV-16-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/SGGIT/CHA/BV-17-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/SGGIT/CHA/BV-18-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/SGGIT/CHA/BV-19-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/SGGIT/CHA/BV-20-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/SGGIT/SDP/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "BAS::BAS/SR/SGGIT/SER/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HRS::HRS/SEN/CN/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HRS::HRS/SEN/CN/BV-02-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HRS::HRS/SEN/CN/BV-03-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HRS::HRS/SEN/CN/BV-04-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HRS::HRS/SEN/CN/BV-05-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HRS::HRS/SEN/CON/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HRS::HRS/SEN/CR/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HRS::HRS/SEN/CW/BI-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HRS::HRS/SEN/CW/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HRS::HRS/SEN/SGGIT/CHA/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HRS::HRS/SEN/SGGIT/CHA/BV-02-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HRS::HRS/SEN/SGGIT/CHA/BV-03-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HRS::HRS/SEN/SGGIT/SER/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/BH/CGGIT/CHA/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/BH/CGGIT/CHA/BV-02-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/BH/CGGIT/CHA/BV-03-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/BH/CGGIT/CHA/BV-04-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/BH/CGGIT/CHA/BV-05-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/BH/CGGIT/CHA/BV-06-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/BH/CGGIT/SER/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/BH/CGGIT/SER/BV-02-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/BH/CGGIT/SER/BV-03-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/BH/HGCF/BV-03-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/BH/HGCF/BV-04-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/BH/HGCF/BV-05-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/BH/HGCF/BV-06-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/BH/HGDC/BV-13-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/BH/HGNF/BI-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/BH/HGNF/BV-02-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/BH/HGNF/BV-03-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/BH/HGRF/BV-18-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/BH/HGWF/BV-08-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/HD/HGDC/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/HD/HGIOM/BI-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/HD/HGIOM/BI-02-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/HD/HGIOM/BI-03-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/HD/HGIOM/BI-04-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/HD/HGIOM/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/HD/HGIOM/BV-02-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/HD/HGIPS/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/HD/HGIPS/BV-02-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/HD/HGIPS/BV-03-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/HD/HGIPT/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/HD/HGIPT/BV-02-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/HD/SGGIT/CHA/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/HD/SGGIT/CHA/BV-02-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/HD/SGGIT/CHA/BV-03-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/HD/SGGIT/SER/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/HD/SGGIT/SER/BV-02-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/HD/SGGIT/SER/BV-03-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/HD/SGGIT/SER/BV-04-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/HD/SGGIT/SER/BV-05-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/HD/SGGIT/SER/BV-06-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/CGGIT/CHA/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/CGGIT/CHA/BV-02-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/CGGIT/CHA/BV-03-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/CGGIT/CHA/BV-04-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/CGGIT/CHA/BV-05-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/CGGIT/CHA/BV-06-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/CGGIT/CHA/BV-07-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/CGGIT/CHA/BV-08-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/CGGIT/DES/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/CGGIT/SER/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/CGGIT/SER/BV-02-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/CGGIT/SER/BV-03-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/CGGIT/SER/BV-04-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGCF/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGCF/BV-02-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGDC/BV-03-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGDC/BV-04-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGDC/BV-05-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGIOM/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGIOM/BV-02-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGIPS/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGIPS/BV-02-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGIPS/BV-03-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGIPT/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGIPT/BV-02-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGIPT/BV-03-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGNF/BI-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGNF/BI-02-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGNF/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGRF/BV-02-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGRF/BV-03-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGRF/BV-04-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGRF/BV-05-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGRF/BV-06-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGRF/BV-07-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGRF/BV-08-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGRF/BV-18-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGRF/BV-19-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGWF/BV-01-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGWF/BV-02-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGWF/BV-04-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGWF/BV-05-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGWF/BV-06-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    },
+    "HID::HOGP/RH/HGWF/BV-07-C": {
+      "manual": {
+        "status": "not_tested",
+        "owner": ""
+      },
+      "autopts": {
+        "status": "not_tested",
+        "owner": ""
+      }
+    }
+  }
+}
