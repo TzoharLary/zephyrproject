@@ -1,0 +1,36 @@
+{
+  "generated_at": "2026-02-24",
+  "profiles_root": "docs/Profiles",
+  "sync_tool": {
+    "name": "bluetooth-profile-doc-sync",
+    "skill_path": "/Users/tzoharlary/.codex/skills/bluetooth-profile-doc-sync/SKILL.md",
+    "script_path": "/Users/tzoharlary/.codex/skills/bluetooth-profile-doc-sync/scripts/sync_bluetooth_profile_docs.py"
+  },
+  "last_sync_at": "2026-02-24",
+  "profiles": [
+    {
+      "profile_id": "BPS",
+      "query": "Blood Pressure Service",
+      "spec_page_url": "https://www.bluetooth.com/specifications/specs/blood-pressure-service-1-1-1/",
+      "resolved_title": "Blood Pressure Service 1.1.1",
+      "status": "synced",
+      "notes": ["HTML page link reported locked, PDF spec downloaded instead."]
+    },
+    {
+      "profile_id": "WSS",
+      "query": "Weight Scale Service",
+      "spec_page_url": "https://www.bluetooth.com/specifications/specs/weight-scale-service-1-0-1/",
+      "resolved_title": "Weight Scale Service 1.0.1",
+      "status": "synced",
+      "notes": ["HTML page link reported locked, PDF spec downloaded instead."]
+    },
+    {
+      "profile_id": "SCPS",
+      "query": "Scan Parameters Service",
+      "spec_page_url": "https://www.bluetooth.com/specifications/specs/scan-parameters-service-1-0/",
+      "resolved_title": "Scan Parameters Service 1.0",
+      "status": "synced",
+      "notes": ["HTML page link reported locked, PDF spec downloaded instead."]
+    }
+  ]
+}

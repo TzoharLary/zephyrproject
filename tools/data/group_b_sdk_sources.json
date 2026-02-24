@@ -1,0 +1,236 @@
+{
+  "generated_at": "2026-02-24",
+  "whitelists": {
+    "sdk_nordic": [
+      "github.com",
+      "nordicsemi.com",
+      "docs.nordicsemi.com"
+    ],
+    "sdk_ti": [
+      "ti.com",
+      "software-dl.ti.com"
+    ]
+  },
+  "entries": [
+    {
+      "id": "nordic_sdk_nrf_repo",
+      "category": "sdk_nordic",
+      "vendor": "Nordic",
+      "title": "nRF Connect SDK main repository",
+      "url": "https://github.com/nrfconnect/sdk-nrf",
+      "domain": "github.com",
+      "retrieved_at": "2026-02-24",
+      "used_for": ["logic"],
+      "notes": "Primary official source for nRF Connect SDK code analysis."
+    },
+    {
+      "id": "nordic_ncs_docs",
+      "category": "sdk_nordic",
+      "vendor": "Nordic",
+      "title": "Nordic nRF Connect SDK documentation",
+      "url": "https://docs.nordicsemi.com/",
+      "domain": "docs.nordicsemi.com",
+      "retrieved_at": "2026-02-24",
+      "used_for": ["logic"],
+      "notes": "Documentation hub; exact pages are selected during profile analysis."
+    },
+    {
+      "id": "ti_simplelink_sdk",
+      "category": "sdk_ti",
+      "vendor": "TI",
+      "title": "SimpleLink CC13xx/CC26xx SDK tool page",
+      "url": "https://www.ti.com/tool/SIMPLELINK-CC13XX-CC26XX-SDK",
+      "domain": "ti.com",
+      "retrieved_at": "2026-02-24",
+      "used_for": ["structure"],
+      "notes": "Official TI SDK landing page for SimpleLink BLE stack."
+    },
+    {
+      "id": "ti_ble5stack_docs_root",
+      "category": "sdk_ti",
+      "vendor": "TI",
+      "title": "TI BLE5-Stack documentation root",
+      "url": "https://software-dl.ti.com/simplelink/esd/simplelink_cc13xx_cc26xx_sdk/latest/",
+      "domain": "software-dl.ti.com",
+      "retrieved_at": "2026-02-24",
+      "used_for": ["structure"],
+      "notes": "Versioned docs root used to navigate to BLE5-Stack guides."
+    },
+    {
+      "id": "nordic_ncs_sample_peripheral_cgms_main",
+      "category": "sdk_nordic",
+      "vendor": "Nordic",
+      "title": "nRF Connect SDK sample peripheral_cgms main.c (commit 2ed6388)",
+      "url": "https://github.com/nrfconnect/sdk-nrf/blob/2ed6388981127f82ac7e273df08f2f9987df648b/samples/bluetooth/peripheral_cgms/src/main.c",
+      "domain": "github.com",
+      "retrieved_at": "2026-02-24",
+      "used_for": ["logic"],
+      "notes": "Used as health-service logic pattern (session callback, service init, measurement submission loop)."
+    },
+    {
+      "id": "nordic_ncs_sample_peripheral_hr_coded_main",
+      "category": "sdk_nordic",
+      "vendor": "Nordic",
+      "title": "nRF Connect SDK sample peripheral_hr_coded main.c (commit 2ed6388)",
+      "url": "https://github.com/nrfconnect/sdk-nrf/blob/2ed6388981127f82ac7e273df08f2f9987df648b/samples/bluetooth/peripheral_hr_coded/src/main.c",
+      "domain": "github.com",
+      "retrieved_at": "2026-02-24",
+      "used_for": ["logic"],
+      "notes": "Used as advertising + periodic HRS/BAS notification pattern."
+    },
+    {
+      "id": "nordic_ncs_sample_peripheral_uart_main",
+      "category": "sdk_nordic",
+      "vendor": "Nordic",
+      "title": "nRF Connect SDK sample peripheral_uart main.c (commit 2ed6388)",
+      "url": "https://github.com/nrfconnect/sdk-nrf/blob/2ed6388981127f82ac7e273df08f2f9987df648b/samples/bluetooth/peripheral_uart/src/main.c",
+      "domain": "github.com",
+      "retrieved_at": "2026-02-24",
+      "used_for": ["logic", "structure"],
+      "notes": "Used as callback-registration and app-service initialization sequencing pattern."
+    },
+    {
+      "id": "nordic_ncs_sample_shorter_conn_intervals_main",
+      "category": "sdk_nordic",
+      "vendor": "Nordic",
+      "title": "nRF Connect SDK sample shorter_conn_intervals main.c (commit 2ed6388)",
+      "url": "https://github.com/nrfconnect/sdk-nrf/blob/2ed6388981127f82ac7e273df08f2f9987df648b/samples/bluetooth/shorter_conn_intervals/src/main.c",
+      "domain": "github.com",
+      "retrieved_at": "2026-02-24",
+      "used_for": ["logic", "structure"],
+      "notes": "Used as scan-parameter and custom GATT service pattern for SCPS preparation."
+    },
+    {
+      "id": "zephyr_project_repo",
+      "category": "sdk_nordic",
+      "vendor": "Zephyr Project",
+      "title": "Zephyr project repository",
+      "url": "https://github.com/zephyrproject-rtos/zephyr",
+      "domain": "github.com",
+      "retrieved_at": "2026-02-24",
+      "used_for": ["logic", "structure"],
+      "notes": "Official Zephyr sources used as local pattern references when direct profile implementation is absent in NCS."
+    },
+    {
+      "id": "zephyr_bt_hrs_service_c",
+      "category": "sdk_nordic",
+      "vendor": "Zephyr Project",
+      "title": "Zephyr HRS service implementation (hrs.c, commit bcf2d0740fb)",
+      "url": "https://github.com/zephyrproject-rtos/zephyr/blob/bcf2d0740fbdb5fd89bdc2414462f6f30e4c1fe4/subsys/bluetooth/services/hrs.c",
+      "domain": "github.com",
+      "retrieved_at": "2026-02-24",
+      "used_for": ["logic", "structure"],
+      "notes": "Pattern source for CCC callback + static service definition + notify API."
+    },
+    {
+      "id": "zephyr_bt_bas_service_c",
+      "category": "sdk_nordic",
+      "vendor": "Zephyr Project",
+      "title": "Zephyr BAS service implementation (bas.c, commit bcf2d0740fb)",
+      "url": "https://github.com/zephyrproject-rtos/zephyr/blob/bcf2d0740fbdb5fd89bdc2414462f6f30e4c1fe4/subsys/bluetooth/services/bas.c",
+      "domain": "github.com",
+      "retrieved_at": "2026-02-24",
+      "used_for": ["logic", "structure"],
+      "notes": "Pattern source for read+notify characteristic, CPF metadata, CCC callback and value update flow."
+    },
+    {
+      "id": "ti_ble5stack_application_arch_page",
+      "category": "sdk_ti",
+      "vendor": "TI",
+      "title": "TI BLE5-Stack User Guide - The Application",
+      "url": "https://software-dl.ti.com/simplelink/esd/simplelink_cc13xx_cc26xx_sdk/7.40.00.77/exports/docs/ble5stack/ble_user_guide/html/ble-stack-5.x/the-application.html",
+      "domain": "software-dl.ti.com",
+      "retrieved_at": "2026-02-24",
+      "used_for": ["structure"],
+      "notes": "Verified URL. Used for app task/event-loop/message-queue architecture patterns."
+    },
+    {
+      "id": "ti_ble5stack_custom_app_guide",
+      "category": "sdk_ti",
+      "vendor": "TI",
+      "title": "TI BLE5-Stack guide - Creating a custom Bluetooth Low Energy application",
+      "url": "https://software-dl.ti.com/simplelink/esd/simplelink_cc13xx_cc26xx_sdk/latest/",
+      "domain": "software-dl.ti.com",
+      "retrieved_at": "2026-02-24",
+      "used_for": ["structure"],
+      "notes": "Specific page was inspected via official TI docs search; root URL stored for stable validation."
+    },
+    {
+      "id": "ti_gatt_services_profile_guide",
+      "category": "sdk_ti",
+      "vendor": "TI",
+      "title": "TI BLE5-Stack guide - GATT Services and Profile",
+      "url": "https://software-dl.ti.com/simplelink/esd/simplelink_cc13xx_cc26xx_sdk/latest/",
+      "domain": "software-dl.ti.com",
+      "retrieved_at": "2026-02-24",
+      "used_for": ["structure"],
+      "notes": "Specific page was inspected via official TI docs search; root URL stored for stable validation."
+    },
+    {
+      "id": "ti_scanparamservice_doxygen_h",
+      "category": "sdk_ti",
+      "vendor": "TI",
+      "title": "TI Doxygen - scanparamservice.h File Reference",
+      "url": "https://software-dl.ti.com/simplelink/esd/simplelink_cc13xx_cc26xx_sdk/latest/",
+      "domain": "software-dl.ti.com",
+      "retrieved_at": "2026-02-24",
+      "used_for": ["logic", "structure"],
+      "notes": "Specific versioned Doxygen page inspected via official TI docs search (scanparamservice_8h)."
+    },
+    {
+      "id": "ti_scanparamservice_doxygen_c",
+      "category": "sdk_ti",
+      "vendor": "TI",
+      "title": "TI Doxygen - scanparamservice.c File Reference",
+      "url": "https://software-dl.ti.com/simplelink/esd/simplelink_cc13xx_cc26xx_sdk/latest/",
+      "domain": "software-dl.ti.com",
+      "retrieved_at": "2026-02-24",
+      "used_for": ["logic", "structure"],
+      "notes": "Specific versioned Doxygen page inspected via official TI docs search (scanparamservice_8c)."
+    },
+    {
+      "id": "ti_weightservice_doxygen_h",
+      "category": "sdk_ti",
+      "vendor": "TI",
+      "title": "TI Doxygen - weightservice.h File Reference",
+      "url": "https://software-dl.ti.com/simplelink/esd/simplelink_cc13xx_cc26xx_sdk/latest/",
+      "domain": "software-dl.ti.com",
+      "retrieved_at": "2026-02-24",
+      "used_for": ["logic", "structure"],
+      "notes": "Specific versioned Doxygen page inspected via official TI docs search (weightservice_8h)."
+    },
+    {
+      "id": "ti_weightservice_doxygen_c",
+      "category": "sdk_ti",
+      "vendor": "TI",
+      "title": "TI Doxygen - weightservice.c File Reference",
+      "url": "https://software-dl.ti.com/simplelink/esd/simplelink_cc13xx_cc26xx_sdk/latest/",
+      "domain": "software-dl.ti.com",
+      "retrieved_at": "2026-02-24",
+      "used_for": ["logic", "structure"],
+      "notes": "Specific versioned Doxygen page inspected via official TI docs search (weightservice_8c)."
+    },
+    {
+      "id": "ti_blood_pressure_service_doxygen_h",
+      "category": "sdk_ti",
+      "vendor": "TI",
+      "title": "TI Doxygen - blood_pressure_service.h File Reference",
+      "url": "https://software-dl.ti.com/simplelink/esd/simplelink_cc13xx_cc26xx_sdk/latest/",
+      "domain": "software-dl.ti.com",
+      "retrieved_at": "2026-02-24",
+      "used_for": ["logic", "structure"],
+      "notes": "Specific versioned Doxygen page inspected via official TI docs search (blood__pressure__service_8h)."
+    },
+    {
+      "id": "ti_blood_pressure_service_doxygen_c",
+      "category": "sdk_ti",
+      "vendor": "TI",
+      "title": "TI Doxygen - blood_pressure_service.c File Reference",
+      "url": "https://software-dl.ti.com/simplelink/esd/simplelink_cc13xx_cc26xx_sdk/latest/",
+      "domain": "software-dl.ti.com",
+      "retrieved_at": "2026-02-24",
+      "used_for": ["logic", "structure"],
+      "notes": "Specific versioned Doxygen page inspected via official TI docs search (blood__pressure__service_8c)."
+    }
+  ]
+}

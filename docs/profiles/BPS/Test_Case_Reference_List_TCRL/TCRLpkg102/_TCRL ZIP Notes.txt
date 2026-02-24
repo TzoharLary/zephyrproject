@@ -1,0 +1,38 @@
+This is the pkg102 TCRL
+
+Modified with pkg102 (Feb 2026):
+
+• GATTBased.TCRL.p28
+  o Maintenance updates from TSEs
+
+• GATTBasedAudio.TCRL.p9
+  o Maintenance updates from TSEs
+
+• MESH.MMDL.TCRL.p16
+  o Maintenance updates from TSEs
+ 
+• Traditional.TCRL.p48
+  o Maintenance updates from TSEs
+
+• IOPT.TCRL.p9 
+  o Maintenance updates from TSEs
+
+
+Unmodified since pkg101p1:
+• Core.TCRL.p49
+
+• Integrated Errata - Core TCRL_p8
+• Integrated Errata - GATTBased TCRL_p8
+• Integrated Errata - GATTBasedAudio TCRL_p6
+• Integrated Errata - MESH.MMDL TCRL_p6
+• Integrated Errata - Traditional TCRL_p9
+
+
+
+
+
+
+
+
+
+

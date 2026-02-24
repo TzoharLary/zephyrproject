@@ -1,0 +1,120 @@
+{
+  "generated_at": "2026-02-24",
+  "whitelists": {
+    "sig": [
+      "bluetooth.com",
+      "qualification.bluetooth.com",
+      "pts.bluetooth.com",
+      "support.bluetooth.com"
+    ],
+    "ux_ui": [
+      "design.cms.gov",
+      "design.va.gov",
+      "design-system.service.gov.uk",
+      "designsystem.digital.gov",
+      "learn.microsoft.com"
+    ]
+  },
+  "entries": [
+    {
+      "id": "sig_bps_spec_page",
+      "category": "sig",
+      "profile_ids": ["BPS"],
+      "title": "Blood Pressure Service 1.1.1",
+      "url": "https://www.bluetooth.com/specifications/specs/blood-pressure-service-1-1-1/",
+      "domain": "bluetooth.com",
+      "retrieved_at": "2026-02-24",
+      "notes": "Resolved by bluetooth-profile-doc-sync dry-run and synced."
+    },
+    {
+      "id": "sig_wss_spec_page",
+      "category": "sig",
+      "profile_ids": ["WSS"],
+      "title": "Weight Scale Service 1.0.1",
+      "url": "https://www.bluetooth.com/specifications/specs/weight-scale-service-1-0-1/",
+      "domain": "bluetooth.com",
+      "retrieved_at": "2026-02-24",
+      "notes": "Resolved by bluetooth-profile-doc-sync dry-run and synced."
+    },
+    {
+      "id": "sig_scps_spec_page",
+      "category": "sig",
+      "profile_ids": ["SCPS"],
+      "title": "Scan Parameters Service 1.0",
+      "url": "https://www.bluetooth.com/specifications/specs/scan-parameters-service-1-0/",
+      "domain": "bluetooth.com",
+      "retrieved_at": "2026-02-24",
+      "notes": "Resolved by bluetooth-profile-doc-sync dry-run and synced."
+    },
+    {
+      "id": "ux_tabs_cms",
+      "category": "ux_ui",
+      "profile_ids": [],
+      "title": "CMS Design System - Tabs",
+      "url": "https://design.cms.gov/components/tabs/",
+      "domain": "design.cms.gov",
+      "retrieved_at": "2026-02-24",
+      "notes": "UX reference for tab behavior and accessible navigation."
+    },
+    {
+      "id": "ux_tabs_va",
+      "category": "ux_ui",
+      "profile_ids": [],
+      "title": "VA.gov Design System - Tabs",
+      "url": "https://design.va.gov/components/tabs",
+      "domain": "design.va.gov",
+      "retrieved_at": "2026-02-24",
+      "notes": "UX reference for tab placement and content density guidance."
+    },
+    {
+      "id": "ux_tabs_govuk",
+      "category": "ux_ui",
+      "profile_ids": [],
+      "title": "GOV.UK Design System - Tabs",
+      "url": "https://design-system.service.gov.uk/components/tabs/",
+      "domain": "design-system.service.gov.uk",
+      "retrieved_at": "2026-02-24",
+      "notes": "UX reference for tab interaction patterns."
+    },
+    {
+      "id": "ux_accordion_govuk",
+      "category": "ux_ui",
+      "profile_ids": [],
+      "title": "GOV.UK Design System - Accordion",
+      "url": "https://design-system.service.gov.uk/components/accordion/",
+      "domain": "design-system.service.gov.uk",
+      "retrieved_at": "2026-02-24",
+      "notes": "UX reference for progressive disclosure."
+    },
+    {
+      "id": "ux_accordion_uswds",
+      "category": "ux_ui",
+      "profile_ids": [],
+      "title": "USWDS - Accordion",
+      "url": "https://designsystem.digital.gov/components/accordion/",
+      "domain": "designsystem.digital.gov",
+      "retrieved_at": "2026-02-24",
+      "notes": "UX reference for dense content expansion patterns."
+    },
+    {
+      "id": "ux_inpage_uswds",
+      "category": "ux_ui",
+      "profile_ids": [],
+      "title": "USWDS - In-page navigation",
+      "url": "https://designsystem.digital.gov/components/in-page-navigation/",
+      "domain": "designsystem.digital.gov",
+      "retrieved_at": "2026-02-24",
+      "notes": "UX reference for long-page navigation."
+    },
+    {
+      "id": "ux_tables_microsoft_learn",
+      "category": "ux_ui",
+      "profile_ids": [],
+      "title": "Microsoft Learn Style Guide - Tables",
+      "url": "https://learn.microsoft.com/en-us/style-guide/scannable-content/tables",
+      "domain": "learn.microsoft.com",
+      "retrieved_at": "2026-02-24",
+      "notes": "Scannability guidance for table-heavy pages."
+    }
+  ]
+}
