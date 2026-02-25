@@ -12,6 +12,9 @@
 # 5. CMakeLists.txt Integration
 # 6. UUID Definition Patterns
 # 7. Logging Patterns
+# 8. Pattern Selection Guide
+# 9. Common Mistakes to Avoid
+# 10. Phase 1 Discovered Patterns (added from spec analysis of docs/profiles/)
 
 ---
 
@@ -769,3 +772,182 @@ LOG_ERR("Error: initialization failed: %d", err);
 7. **Using fixed-size buffers for variable-length writes**: Check `offset + len`
    vs. maximum expected size and return `BT_ATT_ERR_INVALID_OFFSET` or
    `BT_ATT_ERR_INVALID_ATTRIBUTE_LEN` appropriately.
+
+---
+
+## 10. Phase 1 Discovered Patterns
+
+> These patterns were discovered during Phase 1 validation (analysis of BT SIG spec docs
+> in `docs/profiles/` and cross-referencing with the Zephyr service implementations).
+
+### 10.1 Server-Requests-Client-Refresh Pattern (SCPS)
+
+Source: `docs/profiles/SCPS/Scan_Parameters_Service_1.0.pdf`, Section 2.5
+
+The Scan Parameters Service introduces a unique pattern where the **server notifies the
+client to re-send its scan parameters**. This is the inverse of normal notify usage:
+
+```
+Normal notify:  Server → Client (data push)
+SCPS refresh:   Server → Client (notification = "please re-send your scan parameters")
+                Client → Server (write_without_response with new scan params)
+```
+
+**Implementation pattern:**
+```c
+/* Server side: notify client to refresh */
+static int sps_request_refresh(struct bt_conn *conn)
+{
+    uint8_t refresh_val = 0x00;  /* "Server requires refresh" */
+
+    return bt_gatt_notify(conn,
+                          &bt_sps_svc.attrs[BT_SPS_ATTR_SCAN_REFRESH],
+                          &refresh_val, sizeof(refresh_val));
+}
+
+/* Client-side write handler (on the server for Scan Interval Window) */
+static ssize_t write_scan_interval_window(struct bt_conn *conn,
+                                           const struct bt_gatt_attr *attr,
+                                           const void *buf, uint16_t len,
+                                           uint16_t offset, uint8_t flags)
+{
+    /* Store client scan parameters for power optimization */
+    if (len != sizeof(struct bt_sps_scan_interval_window)) {
+        return BT_GATT_ERR(BT_ATT_ERR_INVALID_ATTRIBUTE_LEN);
+    }
+    memcpy(&scan_params, buf, len);
+    LOG_DBG("Client scan params updated: interval=%u window=%u",
+            scan_params.le_scan_interval, scan_params.le_scan_window);
+    return len;
+}
+```
+
+**Key rule from SCPS spec (Section 2.6):** When disconnected, the server should assume
+the stored values represent the **last known worst-case** client scanning behavior:
+- `LE_Scan_Interval`: assume maximum interval
+- `LE_Scan_Window`: assume minimum window
+
+**Pattern tag:** `server-requests-refresh`
+
+---
+
+### 10.2 Indicate-Based Measurement Delivery Pattern (BPS, HTS, BCS, WSS)
+
+Source: `docs/profiles/BPS/Blood_Pressure_Service_1.1.1.pdf`, Section 3.1;
+`docs/profiles/WSS/Weight_Scale_Service_1.0.1.pdf`, Section 3.2
+
+Medical measurement profiles (BPS, HTS, WSS, BCS) use **Indicate** (not Notify) for
+measurement delivery. This is intentional: measurements are clinically significant and
+MUST be acknowledged by the collector.
+
+**Key behavioral rules from BPS spec:**
+1. When CCC is configured for indications and a measurement is available, the server
+   SHALL send an indication
+2. The server SHALL NOT send a new indication until the previous one is acknowledged
+3. If multiple measurements were buffered while not connected, they are indicated
+   one-by-one after reconnection (in order)
+
+**Implementation pattern:**
+```c
+/* Blood pressure measurement delivery via indicate */
+static struct {
+    struct bt_gatt_indicate_params params;
+    /* measurement data buffer */
+    uint8_t data[BPS_MEASUREMENT_MAX_LEN];
+    uint8_t len;
+    bool pending;
+} bps_indicate_ctx;
+
+static void bps_indicate_cb(struct bt_conn *conn,
+                             struct bt_gatt_indicate_params *params,
+                             uint8_t err)
+{
+    if (err) {
+        LOG_WRN("Blood pressure indication failed: %d", err);
+    } else {
+        LOG_DBG("Blood pressure indication confirmed");
+    }
+    bps_indicate_ctx.pending = false;
+    /* Check for queued measurements and send next if available */
+}
+
+int bt_bps_indicate(struct bt_conn *conn, const uint8_t *data, size_t len)
+{
+    if (bps_indicate_ctx.pending) {
+        return -EBUSY;  /* Previous indication not yet acknowledged */
+    }
+
+    memcpy(bps_indicate_ctx.data, data, len);
+    bps_indicate_ctx.len = len;
+    bps_indicate_ctx.params.attr = &bt_bps_svc.attrs[BT_BPS_ATTR_MEASUREMENT];
+    bps_indicate_ctx.params.func = bps_indicate_cb;
+    bps_indicate_ctx.params.data = bps_indicate_ctx.data;
+    bps_indicate_ctx.params.len = bps_indicate_ctx.len;
+
+    bps_indicate_ctx.pending = true;
+    return bt_gatt_indicate(conn, &bps_indicate_ctx.params);
+}
+```
+
+**Key rule:** Always check if a previous indication is pending before sending a new one.
+Use a `pending` flag or semaphore.
+
+---
+
+### 10.3 Conditional Feature Indication Pattern (WSS, BPS Feature Characteristics)
+
+Source: `docs/profiles/WSS/Weight_Scale_Service_1.0.1.pdf`, Table 3.1 footnote;
+`docs/profiles/BPS/Blood_Pressure_Service_1.1.1.pdf`, Note C.5
+
+Some "Feature" characteristics (e.g., Weight Scale Feature, Blood Pressure Feature)
+support a **conditional Indicate** property:
+
+> "The Indicate property shall be supported for the Feature characteristic if the device
+> supports bonding **and** the value of the Feature characteristic can change over the
+> lifetime of the device, **otherwise excluded** for this service."
+
+**Pattern:** The feature characteristic is normally read-only, but gains Indicate when
+the device supports bonding and the feature value might change.
+
+```c
+/* Feature characteristic: Read always + Indicate only when bonding+dynamic
+ * Replace <PROFILE> with profile prefix, e.g. BT_UUID_WSS_FEATURE or BT_UUID_BPS_FEATURE */
+BT_GATT_CHARACTERISTIC(BT_UUID_<PROFILE>_FEATURE,  /* e.g., BT_UUID_WSS_FEATURE */
+                        BT_GATT_CHRC_READ | BT_GATT_CHRC_INDICATE,
+                        BT_GATT_PERM_READ,
+                        read_feature, NULL, NULL),
+BT_GATT_CCC(feature_ccc_cfg_changed,
+             BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
+```
+
+If bonding is not supported or the feature value is static for device lifetime,
+the CCC descriptor can be omitted:
+```c
+/* Static feature — Read only
+ * Replace <PROFILE> with profile prefix, e.g. BT_UUID_BPS_FEATURE */
+BT_GATT_CHARACTERISTIC(BT_UUID_<PROFILE>_FEATURE,  /* e.g., BT_UUID_BPS_FEATURE */
+                        BT_GATT_CHRC_READ,
+                        BT_GATT_PERM_READ,
+                        read_feature, NULL, &feature_value),
+```
+
+---
+
+### 10.4 Technical Tag Classification Rules (Phase 1 Discovery)
+
+From Phase 1 analysis, these tags reliably predict implementation complexity:
+
+| Tag | Meaning | Complexity Impact |
+|-----|---------|------------------|
+| `has_control_point` | Profile has RACP, HID CP, or OTS OACP | Always Complex; requires full indicate + state machine |
+| `uses_indicate` | Primary data delivery uses Indicate (not Notify) | Add semaphore/pending flag for indication flow control |
+| `per_connection_state_required` | Cannot function correctly without per-connection state | Must implement BT_CONN_CB_DEFINE callbacks |
+| `server-requests-refresh` | Server sends notification to trigger client action | Inverse of normal notify pattern — document clearly |
+| `connection-aware` | Profile behavior changes on connect/disconnect | Always implement connected/disconnected callbacks |
+
+**Profiles by tag:**
+- `has_control_point`: OTS, HIDS, GLS, ANS, UDS, CGMS
+- `uses_indicate`: HTS, BPS, OTS, GLS, UDS, BCS, WSS, CGMS, PLXS
+- `per_connection_state_required`: ESS, CTS, OTS, HIDS, GLS, UDS, CGMS
+- `server-requests-refresh`: SPS
+- `connection-aware`: LLS (alert on link loss)

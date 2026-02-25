@@ -5,8 +5,14 @@
 #
 # Schema version: 1.0.0
 
-version: "1.0.0"
+version: "1.1.0"
 last_updated: "2026-02-25"
+
+# Phase 1 validation status:
+# - UUID spot-check: HRS, BAS, DIS, HTS, ESS, OTS — all verified against BT SIG docs in docs/profiles/
+# - Mandatory/optional flags: verified for all 6 spot-checked profiles
+# - Coverage audit: BPS (0x1810) added — present in docs/profiles/BPS/ and tools/data/ but was missing
+# - Technical tags added: has_control_point, uses_indicate, per_connection_state_required
 
 profiles:
 
@@ -33,6 +39,9 @@ profiles:
           mandatory: false
     callbacks: true
     state_management: false
+    has_control_point: false
+    uses_indicate: false
+    per_connection_state_required: false
     kconfig_symbol: BT_HRS
     reference_files:
       header: "include/zephyr/bluetooth/services/hrs.h"
@@ -84,6 +93,9 @@ profiles:
           mandatory: false
     callbacks: false
     state_management: false
+    has_control_point: false
+    uses_indicate: false
+    per_connection_state_required: false
     kconfig_symbol: BT_DIS
     reference_files:
       header: "include/zephyr/bluetooth/services/dis.h"
@@ -107,13 +119,16 @@ profiles:
           mandatory: true
     callbacks: true
     state_management: false
+    has_control_point: false
+    uses_indicate: false
+    per_connection_state_required: false
     kconfig_symbol: BT_BAS
     reference_files:
       header: "include/zephyr/bluetooth/services/bas.h"
       impl: "subsys/bluetooth/services/bas.c"
     similar_profiles: [HRS, DIS]
     tags: [power, battery, read, notify, simple, sensor]
-    notes: "Simple read/notify profile. Good reference for combined read+notify characteristics."
+    notes: "Simple read/notify profile. Good reference for combined read+notify characteristics. BAS v1.1 added 11 optional characteristics (Battery Level Status, Estimated Service Date, etc.) — basic implementation covers v1.0 Battery Level only."
 
   - name: "Health Thermometer Service"
     id: HTS
@@ -142,12 +157,15 @@ profiles:
           mandatory: false
     callbacks: true
     state_management: false
+    has_control_point: false
+    uses_indicate: true
+    per_connection_state_required: false
     kconfig_symbol: BT_HTS
     reference_files:
       header: "include/zephyr/bluetooth/services/hts.h"
       impl: "subsys/bluetooth/services/hts.c"
     similar_profiles: [HRS, ESS]
-    tags: [health, sensor, indicate, notify, temperature, mixed]
+    tags: [health, sensor, indicate, notify, temperature, mixed, uses_indicate]
     notes: "Uses Indicate (acknowledged notify). Good reference for indicate-based profiles."
 
   - name: "Environmental Sensing Service"
@@ -189,12 +207,15 @@ profiles:
           mandatory: false
     callbacks: true
     state_management: true
+    has_control_point: false
+    uses_indicate: false
+    per_connection_state_required: true
     kconfig_symbol: BT_ESS
     reference_files:
       header: "include/zephyr/bluetooth/services/ess.h"
       impl: "subsys/bluetooth/services/ess.c"
     similar_profiles: [HRS, HTS]
-    tags: [environment, sensor, notify, complex, multi-characteristic, weather]
+    tags: [environment, sensor, notify, complex, multi-characteristic, weather, per_connection_state_required]
     notes: "Multi-characteristic environment sensing profile. Good for complex sensor aggregation."
 
   - name: "Current Time Service"
@@ -220,12 +241,15 @@ profiles:
           mandatory: false
     callbacks: true
     state_management: true
+    has_control_point: false
+    uses_indicate: false
+    per_connection_state_required: true
     kconfig_symbol: BT_CTS
     reference_files:
       header: "include/zephyr/bluetooth/services/cts.h"
       impl: "subsys/bluetooth/services/cts.c"
     similar_profiles: [DIS, BAS]
-    tags: [time, read, write, notify, mixed, time-sync]
+    tags: [time, read, write, notify, mixed, time-sync, per_connection_state_required]
     notes: "Mixed read/write/notify profile. Uses state for tracking time updates."
 
   - name: "Link Loss Service"
@@ -243,6 +267,9 @@ profiles:
           mandatory: true
     callbacks: true
     state_management: false
+    has_control_point: false
+    uses_indicate: false
+    per_connection_state_required: false
     kconfig_symbol: BT_LLS
     reference_files:
       header: "include/zephyr/bluetooth/services/lls.h"
@@ -266,6 +293,9 @@ profiles:
           mandatory: true
     callbacks: false
     state_management: false
+    has_control_point: false
+    uses_indicate: false
+    per_connection_state_required: false
     kconfig_symbol: BT_TPS
     reference_files:
       header: "include/zephyr/bluetooth/services/tps.h"
@@ -289,6 +319,9 @@ profiles:
           mandatory: true
     callbacks: true
     state_management: false
+    has_control_point: false
+    uses_indicate: false
+    per_connection_state_required: false
     kconfig_symbol: BT_IAS
     reference_files:
       header: "include/zephyr/bluetooth/services/ias.h"
@@ -356,12 +389,15 @@ profiles:
           mandatory: false
     callbacks: true
     state_management: true
+    has_control_point: true
+    uses_indicate: true
+    per_connection_state_required: true
     kconfig_symbol: BT_OTS
     reference_files:
       header: "include/zephyr/bluetooth/services/ots.h"
       impl: "subsys/bluetooth/services/ots.c"
     similar_profiles: [HIDS]
-    tags: [data-transfer, complex, mixed, object, l2cap, state-machine, indicate]
+    tags: [data-transfer, complex, mixed, object, l2cap, state-machine, indicate, has_control_point, uses_indicate, per_connection_state_required]
     notes: "Most complex Zephyr BLE service. Uses L2CAP COC for data transfer. Full state machine."
 
   - name: "HID over GATT Profile"
@@ -407,12 +443,15 @@ profiles:
           mandatory: true
     callbacks: true
     state_management: true
+    has_control_point: true
+    uses_indicate: false
+    per_connection_state_required: true
     kconfig_symbol: BT_HIDS
     reference_files:
       header: "include/zephyr/bluetooth/services/hids.h"
       impl: "subsys/bluetooth/services/hids.c"
     similar_profiles: [OTS]
-    tags: [hid, complex, mixed, keyboard, mouse, report, state-machine, boot-mode]
+    tags: [hid, complex, mixed, keyboard, mouse, report, state-machine, boot-mode, has_control_point, per_connection_state_required]
     notes: "Complex HID profile with boot and report modes. Full state machine with connection tracking."
 
   - name: "Scan Parameters Service"
@@ -434,12 +473,15 @@ profiles:
           mandatory: false
     callbacks: true
     state_management: false
+    has_control_point: false
+    uses_indicate: false
+    per_connection_state_required: false
     kconfig_symbol: BT_SPS
     reference_files:
       header: "include/zephyr/bluetooth/services/sps.h"
       impl: "subsys/bluetooth/services/sps.c"
     similar_profiles: [IAS, LLS]
-    tags: [generic, scan, write, notify, simple]
+    tags: [generic, scan, write, notify, simple, server-requests-refresh]
     notes: "Used for scan parameter negotiation between GAP Central and GAP Peripheral."
 
   - name: "Running Speed and Cadence Service"
@@ -469,6 +511,9 @@ profiles:
           mandatory: false
     callbacks: true
     state_management: false
+    has_control_point: false
+    uses_indicate: false
+    per_connection_state_required: false
     kconfig_symbol: BT_RSCS
     reference_files:
       header: "include/zephyr/bluetooth/services/rscs.h"
@@ -504,6 +549,9 @@ profiles:
           mandatory: false
     callbacks: true
     state_management: false
+    has_control_point: false
+    uses_indicate: false
+    per_connection_state_required: false
     kconfig_symbol: BT_CSCS
     reference_files:
       header: "include/zephyr/bluetooth/services/cscs.h"
@@ -539,12 +587,15 @@ profiles:
           mandatory: true
     callbacks: true
     state_management: true
+    has_control_point: true
+    uses_indicate: true
+    per_connection_state_required: true
     kconfig_symbol: BT_GLS
     reference_files:
       header: "include/zephyr/bluetooth/services/gls.h"
       impl: "subsys/bluetooth/services/gls.c"
     similar_profiles: [HTS, HRS]
-    tags: [health, medical, glucose, notify, indicate, state-machine, complex]
+    tags: [health, medical, glucose, notify, indicate, state-machine, complex, has_control_point, uses_indicate, per_connection_state_required]
     notes: "Medical profile with RACP for record access control. Full state machine required."
 
   - name: "Alert Notification Service"
@@ -578,12 +629,15 @@ profiles:
           mandatory: true
     callbacks: true
     state_management: false
+    has_control_point: true
+    uses_indicate: false
+    per_connection_state_required: false
     kconfig_symbol: BT_ANS
     reference_files:
       header: "include/zephyr/bluetooth/services/ans.h"
       impl: "subsys/bluetooth/services/ans.c"
     similar_profiles: [IAS, LLS]
-    tags: [alert, notify, write, mixed, phone-alert]
+    tags: [alert, notify, write, mixed, phone-alert, has_control_point]
     notes: "Phone Alert Status profile dependency. Manages alert categories and notifications."
 
   - name: "Phone Alert Status Service"
@@ -609,6 +663,9 @@ profiles:
           mandatory: true
     callbacks: true
     state_management: false
+    has_control_point: false
+    uses_indicate: false
+    per_connection_state_required: false
     kconfig_symbol: BT_PASS
     reference_files:
       header: "include/zephyr/bluetooth/services/pass.h"
@@ -664,12 +721,15 @@ profiles:
           mandatory: true
     callbacks: true
     state_management: true
+    has_control_point: true
+    uses_indicate: true
+    per_connection_state_required: true
     kconfig_symbol: BT_UDS
     reference_files:
       header: "include/zephyr/bluetooth/services/uds.h"
       impl: "subsys/bluetooth/services/uds.c"
     similar_profiles: [GLS, OTS]
-    tags: [user, profile, mixed, complex, multi-user, fitness, health]
+    tags: [user, profile, mixed, complex, multi-user, fitness, health, has_control_point, uses_indicate, per_connection_state_required]
     notes: "Multi-user data storage profile. Requires user management state machine."
 
   - name: "Body Composition Service"
@@ -691,12 +751,15 @@ profiles:
           mandatory: true
     callbacks: true
     state_management: false
+    has_control_point: false
+    uses_indicate: true
+    per_connection_state_required: false
     kconfig_symbol: BT_BCS
     reference_files:
       header: "include/zephyr/bluetooth/services/bcs.h"
       impl: "subsys/bluetooth/services/bcs.c"
     similar_profiles: [HTS, HRS]
-    tags: [health, body, indicate, fitness, measurement]
+    tags: [health, body, indicate, fitness, measurement, uses_indicate]
     notes: "Simple indicate profile for body composition data."
 
   - name: "Weight Scale Service"
@@ -718,13 +781,16 @@ profiles:
           mandatory: true
     callbacks: true
     state_management: false
+    has_control_point: false
+    uses_indicate: true
+    per_connection_state_required: false
     kconfig_symbol: BT_WSS
     reference_files:
       header: "include/zephyr/bluetooth/services/wss.h"
       impl: "subsys/bluetooth/services/wss.c"
     similar_profiles: [BCS, HTS]
-    tags: [health, weight, indicate, fitness, measurement]
-    notes: "Weight scale profile. Similar structure to BCS - indicate-based measurement."
+    tags: [health, weight, indicate, fitness, measurement, uses_indicate]
+    notes: "Weight scale profile. Similar structure to BCS - indicate-based measurement. Verified against docs/profiles/WSS/Weight_Scale_Service_1.0.1.pdf."
 
   - name: "Continuous Glucose Monitoring Service"
     id: CGMS
@@ -765,12 +831,15 @@ profiles:
           mandatory: true
     callbacks: true
     state_management: true
+    has_control_point: true
+    uses_indicate: true
+    per_connection_state_required: true
     kconfig_symbol: BT_CGMS
     reference_files:
       header: "include/zephyr/bluetooth/services/cgms.h"
       impl: "subsys/bluetooth/services/cgms.c"
     similar_profiles: [GLS, HTS]
-    tags: [health, medical, glucose, continuous, notify, indicate, complex, state-machine]
+    tags: [health, medical, glucose, continuous, notify, indicate, complex, state-machine, has_control_point, uses_indicate, per_connection_state_required]
     notes: "Advanced glucose monitoring. Extends GLS with session management and specific ops control."
 
   - name: "Pulse Oximeter Service"
@@ -800,12 +869,15 @@ profiles:
           mandatory: false
     callbacks: true
     state_management: false
+    has_control_point: false
+    uses_indicate: true
+    per_connection_state_required: false
     kconfig_symbol: BT_PLXS
     reference_files:
       header: "include/zephyr/bluetooth/services/plxs.h"
       impl: "subsys/bluetooth/services/plxs.c"
     similar_profiles: [HRS, HTS]
-    tags: [health, medical, oxygen, pulse, notify, indicate, sensor]
+    tags: [health, medical, oxygen, pulse, notify, indicate, sensor, uses_indicate]
     notes: "Blood oxygen saturation sensor. Mix of spot-check indicate and continuous notify."
 
   - name: "Indoor Positioning Service"
@@ -855,6 +927,9 @@ profiles:
           mandatory: false
     callbacks: true
     state_management: false
+    has_control_point: false
+    uses_indicate: false
+    per_connection_state_required: false
     kconfig_symbol: BT_IPS
     reference_files:
       header: "include/zephyr/bluetooth/services/ips.h"
@@ -862,3 +937,44 @@ profiles:
     similar_profiles: [ESS, DIS]
     tags: [location, indoor, position, read, write, advertising]
     notes: "Used primarily in advertising data. Multi-characteristic location profile."
+
+  - name: "Blood Pressure Service"
+    id: BPS
+    category: Health
+    type: Simple
+    complexity: Medium
+    pattern: Indicate
+    uuids:
+      service: "0x1810"
+      characteristics:
+        - name: "Blood Pressure Measurement"
+          uuid: "0x2A35"
+          properties: [Indicate]
+          mandatory: true
+        - name: "Intermediate Cuff Pressure"
+          uuid: "0x2A36"
+          properties: [Notify]
+          mandatory: false
+        - name: "Blood Pressure Feature"
+          uuid: "0x2A49"
+          properties: [Read]
+          mandatory: true
+    callbacks: true
+    state_management: false
+    has_control_point: false
+    uses_indicate: true
+    per_connection_state_required: false
+    kconfig_symbol: BT_BPS
+    reference_files:
+      header: "include/zephyr/bluetooth/services/bps.h"
+      impl: "subsys/bluetooth/services/bps.c"
+    similar_profiles: [HTS, BCS, WSS]
+    tags: [health, medical, blood-pressure, indicate, notify, measurement, uses_indicate]
+    spec_version: "v1.1.1"
+    spec_doc: "docs/profiles/BPS/Blood_Pressure_Service_1.1.1.pdf"
+    pts_tracked: true
+    notes: >
+      Blood pressure measurement profile using Indicate for measurements (acknowledged delivery).
+      BPS v1.1.1 (docs/profiles/BPS/) adds optional RACP for stored records — making it Complex
+      when RACP is implemented. Basic form (3 characteristics) is Simple. UUID verified against
+      docs/profiles/BPS/Blood_Pressure_Service_1.1.1.pdf.
