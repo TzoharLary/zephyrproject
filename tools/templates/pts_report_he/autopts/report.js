@@ -130,6 +130,10 @@ function confidencePill(confidence) {
 
 function statusPill(status) {
   const s = String(status || "");
+  if (s === "high") return pill("גבוה", "mandatory");
+  if (s === "medium") return pill("בינוני", "optional");
+  if (s === "low") return pill("נמוך", "conditional");
+  if (s === "none") return pill("לא נמצא", "conditional");
   if (s === "confirmed") return pill("מאומת", "mandatory");
   if (s === "inferred") return pill("מוסק", "optional");
   if (s === "needs_validation") return pill("דורש אימות", "conditional");
@@ -462,18 +466,18 @@ function renderProfileSubtabGuide(profileId, subtab) {
     },
     logic: {
       title: "איך לקרוא את לשונית הלוגיקה",
-      text: "זו לא רשימת spec. זה ניתוח מסונתז של ההתנהגות שזוהתה במקורות: מה הפרופיל עושה, איך זיהינו את זה, ומה זה אומר למימוש.",
+      text: "הלשונית הזו מציגה רק שני דברים: אילו מקורות נחקרו כדי להבין את הלוגיקה, ומה סיכום הלוגיקה בפועל למימוש.",
       bullets: [
-        "התחל ב'מה זוהה (תמצית)' כדי להבין את התמונה הכללית.",
-        "אחר כך קרא 'ממצאים מובנים' ו'לפי מקור' רק עבור מה שמעניין אותך למימוש.",
+        "התחל ב'סיכום הלוגיקה של הפרופיל (תכלס)'.",
+        "חזור ל'מקורות שנחקרו' רק אם אתה רוצה להבין מאיפה הסיכום נגזר.",
       ],
     },
     structure: {
       title: "איך לקרוא את לשונית המבנה",
-      text: "הלשונית הזו מתרגמת את המחקר למבנה קוד מוצע: חלוקת מודולים, גבולות אחריות, ותלויות. המטרה שלה היא למנוע ניחושים לפני כתיבת הקוד.",
+      text: "הלשונית הזו מציגה רק שני דברים: אילו מקורות נחקרו כדי להבין מבנה, ומה מבנה המימוש המומלץ (קבצים + מבנה פנימי).",
       bullets: [
-        "התחל ב'מה זוהה (תמצית)'.",
-        "השתמש ב'השלכות להמשך המימוש' כדי להבין מה צריך לבנות בפועל.",
+        "התחל ב'סיכום מבנה המימוש המומלץ'.",
+        "השתמש ב'מקורות שנחקרו' רק כשצריך להבין למה המבנה הוצע כך.",
       ],
     },
     status: {
@@ -867,7 +871,7 @@ function renderResearchedSourcesCards(items, kindLabel) {
           <p class="muted">${esc(item.source_type || "")}</p>
           <div class="obs-row"><span>מה נחקר בו</span><p>${esc(item.what_was_checked_he || "-")}</p></div>
           <div class="obs-row"><span>מה נמצא</span><p>${esc(item.what_was_found_he || "-")}</p></div>
-          <div class="obs-row"><span>מה למדנו מזה ל-${esc(kindLabel)}</span><p>${esc(item[`what_we_learned_for_${kindLabel === "לוגיקה" ? "logic" : "structure"}_he`] || "-")}</p></div>
+          <div class="obs-row"><span>מה למדנו מזה עבור ${esc(kindLabel)}</span><p>${esc(item[`what_we_learned_for_${kindLabel === "לוגיקה" ? "logic" : "structure"}_he`] || "-")}</p></div>
           ${sourceDetails(item.sources || [], "מקורות")}
         </article>
       `).join("")}
