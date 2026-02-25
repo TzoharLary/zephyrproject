@@ -5,13 +5,54 @@ const quickStatusContainer = document.getElementById("hubQuickStatus");
 const hubSearchInput = document.getElementById("hubSearchInput");
 
 const state = {
-  topTab: "overview",
+  topTab: "BPS",
   profileSubtabs: {
-    BPS: "specs",
-    WSS: "specs",
-    SCPS: "specs",
+    BPS: "status",
+    WSS: "status",
+    SCPS: "status",
   },
 };
+
+const GROUP_B_TASKS_API_PATH = "/api/group-b-tasks";
+const TASK_STATUS_ORDER = ["todo", "in_progress", "blocked", "deferred", "done"];
+const TASK_STATUS_LABELS = {
+  todo: "לביצוע",
+  in_progress: "בתהליך",
+  done: "בוצע",
+  blocked: "חסום",
+  deferred: "נדחה",
+};
+const TASK_PRIORITY_LABELS = {
+  high: "גבוהה",
+  medium: "בינונית",
+  low: "נמוכה",
+};
+const TASK_CATEGORY_LABELS = {
+  logic: "לוגיקה",
+  structure: "מבנה",
+  tests: "בדיקות",
+  integration: "אינטגרציה",
+  docs: "תיעוד/החלטות",
+};
+
+const taskStateApi = {
+  available: false,
+  readOnly: true,
+  loading: false,
+  error: null,
+  payload: {
+    version: 1,
+    updated_at: null,
+    profiles: {
+      BPS: { tasks: {} },
+      WSS: { tasks: {} },
+      SCPS: { tasks: {} },
+    },
+  },
+};
+
+let taskSaveTimer = null;
+let pendingTaskSaveReason = "";
 
 function esc(value) {
   return String(value ?? "").replace(/[&<>"']/g, (s) =>
@@ -135,6 +176,196 @@ function renderNamedObjectKv(obj, labels = {}) {
   `;
 }
 
+function profileTaskTemplates(profileId) {
+  return ((((DATA.group_b || {}).current_work || {}).profiles || {})[profileId] || {}).task_templates || [];
+}
+
+function profileTaskState(profileId) {
+  const profiles = (taskStateApi.payload && taskStateApi.payload.profiles) || {};
+  return (profiles[profileId] && profiles[profileId].tasks) || {};
+}
+
+function defaultTaskStateFromTemplate(tpl) {
+  return {
+    assignee: tpl.default_assignee || "",
+    status: tpl.default_status || "todo",
+    priority: tpl.suggested_priority || "medium",
+    notes: "",
+    blocked_reason: "",
+    depends_on: [],
+    updated_at: null,
+    updated_by: tpl.default_assignee || "",
+  };
+}
+
+function mergedTasksForProfile(profileId) {
+  const templates = profileTaskTemplates(profileId);
+  const stateMap = profileTaskState(profileId);
+  return templates.map((tpl) => {
+    const taskId = String(tpl.task_id || "");
+    const override = stateMap[taskId] && typeof stateMap[taskId] === "object" ? stateMap[taskId] : {};
+    const merged = { ...defaultTaskStateFromTemplate(tpl), ...override };
+    return {
+      ...tpl,
+      current: merged,
+      task_id: taskId,
+      parent_task_id: tpl.parent_task_id || null,
+    };
+  });
+}
+
+function taskSummaryFromMerged(tasks) {
+  const byStatus = { todo: 0, in_progress: 0, done: 0, blocked: 0, deferred: 0 };
+  const byPriority = { high: 0, medium: 0, low: 0 };
+  (tasks || []).forEach((t) => {
+    const st = String((t.current || {}).status || "todo");
+    const pr = String((t.current || {}).priority || "medium");
+    if (Object.prototype.hasOwnProperty.call(byStatus, st)) byStatus[st] += 1;
+    if (Object.prototype.hasOwnProperty.call(byPriority, pr)) byPriority[pr] += 1;
+  });
+  return {
+    total: (tasks || []).length,
+    done: byStatus.done,
+    in_progress: byStatus.in_progress,
+    blocked: byStatus.blocked,
+    deferred: byStatus.deferred,
+    byStatus,
+    byPriority,
+  };
+}
+
+function setTaskApiError(errorText) {
+  taskStateApi.error = errorText ? String(errorText) : null;
+}
+
+async function loadGroupBTasksState() {
+  taskStateApi.loading = true;
+  try {
+    const resp = await fetch(GROUP_B_TASKS_API_PATH, { cache: "no-store" });
+    if (!resp.ok) {
+      throw new Error(`HTTP ${resp.status}`);
+    }
+    const payload = await resp.json();
+    if (!payload || typeof payload !== "object") {
+      throw new Error("Invalid payload");
+    }
+    const profiles = payload.profiles && typeof payload.profiles === "object" ? payload.profiles : {};
+    taskStateApi.payload = {
+      version: Number(payload.version || 1),
+      updated_at: payload.updated_at || null,
+      profiles: {
+        BPS: profiles.BPS && typeof profiles.BPS === "object" ? profiles.BPS : { tasks: {} },
+        WSS: profiles.WSS && typeof profiles.WSS === "object" ? profiles.WSS : { tasks: {} },
+        SCPS: profiles.SCPS && typeof profiles.SCPS === "object" ? profiles.SCPS : { tasks: {} },
+      },
+    };
+    taskStateApi.available = true;
+    taskStateApi.readOnly = false;
+    setTaskApiError(null);
+  } catch (err) {
+    taskStateApi.available = false;
+    taskStateApi.readOnly = true;
+    setTaskApiError(`שמירת משימות מושבתת (אין שרת או API זמין: ${err && err.message ? err.message : err})`);
+  } finally {
+    taskStateApi.loading = false;
+  }
+}
+
+function ensureTaskProfileState(profileId) {
+  if (!taskStateApi.payload || typeof taskStateApi.payload !== "object") {
+    taskStateApi.payload = { version: 1, updated_at: null, profiles: {} };
+  }
+  if (!taskStateApi.payload.profiles || typeof taskStateApi.payload.profiles !== "object") {
+    taskStateApi.payload.profiles = {};
+  }
+  if (!taskStateApi.payload.profiles[profileId] || typeof taskStateApi.payload.profiles[profileId] !== "object") {
+    taskStateApi.payload.profiles[profileId] = { tasks: {} };
+  }
+  if (!taskStateApi.payload.profiles[profileId].tasks || typeof taskStateApi.payload.profiles[profileId].tasks !== "object") {
+    taskStateApi.payload.profiles[profileId].tasks = {};
+  }
+  return taskStateApi.payload.profiles[profileId].tasks;
+}
+
+function updateTaskStateValue(profileId, taskId, field, value) {
+  const tasks = ensureTaskProfileState(profileId);
+  const current = tasks[taskId] && typeof tasks[taskId] === "object" ? tasks[taskId] : {};
+  const next = { ...current, [field]: value };
+  if (field === "status" && value !== "blocked") {
+    next.blocked_reason = "";
+  }
+  next.updated_at = new Date().toISOString();
+  next.updated_by = String(next.assignee || "manual");
+  tasks[taskId] = next;
+}
+
+function normalizeTaskFieldValue(field, rawValue) {
+  if (field === "depends_on") {
+    return String(rawValue || "")
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean);
+  }
+  return rawValue;
+}
+
+async function saveGroupBTasksState(reason = "") {
+  if (!taskStateApi.available || taskStateApi.readOnly) return false;
+  const payload = {
+    version: Number((taskStateApi.payload || {}).version || 1),
+    updated_at: (taskStateApi.payload || {}).updated_at || null,
+    profiles: (taskStateApi.payload || {}).profiles || {},
+  };
+  try {
+    const resp = await fetch(GROUP_B_TASKS_API_PATH, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`HTTP ${resp.status} ${text}`);
+    }
+    taskStateApi.available = true;
+    taskStateApi.readOnly = false;
+    setTaskApiError(null);
+    taskStateApi.payload.updated_at = new Date().toISOString();
+    pendingTaskSaveReason = "";
+    return true;
+  } catch (err) {
+    taskStateApi.available = false;
+    taskStateApi.readOnly = true;
+    setTaskApiError(`שמירת משימות נכשלה${reason ? ` (${reason})` : ""}: ${err && err.message ? err.message : err}`);
+    return false;
+  }
+}
+
+function scheduleTaskSave(reason = "update") {
+  pendingTaskSaveReason = reason;
+  if (taskSaveTimer) {
+    clearTimeout(taskSaveTimer);
+  }
+  taskSaveTimer = setTimeout(async () => {
+    taskSaveTimer = null;
+    const ok = await saveGroupBTasksState(pendingTaskSaveReason);
+    if (!ok) {
+      renderProfilePanel("BPS");
+      renderProfilePanel("WSS");
+      renderProfilePanel("SCPS");
+    } else if (["BPS", "WSS", "SCPS"].includes(state.topTab)) {
+      renderProfilePanel(state.topTab);
+    }
+  }, 500);
+}
+
+function taskStatusLabel(status) {
+  return TASK_STATUS_LABELS[String(status || "")] || String(status || "todo");
+}
+
+function taskPriorityLabel(priority) {
+  return TASK_PRIORITY_LABELS[String(priority || "")] || String(priority || "medium");
+}
+
 function topTabs() {
   return (DATA.navigation || {}).top_tabs || [];
 }
@@ -192,19 +423,75 @@ function renderTopTabsNav() {
 
 function renderQuickStatus() {
   if (!quickStatusContainer) return;
-  const status = ((DATA.group_b || {}).status_tracker || {}).summary || {};
+  const groupB = DATA.group_b || {};
+  const status = (groupB.status_tracker || {}).summary || {};
+  const rows = ((groupB.status_tracker || {}).rows) || [];
+  const profileRows = ["BPS", "WSS", "SCPS"]
+    .map((pid) => rows.find((r) => r.profile_id === pid) || { profile_id: pid, ready_for_impl_phase1: false });
   quickStatusContainer.innerHTML = `
-    <div class="quick-stat-grid">
-      <div class="quick-stat"><span>Specs שסונכרנו</span><strong>${esc(String(status.spec_synced || 0))}/${esc(String(status.profiles || 0))}</strong></div>
-      <div class="quick-stat"><span>פרופילים עם ממצאי לוגיקה</span><strong>${esc(String(status.logic_with_findings || 0))}</strong></div>
-      <div class="quick-stat"><span>פרופילים עם ממצאי מבנה</span><strong>${esc(String(status.structure_with_findings || 0))}</strong></div>
-      <div class="quick-stat"><span>לוגיקה baseline</span><strong>${esc(String(status.logic_baselined || 0))}</strong></div>
-      <div class="quick-stat"><span>מבנה baseline</span><strong>${esc(String(status.structure_baselined || 0))}</strong></div>
-      <div class="quick-stat"><span>חוזה מימוש מוגדר</span><strong>${esc(String(status.implementation_contract_defined || 0))}</strong></div>
-      <div class="quick-stat"><span>יעדי בדיקות Phase 1</span><strong>${esc(String(status.phase1_test_targets_defined || 0))}</strong></div>
-      <div class="quick-stat"><span>חתימת review</span><strong>${esc(String(status.review_signoff_complete || 0))}</strong></div>
-      <div class="quick-stat"><span>מוכנים ל-Phase 1</span><strong>${esc(String(status.ready_for_impl_phase1 || 0))}</strong></div>
+    <div class="quick-status-meaning">
+      <p class="muted">מה חשוב כאן: כמה מתוך 3 הפרופילים כבר מוכנים להתחלת מימוש (Phase 1), ומה הסטטוס של כל פרופיל.</p>
     </div>
+    <div class="quick-stat-grid">
+      <div class="quick-stat"><span>מוכנים למימוש (Phase 1)</span><strong>${esc(String(status.ready_for_impl_phase1 || 0))}/${esc(String(status.profiles || 3))}</strong></div>
+      <div class="quick-stat"><span>חוזה מימוש + יעדי בדיקות</span><strong>${esc(String(Math.min(status.implementation_contract_defined || 0, status.phase1_test_targets_defined || 0)))}/${esc(String(status.profiles || 3))}</strong></div>
+    </div>
+    <div class="quick-profile-list">
+      ${profileRows.map((row) => `
+        <div class="quick-profile-row" data-searchable="true" data-search-text="${esc(`${row.profile_id} ${uiLabel(row.profile_id)} ${displayNameHe(row.profile_id)}`)}">
+          <div>
+            <strong>${esc(uiLabel(row.profile_id))}</strong>
+            <span class="muted">${esc(displayNameHe(row.profile_id))}</span>
+          </div>
+          <div>${boolPill(!!row.ready_for_impl_phase1, "מוכן למימוש", "עדיין בהכנה")}</div>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderProfileSubtabGuide(profileId, subtab) {
+  const guides = {
+    specs: {
+      title: "מה יש כאן ולמה זה חשוב",
+      text: "הלשונית הזו מראה אילו מסמכי מפרט רשמיים (Spec / TCRL / מסמכי עזר) כבר סונכרנו לפרופיל. משתמשים בה כדי לוודא שלא חסר חומר רשמי לפני מימוש.",
+      bullets: [
+        "אם חסר מסמך חשוב: עוצרים ומרעננים sync.",
+        "אם הכל קיים: עוברים ללוגיקה/מבנה.",
+      ],
+    },
+    logic: {
+      title: "איך לקרוא את לשונית הלוגיקה",
+      text: "זו לא רשימת spec. זה ניתוח מסונתז של ההתנהגות שזוהתה במקורות: מה הפרופיל עושה, איך זיהינו את זה, ומה זה אומר למימוש.",
+      bullets: [
+        "התחל ב'מה זוהה (תמצית)' כדי להבין את התמונה הכללית.",
+        "אחר כך קרא 'ממצאים מובנים' ו'לפי מקור' רק עבור מה שמעניין אותך למימוש.",
+      ],
+    },
+    structure: {
+      title: "איך לקרוא את לשונית המבנה",
+      text: "הלשונית הזו מתרגמת את המחקר למבנה קוד מוצע: חלוקת מודולים, גבולות אחריות, ותלויות. המטרה שלה היא למנוע ניחושים לפני כתיבת הקוד.",
+      bullets: [
+        "התחל ב'מה זוהה (תמצית)'.",
+        "השתמש ב'השלכות להמשך המימוש' כדי להבין מה צריך לבנות בפועל.",
+      ],
+    },
+    status: {
+      title: "מה נותנת לשונית מצב עבודה נוכחי",
+      text: "זו לשונית העבודה בפועל. כאן מנהלים משימות ותתי-משימות, רואים מה הבא, מה בוצע, ומה חסום — על בסיס הלוגיקה, המבנה וחוזה המימוש.",
+      bullets: [
+        "זו נקודת הכניסה המומלצת לכל פרופיל.",
+        "עדכן בעלים/סטטוס/עדיפות כאן, והמערכת שומרת לקובץ דרך השרת המקומי.",
+      ],
+    },
+  };
+  const g = guides[subtab] || guides.specs;
+  return `
+    <section class="hub-card span-12 tab-guide-card" data-searchable="true" data-search-text="${esc(`${profileId} ${subtab} ${g.title} ${g.text}`)}">
+      <h3>${esc(g.title)}</h3>
+      <p>${esc(g.text)}</p>
+      <ul class="compact-list">${(g.bullets || []).map((b) => `<li>${esc(b)}</li>`).join("")}</ul>
+    </section>
   `;
 }
 
@@ -518,6 +805,413 @@ function renderProfileSpecs(profileId) {
   `;
 }
 
+function renderProfileSpecsSimple(profileId) {
+  const specP = ((((DATA.group_b || {}).specs_presentation || {}).profiles) || {})[profileId] || {};
+  const groups = specP.groups || [];
+  return `
+    <div class="profile-sections">
+      <section class="hub-card" data-searchable="true">
+        <h3>מה סונכרן, מאיזה מקור, ומה זה נותן לנו</h3>
+        <p class="muted">הלשונית הזו מיועדת להבנה מהירה של חומר המקור הרשמי שקיים לנו, ומה תפקיד כל קובץ/תיקייה בהכנה למימוש ולבדיקות.</p>
+        <div class="kv-grid compact">
+          <div><span>סטטוס סנכרון</span>${statusPill(specP.sync_status || "missing")}</div>
+          <div><span>קבוצות מקור</span><strong>${esc(String(groups.length || 0))}</strong></div>
+        </div>
+        ${specP.spec_page_url ? `<div class="row-actions"><a class="mini-btn linkish" href="${esc(specP.spec_page_url)}" target="_blank" rel="noopener">עמוד spec רשמי</a></div>` : ""}
+      </section>
+      ${groups.map((g, idx) => `
+        <section class="hub-card" data-searchable="true" data-search-text="${esc(`${g.source_label_he || ""} ${g.summary_he || ""}`)}">
+          <details class="hub-detail" ${idx === 0 ? "open" : ""}>
+            <summary>
+              <span>${esc(g.source_label_he || `מקור ${idx + 1}`)}</span>
+              <span class="muted">${esc(g.summary_he || "")}</span>
+            </summary>
+            <div class="detail-body">
+              <div class="row-actions">
+                ${g.source_url ? `<a class="mini-btn linkish" href="${esc(g.source_url)}" target="_blank" rel="noopener">פתח מקור</a>` : ""}
+                ${g.source_kind ? pill(`source:${g.source_kind}`) : ""}
+              </div>
+              <div class="cards-grid two">
+                ${(g.files || []).map((f) => `
+                  <article class="hub-card nested-card spec-file-card" data-searchable="true" data-search-text="${esc(`${f.name || ""} ${f.what_it_is_he || ""} ${f.what_we_take_from_it_he || ""}`)}">
+                    <h4><code>${esc(f.name || "-")}</code></h4>
+                    <p class="muted">${esc(f.display_kind_he || (f.is_dir ? "תיקייה" : "קובץ"))}</p>
+                    <div class="obs-row"><span>מה זה</span><p>${esc(f.what_it_is_he || "-")}</p></div>
+                    <div class="obs-row"><span>מה לוקחים ממנו</span><p>${esc(f.what_we_take_from_it_he || "-")}</p></div>
+                    ${f.relevance_he ? `<div class="chip-row">${pill(`רלוונטיות: ${f.relevance_he}`)}</div>` : ""}
+                    ${f.path ? `<div class="mini-meta"><span>נתיב מסונכרן:</span> <code>${esc(f.path)}</code></div>` : ""}
+                    ${sourceDetails(f.sources || [], "מקורות קובץ")}</article>
+                `).join("") || '<p class="muted">אין קבצים בקבוצה זו.</p>'}
+              </div>
+              ${sourceDetails(g.sources || [], "מקורות קבוצה")}
+            </div>
+          </details>
+        </section>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderResearchedSourcesCards(items, kindLabel) {
+  if (!items || !items.length) {
+    return '<p class="muted">לא נמצאו מקורות שנחקרו להצגה.</p>';
+  }
+  return `
+    <div class="cards-grid two">
+      ${items.map((item) => `
+        <article class="hub-card nested-card" data-searchable="true" data-search-text="${esc(`${item.source_id || ""} ${item.source_label_he || ""} ${item.what_was_found_he || ""}`)}">
+          <div class="finding-head">
+            <h4>${esc(item.source_label_he || item.source_id || "מקור")}</h4>
+            <div class="chip-row">${statusPill(item.relevance || "none")} ${pill(item.contribution_level_he || "לא ידוע")}</div>
+          </div>
+          <p class="muted">${esc(item.source_type || "")}</p>
+          <div class="obs-row"><span>מה נחקר בו</span><p>${esc(item.what_was_checked_he || "-")}</p></div>
+          <div class="obs-row"><span>מה נמצא</span><p>${esc(item.what_was_found_he || "-")}</p></div>
+          <div class="obs-row"><span>מה למדנו מזה ל-${esc(kindLabel)}</span><p>${esc(item[`what_we_learned_for_${kindLabel === "לוגיקה" ? "logic" : "structure"}_he`] || "-")}</p></div>
+          ${sourceDetails(item.sources || [], "מקורות")}
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderProfileLogicSimple(profileId) {
+  const vm = ((((DATA.group_b || {}).logic_presentation || {}).profiles) || {})[profileId] || {};
+  const summary = vm.logic_summary || {};
+  return `
+    <div class="profile-sections">
+      <section class="hub-card">
+        <h3>מקורות שנחקרו להבנת הלוגיקה</h3>
+        <p class="muted">כאן רואים מה בדקנו בכל מקור, מה מצאנו, ומה לקחנו ממנו כדי להבין את ההתנהגות הנדרשת של הפרופיל.</p>
+        ${renderResearchedSourcesCards(vm.researched_sources || [], "לוגיקה")}
+      </section>
+      <section class="hub-card">
+        <h3>סיכום הלוגיקה של הפרופיל (תכלס)</h3>
+        <p class="lead">${esc(summary.summary_he || "אין עדיין סיכום לוגיקה.")}</p>
+        <h4>מה הפרופיל צריך לדעת לעשות</h4>
+        ${renderListOrMuted(summary.behaviors_required_he || [], "אין סעיפי לוגיקה מסונתזים עדיין.")}
+        <h4>פוקוס לשלב 1 (Phase 1)</h4>
+        ${renderListOrMuted(summary.phase1_focus_he || [], "לא הוגדר פוקוס Phase 1 בלוגיקה.")}
+        ${summary.important_conditions_he && summary.important_conditions_he.length ? `<h4>תנאים/דגשים חשובים</h4>${renderListOrMuted(summary.important_conditions_he, "אין")}` : ""}
+        ${sourceDetails(summary.sources || [], "מקורות הסיכום")}
+      </section>
+    </div>
+  `;
+}
+
+function renderStructureFilePlanTable(filePlan) {
+  if (!filePlan || !filePlan.length) {
+    return '<p class="muted">אין עדיין תכנית קבצים להצגה.</p>';
+  }
+  return `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>נתיב</th><th>שם קובץ</th><th>מטרה</th><th>פאזה</th><th>תלויות</th></tr></thead>
+        <tbody>
+          ${filePlan.map((f) => `
+            <tr data-searchable="true" data-search-text="${esc(`${f.path || ""} ${f.filename || ""} ${f.purpose_he || ""}`)}">
+              <td><code>${esc(f.path || "-")}</code></td>
+              <td>${esc(f.filename || "-")}</td>
+              <td>${esc(f.purpose_he || "-")}</td>
+              <td>${pill(f.created_in_phase || "-")}</td>
+              <td>${(f.depends_on || []).length ? (f.depends_on || []).map((d) => `<code>${esc(d)}</code>`).join(" ") : '<span class="muted">-</span>'}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderFileBlueprints(blueprints) {
+  if (!blueprints || !blueprints.length) return '<p class="muted">אין blueprint פנימי לקבצים.</p>';
+  return `
+    <div class="cards-grid two">
+      ${blueprints.map((bp) => `
+        <article class="hub-card nested-card" data-searchable="true" data-search-text="${esc(`${bp.file_key || ""} ${(bp.responsibilities_he || []).join(" ")}`)}">
+          <h4><code>${esc(bp.file_key || "-")}</code></h4>
+          <h5>מבנה פנימי מוצע</h5>
+          ${renderListOrMuted(bp.internal_sections_he || [], "אין")}
+          <h5>אחריות / פונקציות מרכזיות</h5>
+          ${renderListOrMuted(bp.responsibilities_he || bp.functions_he || [], "אין")}
+          ${(bp.notes_he || []).length ? `<h5>הערות</h5>${renderListOrMuted(bp.notes_he, "אין")}` : ""}
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderProfileStructureSimple(profileId) {
+  const vm = ((((DATA.group_b || {}).structure_presentation || {}).profiles) || {})[profileId] || {};
+  const complexity = vm.profile_complexity || {};
+  const summary = vm.structure_summary || {};
+  const baseRef = summary.base_profile_structure_ref || {};
+  return `
+    <div class="profile-sections">
+      <section class="hub-card">
+        <h3>מקורות שנחקרו להבנת המבנה</h3>
+        <p class="muted">כאן מוצגים המקורות והדפוסים שנבדקו כדי להבין איך נכון לבנות את המימוש בקוד, כולל דמיון לפרופילים אחרים.</p>
+        <div class="cards-grid two">
+          <article class="hub-card nested-card">
+            <h4>סיווג מורכבות</h4>
+            <div class="chip-row">${complexity.classification === "complex" ? pill("Profile מורכב", "optional") : pill("Profile פשוט", "mandatory")}</div>
+            <p>${esc(complexity.classification_reason_he || "אין נימוק זמין.")}</p>
+            ${sourceDetails(complexity.sources || [], "מקורות סיווג")}
+          </article>
+          <article class="hub-card nested-card">
+            <h4>פרופילים דומים שנמצאו</h4>
+            ${(vm.similar_profiles || []).length ? `
+              <ul class="compact-list">
+                ${(vm.similar_profiles || []).map((sp) => `<li><strong>${esc(sp.profile_name || "-")}</strong> — ${esc(sp.why_similar_he || "")}<br><span class="muted">${esc(sp.what_can_be_learned_he || "")}</span></li>`).join("")}
+              </ul>` : '<p class="muted">לא זוהו פרופילים דומים מפורשים בממצאים הנוכחיים.</p>'}
+          </article>
+        </div>
+        ${renderResearchedSourcesCards(vm.researched_sources || [], "מבנה")}
+      </section>
+      <section class="hub-card">
+        <h3>סיכום מבנה המימוש המומלץ</h3>
+        <p class="lead">${esc(summary.summary_he || "אין עדיין סיכום מבנה.")}</p>
+        <div class="warning-box">
+          <strong>מבנה בסיסי לכל פרופיל:</strong>
+          ${esc(baseRef.detail_he || "המקור הבסיסי טרם הוזן; כרגע מוצג fallback מסונתז מהמחקר והחוזה.")}
+        </div>
+        <h4>תכנית קבצים מוצעת</h4>
+        ${renderStructureFilePlanTable(summary.file_plan || [])}
+        <h4>מבנה פנימי מוצע לכל קובץ</h4>
+        ${renderFileBlueprints(summary.file_internal_blueprints || [])}
+        ${sourceDetails(summary.sources || [], "מקורות סיכום מבנה")}
+      </section>
+    </div>
+  `;
+}
+
+function taskStatusPill(status) {
+  const s = String(status || "todo");
+  if (s === "done") return pill("בוצע", "mandatory");
+  if (s === "in_progress") return pill("בתהליך", "optional");
+  if (s === "blocked") return pill("חסום", "conditional");
+  if (s === "deferred") return pill("נדחה", "optional");
+  return pill("לביצוע");
+}
+
+function renderTaskOptions(selected, optionsMap) {
+  const entries = Object.entries(optionsMap || {});
+  return entries
+    .map(([value, label]) => `<option value="${esc(value)}" ${String(selected) === String(value) ? "selected" : ""}>${esc(label)}</option>`)
+    .join("");
+}
+
+function renderTaskCard(task, allTasks, readOnly) {
+  const cur = task.current || {};
+  const children = (allTasks || []).filter((t) => (t.parent_task_id || null) === task.task_id);
+  const isParent = children.length > 0;
+  const disabled = readOnly ? "disabled" : "";
+  const assigneeListId = `assigneeSuggestions-${esc(task.task_id)}`;
+  return `
+    <article class="hub-card nested-card task-card ${isParent ? "task-parent" : ""}" data-searchable="true" data-search-text="${esc(`${task.title_he || ""} ${task.description_he || ""} ${task.category || ""} ${cur.assignee || ""}`)}">
+      <div class="task-card-head">
+        <div>
+          <h4>${esc(task.title_he || "משימה")}</h4>
+          <p class="muted">${esc(task.description_he || "")}</p>
+        </div>
+        <div class="chip-row">
+          ${taskStatusPill(cur.status)}
+          ${pill(`עדיפות: ${taskPriorityLabel(cur.priority)}`)}
+          ${pill(TASK_CATEGORY_LABELS[String(task.category || "")] || String(task.category || "task"))}
+          ${task.is_completed_seed ? pill("בוצע קודם ע\"י Codex", "mandatory") : ""}
+        </div>
+      </div>
+      <div class="task-form-grid">
+        <label>מי עושה
+          <input type="text" list="${assigneeListId}" data-task-field="assignee" data-task-id="${esc(task.task_id)}" data-profile-id="${esc(task.profile_id || "")}" value="${esc(cur.assignee || "")}" ${disabled} />
+          <datalist id="${assigneeListId}">
+            <option value="codex"></option>
+            <option value="tzohar"></option>
+            <option value="manual"></option>
+          </datalist>
+        </label>
+        <label>סטטוס
+          <select data-task-field="status" data-task-id="${esc(task.task_id)}" data-profile-id="${esc(task.profile_id || "")}" ${disabled}>
+            ${renderTaskOptions(cur.status || "todo", TASK_STATUS_LABELS)}
+          </select>
+        </label>
+        <label>עדיפות
+          <select data-task-field="priority" data-task-id="${esc(task.task_id)}" data-profile-id="${esc(task.profile_id || "")}" ${disabled}>
+            ${renderTaskOptions(cur.priority || task.suggested_priority || "medium", TASK_PRIORITY_LABELS)}
+          </select>
+        </label>
+        <label>תלויות (IDs, מופרד בפסיקים)
+          <input type="text" data-task-field="depends_on" data-task-id="${esc(task.task_id)}" data-profile-id="${esc(task.profile_id || "")}" value="${esc((cur.depends_on || []).join(', '))}" ${disabled} />
+        </label>
+        <label class="task-field-wide">הערות
+          <textarea rows="2" data-task-field="notes" data-task-id="${esc(task.task_id)}" data-profile-id="${esc(task.profile_id || "")}" ${disabled}>${esc(cur.notes || "")}</textarea>
+        </label>
+        ${(String(cur.status || "") === "blocked") ? `
+          <label class="task-field-wide">סיבת חסימה
+            <input type="text" data-task-field="blocked_reason" data-task-id="${esc(task.task_id)}" data-profile-id="${esc(task.profile_id || "")}" value="${esc(cur.blocked_reason || "")}" ${disabled} />
+          </label>` : ""}
+      </div>
+      <div class="task-card-meta">
+        <span>${task.derived_from ? `נגזר מ: ${esc(task.derived_from)}` : ""}</span>
+        <span>${cur.updated_at ? `עודכן: ${esc(cur.updated_at)}` : ""}</span>
+      </div>
+      ${sourceDetails(task.source_refs || [], "מקורות משימה")}
+      ${children.length ? `<div class="task-subtasks">${children.map((child) => renderTaskCard(child, allTasks, readOnly)).join("")}</div>` : ""}
+    </article>
+  `;
+}
+
+function renderTaskBucket(title, tasks, allTasks, readOnly, emptyText) {
+  return `
+    <section class="hub-card">
+      <h3>${esc(title)}</h3>
+      ${(tasks || []).length ? `<div class="task-list">${(tasks || []).map((t) => renderTaskCard(t, allTasks, readOnly)).join("")}</div>` : `<p class="muted">${esc(emptyText)}</p>`}
+    </section>
+  `;
+}
+
+function renderProfileCurrentWork(profileId) {
+  const vm = ((((DATA.group_b || {}).current_work || {}).profiles) || {})[profileId] || {};
+  const tasks = mergedTasksForProfile(profileId).map((t) => ({ ...t, profile_id: profileId }));
+  const summary = taskSummaryFromMerged(tasks);
+  const rootTasks = tasks.filter((t) => !t.parent_task_id);
+  const openTasks = rootTasks.filter((t) => !["done", "deferred"].includes(String((t.current || {}).status || "todo")));
+  const doneTasks = rootTasks.filter((t) => String((t.current || {}).status || "") === "done");
+  const blockedTasks = rootTasks.filter((t) => String((t.current || {}).status || "") === "blocked");
+  const readOnly = !!taskStateApi.readOnly;
+  return `
+    <div class="profile-sections">
+      <section class="hub-card">
+        <h3>מצב עבודה נוכחי — ${esc(uiLabel(profileId))}</h3>
+        <p class="muted">זו לשונית העבודה המרכזית: מה ממשיכים לעשות עכשיו, מי אחראי, מה הושלם, ומה חסום. המשימות נגזרות מהלוגיקה, המבנה, חוזה המימוש ויעדי הבדיקות.</p>
+        <div class="kv-grid">
+          <div><span>סה\"כ משימות</span><strong>${esc(String(summary.total || 0))}</strong></div>
+          <div><span>בוצעו</span><strong>${esc(String(summary.done || 0))}</strong></div>
+          <div><span>בתהליך</span><strong>${esc(String(summary.in_progress || 0))}</strong></div>
+          <div><span>חסומות</span><strong>${esc(String(summary.blocked || 0))}</strong></div>
+          <div><span>נדחו</span><strong>${esc(String(summary.deferred || 0))}</strong></div>
+          <div><span>מצב שמירה</span>${readOnly ? pill("קריאה בלבד", "conditional") : pill("שמירה פעילה", "mandatory")}</div>
+        </div>
+        ${taskStateApi.loading ? '<p class="muted">טוען מצב משימות מהשרת...</p>' : ""}
+        ${taskStateApi.error ? `<div class="warning-box"><strong>הערת API:</strong> ${esc(taskStateApi.error)}</div>` : ""}
+        ${sourceDetails(vm.sources || [], "מקורות תבניות משימות")}
+      </section>
+      ${renderTaskBucket("משימות פתוחות / להמשך", openTasks, tasks, readOnly, "אין משימות פתוחות להצגה.")}
+      ${blockedTasks.length ? renderTaskBucket("משימות חסומות", blockedTasks, tasks, readOnly, "אין משימות חסומות.") : ""}
+      ${renderTaskBucket("משימות שבוצעו (כולל Codex)", doneTasks, tasks, readOnly, "אין משימות מסומנות כבוצעו.")}
+    </div>
+  `;
+}
+
+function renderKnowledgeCenterTab() {
+  const root = document.getElementById("hubKnowledgeCenterContent");
+  if (!root) return;
+  const kc = ((DATA.group_b || {}).knowledge_center) || {};
+  const sections = kc.sections || [];
+  const byId = Object.fromEntries((sections || []).map((s) => [s.id, s]));
+  root.innerHTML = `
+    <div class="hub-panel-grid">
+      <section class="hub-card span-12">
+        <h2>מרכז ידע</h2>
+        <p class="lead">כאן נמצא כל המידע העמוק/טכני שלא מוצג במסכי הפרופילים הפשוטים — כדי שלא יאבד ידע, אבל גם לא יעמיס במסכי העבודה.</p>
+      </section>
+
+      <section class="hub-card span-12">
+        <h3>קטגוריות במרכז הידע</h3>
+        <div class="cards-grid two">
+          ${(sections || []).map((s) => `
+            <article class="hub-card nested-card" data-searchable="true" data-search-text="${esc(`${s.label_he || ""} ${s.summary_he || ""}`)}">
+              <h4>${esc(s.label_he || s.id || "קטגוריה")}</h4>
+              <p>${esc(s.summary_he || "")}</p>
+              <div class="mini-meta"><code>${esc(s.id || "")}</code></div>
+            </article>`).join("")}
+        </div>
+      </section>
+
+      <section class="hub-card span-12">
+        <details class="hub-detail">
+          <summary>Deep Dive לפרופילים (לוגיקה/מבנה מלאים + raw)</summary>
+          <div class="detail-body">
+            ${["BPS", "WSS", "SCPS"].map((pid) => `
+              <details class="hub-detail">
+                <summary>${esc(uiLabel(pid))} — תצוגות עומק</summary>
+                <div class="detail-body">
+                  <section class="hub-card nested-card"><h4>לוגיקה (עמוק)</h4>${renderKnowledgeDoc(pid, "logic")}</section>
+                  <section class="hub-card nested-card"><h4>מבנה (עמוק)</h4>${renderKnowledgeDoc(pid, "structure")}</section>
+                </div>
+              </details>`).join("")}
+          </div>
+        </details>
+      </section>
+
+      <section class="hub-card span-12">
+        <details class="hub-detail">
+          <summary>מטא-דטה טכני של מפרטים / readiness / validation</summary>
+          <div class="detail-body">
+            ${(byId.spec_artifacts_technical && byId.spec_artifacts_technical.entries) ? `
+              <div class="cards-grid three">
+                ${byId.spec_artifacts_technical.entries.map((e) => `
+                  <article class="hub-card nested-card">
+                    <h4>${esc(e.ui_label || e.profile_id || "")}</h4>
+                    <div class="kv-grid compact">
+                      <div><span>sync</span>${statusPill(e.sync_status)}</div>
+                      <div><span>artifacts</span><strong>${esc(String(e.artifact_count || 0))}</strong></div>
+                      <div><span>spec dir</span><code>${esc(e.spec_dir || "-")}</code></div>
+                    </div>
+                    <details class="inline-detail"><summary>kind_counts</summary><div class="detail-body"><pre><code>${esc(JSON.stringify(e.kind_counts || {}, null, 2))}</code></pre></div></details>
+                    ${e.spec_page_url ? `<a class="mini-btn linkish" target="_blank" rel="noopener" href="${esc(e.spec_page_url)}">עמוד spec</a>` : ""}
+                  </article>`).join("")}
+              </div>` : '<p class="muted">אין נתוני metadata למפרטים.</p>'}
+            <div class="cards-grid two" style="margin-top:10px;">
+              ${(byId.readiness_validation_qa && (byId.readiness_validation_qa.panels || [])).map((p) => `
+                <article class="hub-card nested-card">
+                  <h4>${esc(p.label_he || p.id || "panel")}</h4>
+                  <pre><code>${esc(JSON.stringify(p.data || {}, null, 2))}</code></pre>
+                </article>`).join("")}
+            </div>
+            ${["BPS", "WSS", "SCPS"].map((pid) => `
+              <details class="hub-detail">
+                <summary>${esc(uiLabel(pid))} — סטטוס/validation/QA עמוק</summary>
+                <div class="detail-body">${renderProfileStatus(pid)}</div>
+              </details>`).join("")}
+          </div>
+        </details>
+      </section>
+
+      <section class="hub-card span-12">
+        <details class="hub-detail">
+          <summary>AutoPTS Deep (מעבר לתקציר)</summary>
+          <div class="detail-body">
+            <div class="cards-grid three">
+              ${(((byId.autopts_deep_dive || {}).panels) || []).map((p) => `
+                <article class="hub-card nested-card">
+                  <h4>${esc(p.label_he || p.id || "")}</h4>
+                  <pre><code>${esc(JSON.stringify(p.data || {}, null, 2))}</code></pre>
+                </article>`).join("")}
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <section class="hub-card span-12">
+        <details class="hub-detail">
+          <summary>Raw Markdown / Debug</summary>
+          <div class="detail-body">
+            ${(((byId.raw_markdown_and_debug || {}).entries) || []).map((e) => `
+              <article class="hub-card nested-card">
+                <h4>${esc(e.ui_label || e.profile_id || "")}</h4>
+                <p class="muted">לוגיקה: <code>${esc(e.logic_path || "-")}</code></p>
+                <details class="inline-detail"><summary>Preview לוגיקה</summary><div class="detail-body"><pre><code>${esc(e.logic_raw_markdown_preview || "")}</code></pre></div></details>
+                <p class="muted">מבנה: <code>${esc(e.structure_path || "-")}</code></p>
+                <details class="inline-detail"><summary>Preview מבנה</summary><div class="detail-body"><pre><code>${esc(e.structure_raw_markdown_preview || "")}</code></pre></div></details>
+              </article>`).join("")}
+          </div>
+        </details>
+      </section>
+    </div>
+  `;
+}
+
 function renderFindingsCards(findings) {
   if (!findings || !findings.length) {
     return `
@@ -687,6 +1381,7 @@ function renderKnowledgeDoc(profileId, kind) {
       <div class="knowledge-main">
         <section id="${tocIdPrefix}-summary" class="hub-card" data-searchable="true" data-search-text="${esc(`${analysis.summary_he || ""} ${analysis.status || ""}`)}">
           <h3>${kindLabel} - מה זיהינו (תמצית)</h3>
+          <p class="muted">זה הסיכום המהיר של הלשונית. אם אתה רוצה להבין מה לממש, תתחיל מכאן ורק אחר כך תרד לממצאים ולמקורות.</p>
           <div class="finding-head">
             <div class="chip-row">${statusPill(analysis.status)} ${pill(`profile:${uiLabel(profileId)}`)} ${pill(`kind:${kind}`)}</div>
           </div>
@@ -695,9 +1390,18 @@ function renderKnowledgeDoc(profileId, kind) {
             <div><span>ממצאים</span><strong>${esc(String((analysis.core_findings || []).length || 0))}</strong></div>
             <div><span>תצפיות מקור</span><strong>${esc(String((analysis.source_observations || []).length || 0))}</strong></div>
             <div><span>שאלות פתוחות</span><strong>${esc(String((analysis.open_questions || []).length || 0))}</strong></div>
-            <div><span>קובץ מקור</span><code>${esc((docMeta.path) || "-")}</code></div>
+            <div><span>שאלות שעדיין פתוחות</span><strong>${esc(String((analysis.open_questions || []).filter((q) => String(q.status || "") === "open").length))}</strong></div>
           </div>
           <div class="mini-meta"><span>התפלגות ודאות:</span> ${confidenceChips}</div>
+          <details class="inline-detail">
+            <summary>פרטים טכניים של מסמך המקור (לא חובה לקריאה)</summary>
+            <div class="detail-body">
+              <div class="kv-grid compact">
+                <div><span>קובץ מקור</span><code>${esc((docMeta.path) || "-")}</code></div>
+                <div><span>סטטוס מסמך</span>${statusPill(docMeta.status || analysis.status)}</div>
+              </div>
+            </div>
+          </details>
           ${(docMeta.missing_sections || []).length ? `<div class="warning-box"><strong>חלקי sections חסרים:</strong> ${(docMeta.missing_sections || []).map((x) => `<code>${esc(x)}</code>`).join(" ")}</div>` : ""}
           ${sourceDetails(analysis.sources || [], "מקורות ניתוח")}
         </section>
@@ -888,30 +1592,39 @@ function renderProfileStatus(profileId) {
     <div class="profile-sections">
       <section class="hub-card" data-searchable="true">
         <h3>סטטוס עבודה - ${esc(uiLabel(profileId))}</h3>
+        <p class="muted">הבלוק הזה עוזר לענות רק על שאלה אחת: האם אפשר להתחיל לממש עכשיו. הנתונים הטכניים המפורטים מופיעים למטה וניתנים לדילוג.</p>
         <div class="kv-grid">
-          <div><span>סנכרון Spec</span>${statusPill(row.spec_sync_status)}</div>
-          <div><span>ארטיפקטים</span><strong>${esc(String(row.spec_artifacts || 0))}</strong></div>
-          <div><span>מסמך לוגיקה</span>${statusPill(row.logic_doc_status)}</div>
-          <div><span>ממצאי לוגיקה</span><strong>${esc(String(row.logic_findings || 0))}</strong></div>
-          <div><span>תצפיות מקור לוגיקה</span><strong>${esc(String(row.logic_source_observations || 0))}</strong></div>
-          <div><span>מסמך מבנה</span>${statusPill(row.structure_doc_status)}</div>
-          <div><span>ממצאי מבנה</span><strong>${esc(String(row.structure_findings || 0))}</strong></div>
-          <div><span>תצפיות מקור מבנה</span><strong>${esc(String(row.structure_source_observations || 0))}</strong></div>
-          <div><span>Phase 1 subset</span>${boolPill(row.phase1_subset_decided, "הוגדר", "חסר")}</div>
-          <div><span>החלטות Phase 1</span><strong>${esc(String(row.phase1_decisions_count || 0))}</strong></div>
-          <div><span>Logic baseline</span>${boolPill(row.logic_analysis_baselined)}</div>
-          <div><span>Structure baseline</span>${boolPill(row.structure_analysis_baselined)}</div>
           <div><span>חוזה מימוש</span>${boolPill(row.implementation_contract_defined, "מוגדר", "חסר")}</div>
           <div><span>יעדי בדיקות Phase 1</span>${boolPill(row.phase1_test_targets_defined, "מוגדרים", "חסרים")}</div>
           <div><span>חתימת review</span>${boolPill(row.review_signoff_complete, "הושלמה", "חסרה")}</div>
           <div><span>חסמי Phase 1</span>${boolPill(row.phase1_blockers_closed_or_deferred, "סגורים/נדחו", "פתוחים")}</div>
           <div><span>מוכן ל-Phase 1</span>${boolPill(row.ready_for_impl_phase1, "מוכן", "לא מוכן")}</div>
         </div>
+        <details class="hub-detail">
+          <summary>הצג פרטי סטטוס טכניים (counts / baseline / סנכרון)</summary>
+          <div class="detail-body">
+            <div class="kv-grid compact">
+              <div><span>סנכרון Spec</span>${statusPill(row.spec_sync_status)}</div>
+              <div><span>ארטיפקטים</span><strong>${esc(String(row.spec_artifacts || 0))}</strong></div>
+              <div><span>מסמך לוגיקה</span>${statusPill(row.logic_doc_status)}</div>
+              <div><span>ממצאי לוגיקה</span><strong>${esc(String(row.logic_findings || 0))}</strong></div>
+              <div><span>תצפיות מקור לוגיקה</span><strong>${esc(String(row.logic_source_observations || 0))}</strong></div>
+              <div><span>מסמך מבנה</span>${statusPill(row.structure_doc_status)}</div>
+              <div><span>ממצאי מבנה</span><strong>${esc(String(row.structure_findings || 0))}</strong></div>
+              <div><span>תצפיות מקור מבנה</span><strong>${esc(String(row.structure_source_observations || 0))}</strong></div>
+              <div><span>Phase 1 subset</span>${boolPill(row.phase1_subset_decided, "הוגדר", "חסר")}</div>
+              <div><span>החלטות Phase 1</span><strong>${esc(String(row.phase1_decisions_count || 0))}</strong></div>
+              <div><span>Logic baseline</span>${boolPill(row.logic_analysis_baselined)}</div>
+              <div><span>Structure baseline</span>${boolPill(row.structure_analysis_baselined)}</div>
+            </div>
+          </div>
+        </details>
         ${(row.gaps_he || []).length ? `<ul class="compact-list">${(row.gaps_he || []).map((g) => `<li data-searchable="true">${esc(g)}</li>`).join("")}</ul>` : '<p class="muted">אין פערים פתוחים ברשימה.</p>'}
       </section>
 
       <section class="hub-card">
-        <h3>Readiness gates (מפורטים)</h3>
+        <h3>בדיקות מוכנות (Readiness gates) - פירוט טכני</h3>
+        <p class="muted">זהו פירוט טכני של check-list פנימי. אם המטרה שלך היא להתחיל לממש, התשובה החשובה כבר מופיעה למעלה בשדה "מוכן ל-Phase 1".</p>
         <div class="cards-grid two">
           <article class="hub-card nested-card">
             <h4>Completed</h4>
@@ -946,7 +1659,9 @@ function renderProfileStatus(profileId) {
       </section>
 
       <section class="hub-card">
-        <h3>תיקוף schema / מסמכים</h3>
+        <details class="hub-detail">
+          <summary>תיקוף schema / מסמכים (טכני, אפשר לדלג)</summary>
+          <div class="detail-body">
         <div class="cards-grid two">
           <article class="hub-card nested-card">
             <h4>לוגיקה</h4>
@@ -979,6 +1694,8 @@ function renderProfileStatus(profileId) {
             ${(qaMeta.last_manual_review_notes_he || []).length ? `<ul class="compact-list">${(qaMeta.last_manual_review_notes_he || []).map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}
           </div>
         </details>
+          </div>
+        </details>
       </section>
     </div>
   `;
@@ -987,16 +1704,16 @@ function renderProfileStatus(profileId) {
 function renderProfilePanel(profileId) {
   const root = document.getElementById(`hubProfile${profileId}Content`);
   if (!root) return;
-  const subtab = state.profileSubtabs[profileId] || "specs";
+  const subtab = state.profileSubtabs[profileId] || "status";
   const spec = ((((DATA.group_b || {}).spec_research || {}).profiles) || {})[profileId] || {};
   const logic = ((((DATA.group_b || {}).logic_analysis || {})[profileId]) || {});
   const structure = ((((DATA.group_b || {}).structure_analysis || {})[profileId]) || {});
 
   let body = "";
-  if (subtab === "specs") body = renderProfileSpecs(profileId);
-  else if (subtab === "logic") body = renderKnowledgeDoc(profileId, "logic");
-  else if (subtab === "structure") body = renderKnowledgeDoc(profileId, "structure");
-  else body = renderProfileStatus(profileId);
+  if (subtab === "specs") body = renderProfileSpecsSimple(profileId);
+  else if (subtab === "logic") body = renderProfileLogicSimple(profileId);
+  else if (subtab === "structure") body = renderProfileStructureSimple(profileId);
+  else body = renderProfileCurrentWork(profileId);
 
   root.innerHTML = `
     <div class="hub-panel-grid">
@@ -1014,6 +1731,7 @@ function renderProfilePanel(profileId) {
         </div>
         ${renderProfileSubtabs(profileId)}
       </section>
+      ${renderProfileSubtabGuide(profileId, subtab)}
       <section class="span-12">
         ${body}
       </section>
@@ -1179,11 +1897,11 @@ function renderSourcesTab() {
 }
 
 function renderAllPanels() {
-  renderOverviewTab();
   renderAutoptsTab();
   renderProfilePanel("BPS");
   renderProfilePanel("WSS");
   renderProfilePanel("SCPS");
+  renderKnowledgeCenterTab();
   renderSourcesTab();
 }
 
@@ -1192,7 +1910,7 @@ function bindEvents() {
     topTabsContainer.addEventListener("click", (event) => {
       const btn = event.target.closest ? event.target.closest("[data-hub-top-tab]") : null;
       if (!btn) return;
-      activateTopTab(btn.getAttribute("data-hub-top-tab") || "overview");
+      activateTopTab(btn.getAttribute("data-hub-top-tab") || "BPS");
     });
   }
 
@@ -1224,6 +1942,36 @@ function bindEvents() {
       target.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
+  });
+
+  const handleTaskFieldEvent = (event) => {
+    const el = event.target && event.target.closest ? event.target.closest("[data-task-field]") : null;
+    if (!el) return;
+    const profileId = el.getAttribute("data-profile-id") || "";
+    const taskId = el.getAttribute("data-task-id") || "";
+    const field = el.getAttribute("data-task-field") || "";
+    if (!profileId || !taskId || !field) return;
+    const rawValue = "value" in el ? el.value : "";
+    const value = normalizeTaskFieldValue(field, rawValue);
+    updateTaskStateValue(profileId, taskId, field, value);
+
+    if (field === "status") {
+      renderProfilePanel(profileId);
+    }
+
+    scheduleTaskSave(`${profileId}:${taskId}:${field}`);
+  };
+
+  document.addEventListener("change", handleTaskFieldEvent);
+  document.addEventListener("input", (event) => {
+    const el = event.target && event.target.closest ? event.target.closest("[data-task-field]") : null;
+    if (!el) return;
+    const tag = String(el.tagName || "").toLowerCase();
+    const field = el.getAttribute("data-task-field") || "";
+    // Text inputs/textareas should update state while typing, selects are handled on change.
+    if (tag === "select") return;
+    if (field === "depends_on") return;
+    handleTaskFieldEvent(event);
   });
 
   if (hubSearchInput) {
@@ -1262,12 +2010,17 @@ function bindEvents() {
   }
 }
 
-function bootstrap() {
+async function bootstrap() {
   renderTopTabsNav();
   renderQuickStatus();
   renderAllPanels();
   bindEvents();
-  activateTopTab("overview");
+  activateTopTab("BPS");
+  await loadGroupBTasksState();
+  renderProfilePanel("BPS");
+  renderProfilePanel("WSS");
+  renderProfilePanel("SCPS");
+  applySearch();
 }
 
 bootstrap();
