@@ -100,8 +100,15 @@ function statusPill(status) {
   if (s === "present") return pill("קיים", "optional");
   if (s === "scaffold") return pill("טיוטת שלד", "optional");
   if (s === "open") return pill("פתוח", "conditional");
+  if (s === "reviewed") return pill("נסקר", "mandatory");
+  if (s === "ready") return pill("מוכן", "mandatory");
+  if (s === "blocked") return pill("חסום", "conditional");
   if (s) return pill(s);
   return pill("—");
+}
+
+function boolPill(flag, yes = "כן", no = "לא") {
+  return flag ? pill(yes, "mandatory") : pill(no, "conditional");
 }
 
 function topTabs() {
@@ -167,6 +174,9 @@ function renderQuickStatus() {
       <div class="quick-stat"><span>Specs שסונכרנו</span><strong>${esc(String(status.spec_synced || 0))}/${esc(String(status.profiles || 0))}</strong></div>
       <div class="quick-stat"><span>פרופילים עם ממצאי לוגיקה</span><strong>${esc(String(status.logic_with_findings || 0))}</strong></div>
       <div class="quick-stat"><span>פרופילים עם ממצאי מבנה</span><strong>${esc(String(status.structure_with_findings || 0))}</strong></div>
+      <div class="quick-stat"><span>לוגיקה baseline</span><strong>${esc(String(status.logic_baselined || 0))}</strong></div>
+      <div class="quick-stat"><span>מבנה baseline</span><strong>${esc(String(status.structure_baselined || 0))}</strong></div>
+      <div class="quick-stat"><span>מוכנים ל-Phase 1</span><strong>${esc(String(status.ready_for_impl_phase1 || 0))}</strong></div>
     </div>
   `;
 }
@@ -175,6 +185,8 @@ function renderOverviewTab() {
   const meta = DATA.meta || {};
   const statusRows = (((DATA.group_b || {}).status_tracker || {}).rows) || [];
   const specRows = (((DATA.group_b || {}).spec_research || {}).rows) || [];
+  const readinessSummary = (((DATA.group_b || {}).readiness_gates || {}).summary) || {};
+  const qaMeta = ((DATA.group_b || {}).qa_meta) || {};
 
   const profileCards = statusRows
     .map((row) => {
@@ -253,6 +265,33 @@ function renderOverviewTab() {
             </thead>
             <tbody>${specTableRows || '<tr><td colspan="7" class="muted">אין נתונים.</td></tr>'}</tbody>
           </table>
+        </div>
+      </section>
+
+      <section class="hub-card span-12">
+        <h3>מוכנות למימוש (Readiness gates) + QA</h3>
+        <div class="cards-grid two">
+          <article class="hub-card nested-card" data-searchable="true">
+            <h4>סיכום readiness</h4>
+            <div class="kv-grid compact">
+              <div><span>Spec sync complete</span><strong>${esc(String(readinessSummary.spec_sync_complete || 0))}</strong></div>
+              <div><span>Logic baseline</span><strong>${esc(String(readinessSummary.logic_analysis_baselined || 0))}</strong></div>
+              <div><span>Structure baseline</span><strong>${esc(String(readinessSummary.structure_analysis_baselined || 0))}</strong></div>
+              <div><span>Phase 1 subset decided</span><strong>${esc(String(readinessSummary.phase1_subset_decided || 0))}</strong></div>
+              <div><span>Logic reviewed</span><strong>${esc(String(readinessSummary.logic_analysis_reviewed || 0))}</strong></div>
+              <div><span>Structure reviewed</span><strong>${esc(String(readinessSummary.structure_analysis_reviewed || 0))}</strong></div>
+              <div><span>Ready for impl phase 1</span><strong>${esc(String(readinessSummary.ready_for_impl_phase1 || 0))}</strong></div>
+            </div>
+          </article>
+          <article class="hub-card nested-card" data-searchable="true">
+            <h4>QA / Smoke</h4>
+            <div class="kv-grid compact">
+              <div><span>מצב smoke</span>${statusPill(qaMeta.smoke_test_mode || "manual")}</div>
+              <div><span>בדיקה אחרונה</span><code>${esc(qaMeta.last_smoke_test_at || "-")}</code></div>
+            </div>
+            ${(qaMeta.known_expected_console_errors || []).length ? `<ul class="compact-list">${(qaMeta.known_expected_console_errors || []).map((e) => `<li>${esc(e)}</li>`).join("")}</ul>` : ""}
+            ${sourceDetails(qaMeta.sources || [], "מקורות QA meta")}
+          </article>
         </div>
       </section>
     </div>
@@ -676,6 +715,8 @@ function renderProfileStatus(profileId) {
   const row = ((((DATA.group_b || {}).status_tracker || {}).rows) || []).find((r) => r.profile_id === profileId) || {};
   const logic = ((((DATA.group_b || {}).logic_analysis || {})[profileId]) || {});
   const structure = ((((DATA.group_b || {}).structure_analysis || {})[profileId]) || {});
+  const readiness = (((DATA.group_b || {}).readiness_gates || {}).profiles || {})[profileId] || {};
+  const qaMeta = ((DATA.group_b || {}).qa_meta) || {};
   return `
     <div class="profile-sections">
       <section class="hub-card" data-searchable="true">
@@ -685,10 +726,31 @@ function renderProfileStatus(profileId) {
           <div><span>ארטיפקטים</span><strong>${esc(String(row.spec_artifacts || 0))}</strong></div>
           <div><span>מסמך לוגיקה</span>${statusPill(row.logic_doc_status)}</div>
           <div><span>ממצאי לוגיקה</span><strong>${esc(String(row.logic_findings || 0))}</strong></div>
+          <div><span>תצפיות מקור לוגיקה</span><strong>${esc(String(row.logic_source_observations || 0))}</strong></div>
           <div><span>מסמך מבנה</span>${statusPill(row.structure_doc_status)}</div>
           <div><span>ממצאי מבנה</span><strong>${esc(String(row.structure_findings || 0))}</strong></div>
+          <div><span>תצפיות מקור מבנה</span><strong>${esc(String(row.structure_source_observations || 0))}</strong></div>
+          <div><span>Phase 1 subset</span>${boolPill(row.phase1_subset_decided, "הוגדר", "חסר")}</div>
+          <div><span>Logic baseline</span>${boolPill(row.logic_analysis_baselined)}</div>
+          <div><span>Structure baseline</span>${boolPill(row.structure_analysis_baselined)}</div>
+          <div><span>מוכן ל-Phase 1</span>${boolPill(row.ready_for_impl_phase1, "מוכן", "לא מוכן")}</div>
         </div>
         ${(row.gaps_he || []).length ? `<ul class="compact-list">${(row.gaps_he || []).map((g) => `<li data-searchable="true">${esc(g)}</li>`).join("")}</ul>` : '<p class="muted">אין פערים פתוחים ברשימה.</p>'}
+      </section>
+
+      <section class="hub-card">
+        <h3>Readiness gates (מפורטים)</h3>
+        <div class="cards-grid two">
+          <article class="hub-card nested-card">
+            <h4>Completed</h4>
+            ${(readiness.completed_checks || []).length ? `<ul class="compact-list">${(readiness.completed_checks || []).map((x) => `<li><code>${esc(x)}</code></li>`).join("")}</ul>` : '<p class="muted">אין checks שהושלמו.</p>'}
+          </article>
+          <article class="hub-card nested-card">
+            <h4>Blocked / חסר</h4>
+            ${(readiness.blocked_checks || []).length ? `<ul class="compact-list">${(readiness.blocked_checks || []).map((x) => `<li><code>${esc((x || {}).id || "")}</code> — ${esc((x || {}).reason_he || "")}</li>`).join("")}</ul>` : '<p class="muted">אין חסימות.</p>'}
+          </article>
+        </div>
+        ${(readiness.decision_notes_he || []).length ? `<details class="hub-detail"><summary>הערות החלטה / מוכנות</summary><div class="detail-body"><ul class="compact-list">${(readiness.decision_notes_he || []).map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div></details>` : ""}
       </section>
 
       <section class="hub-card">
@@ -700,6 +762,7 @@ function renderProfileStatus(profileId) {
               <div><span>סטטוס</span>${statusPill(logic.status)}</div>
               <div><span>sections חסרים</span><strong>${esc(String(((logic.validation || {}).missing_sections || []).length || 0))}</strong></div>
               <div><span>שיטות חסרות</span><strong>${esc(String(((logic.validation || {}).missing_methods || []).length || 0))}</strong></div>
+              <div><span>warnings</span><strong>${esc(String(((logic.validation || {}).warnings || []).length || 0))}</strong></div>
             </div>
             ${sourceDetails(logic.sources || [], "מקורות לוגיקה")}
           </article>
@@ -709,10 +772,21 @@ function renderProfileStatus(profileId) {
               <div><span>סטטוס</span>${statusPill(structure.status)}</div>
               <div><span>sections חסרים</span><strong>${esc(String(((structure.validation || {}).missing_sections || []).length || 0))}</strong></div>
               <div><span>שיטות חסרות</span><strong>${esc(String(((structure.validation || {}).missing_methods || []).length || 0))}</strong></div>
+              <div><span>warnings</span><strong>${esc(String(((structure.validation || {}).warnings || []).length || 0))}</strong></div>
             </div>
             ${sourceDetails(structure.sources || [], "מקורות מבנה")}
           </article>
         </div>
+        <details class="hub-detail">
+          <summary>QA meta (גלובלי לעמוד)</summary>
+          <div class="detail-body">
+            <div class="kv-grid compact">
+              <div><span>smoke mode</span><code>${esc(qaMeta.smoke_test_mode || "-")}</code></div>
+              <div><span>last smoke</span><code>${esc(qaMeta.last_smoke_test_at || "-")}</code></div>
+            </div>
+            ${(qaMeta.last_manual_review_notes_he || []).length ? `<ul class="compact-list">${(qaMeta.last_manual_review_notes_he || []).map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}
+          </div>
+        </details>
       </section>
     </div>
   `;

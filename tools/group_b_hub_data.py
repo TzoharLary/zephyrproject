@@ -4,7 +4,7 @@ import json
 import re
 from collections import Counter
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple
 from urllib.parse import urlparse
@@ -114,7 +114,10 @@ def web_source(url: str, title: str, retrieved_at: str, note: Optional[str] = No
 
 
 def read_text(path: Path) -> str:
-    return path.read_text(encoding="utf-8", errors="replace")
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"Invalid UTF-8 in file: {path}") from exc
 
 
 def read_json(path: Path) -> Dict[str, Any]:
@@ -221,17 +224,17 @@ def parse_structured_blocks(markdown_body: str) -> List[Dict[str, Any]]:
             continue
         payload_text = match.group(2).strip()
         payload: Dict[str, Any]
+        block_line = markdown_body.count("\n", 0, match.start()) + 1
         try:
             parsed = json.loads(payload_text)
-            payload = parsed if isinstance(parsed, dict) else {"value": parsed}
-        except Exception:
-            payload = {"raw": payload_text}
-            for line in payload_text.splitlines():
-                m = re.match(r"^([A-Za-z0-9_]+)\s*:\s*(.*)$", line.strip())
-                if m:
-                    payload[m.group(1)] = _parse_scalar(m.group(2))
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid JSON in {block_type} block #{i} (line {block_line}): {exc}") from exc
+        if not isinstance(parsed, dict):
+            raise ValueError(f"Structured block {block_type} #{i} (line {block_line}) must contain a JSON object")
+        payload = parsed
         payload["_block_type"] = block_type
         payload["_ordinal"] = i
+        payload["_line"] = block_line
         out.append(payload)
     return out
 
@@ -262,9 +265,12 @@ def extract_first_paragraph(text: str) -> str:
 
 def load_group_b_markdown_doc(paths: Paths, path: Path, expected_kind: str) -> Dict[str, Any]:
     raw = read_text(path) if path.exists() else ""
-    front_matter, body = split_front_matter(raw) if raw else ({}, "")
-    sections = parse_sections(body) if body else []
-    blocks = parse_structured_blocks(body) if body else []
+    try:
+        front_matter, body = split_front_matter(raw) if raw else ({}, "")
+        sections = parse_sections(body) if body else []
+        blocks = parse_structured_blocks(body) if body else []
+    except Exception as exc:
+        raise ValueError(f"Failed parsing Group_B markdown: {path}") from exc
     section_titles = [str(sec.get("title") or "") for sec in sections]
     required = REQUIRED_SECTIONS_BY_KIND.get(expected_kind, [])
     missing_sections = [title for title in required if title not in section_titles]
@@ -357,6 +363,36 @@ def load_group_b_manifests(paths: Paths) -> Dict[str, Any]:
             "sources": [repo_source(paths, sync_manifest_path)] if sync_manifest_path.exists() else [],
         },
         "source_catalog": source_catalog,
+    }
+
+
+def load_group_b_qa_meta(paths: Paths) -> Dict[str, Any]:
+    qa_path = paths.data_dir / "group_b_qa_meta.json"
+    default = {
+        "last_smoke_test_at": None,
+        "smoke_test_mode": "manual",
+        "known_expected_console_errors": [
+            "GET /dashboards/pts_report_he/api/run-status -> 404 (static server)",
+            "GET /favicon.ico -> 404 (static server)",
+        ],
+        "last_manual_review_notes_he": [
+            "יש להשלים QA ידני לכל הטאבים ותתי-הלשוניות אחרי כל שינוי משמעותי בתוכן/רינדור.",
+        ],
+    }
+    if not qa_path.exists():
+        return {
+            **default,
+            "exists": False,
+            "sources": [],
+        }
+    payload = read_json(qa_path)
+    if not isinstance(payload, dict):
+        payload = {}
+    return {
+        **default,
+        **payload,
+        "exists": True,
+        "sources": [repo_source(paths, qa_path)],
     }
 
 
@@ -483,6 +519,81 @@ def _normalize_local_method(raw: Dict[str, Any], profile_id: str, doc_kind: str,
     }
 
 
+def _extract_analysis_warnings(findings: List[Dict[str, Any]], source_observations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    warnings: List[Dict[str, Any]] = []
+    for finding in findings:
+        confidence = str(finding.get("confidence") or "").lower()
+        status = str(finding.get("status") or "").lower()
+        evidence_refs = finding.get("evidence_refs") if isinstance(finding.get("evidence_refs"), list) else []
+        if status == "inferred" and confidence == "high" and len(evidence_refs) < 2:
+            warnings.append(
+                {
+                    "severity": "warning",
+                    "code": "inferred_high_confidence_low_evidence",
+                    "finding_id": finding.get("id"),
+                    "message_he": "ממצא מוסק עם ודאות גבוהה ללא לפחות 2 ראיות מפורטות.",
+                }
+            )
+    for obs in source_observations:
+        line_refs = obs.get("line_refs") if isinstance(obs.get("line_refs"), list) else []
+        if not line_refs:
+            warnings.append(
+                {
+                    "severity": "warning",
+                    "code": "source_observation_missing_line_refs",
+                    "source_observation_id": obs.get("id"),
+                    "message_he": "תצפית מקור ללא line_refs. מומלץ להוסיף שורות/טווחים.",
+                }
+            )
+    return warnings
+
+
+def _detect_phase1_subset_decision(
+    profile_id: str,
+    doc_kind: str,
+    findings: List[Dict[str, Any]],
+    implications: List[str],
+    open_questions: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    phase_tokens = ("phase 1", "שלב 1", "שלב ראשון", "subset")
+    searchable_findings = []
+    for finding in findings:
+        searchable_findings.append(
+            " ".join(
+                [
+                    str(finding.get("id") or ""),
+                    str(finding.get("title_he") or ""),
+                    str(finding.get("statement_he") or ""),
+                    str(finding.get("why_it_matters_he") or ""),
+                ]
+            ).lower()
+        )
+    searchable_implications = " ".join(str(x) for x in implications).lower()
+    phase_findings = [f for f in findings if any(t in " ".join([str(f.get("id") or ""), str(f.get("title_he") or ""), str(f.get("statement_he") or "")]).lower() for t in phase_tokens)]
+    has_phase_text = any(any(t in text for t in phase_tokens) for text in searchable_findings) or any(
+        t in searchable_implications for t in phase_tokens
+    )
+
+    unresolved_phase_questions = []
+    for q in open_questions:
+        q_text = " ".join([str(q.get("id") or ""), str(q.get("title_he") or ""), str(q.get("detail_he") or "")]).lower()
+        if any(t in q_text for t in phase_tokens):
+            unresolved_phase_questions.append(q)
+
+    decided = bool(phase_findings or has_phase_text) and not any(str(q.get("status") or "open").lower() == "open" for q in unresolved_phase_questions)
+    note = (
+        f"{profile_id}/{doc_kind}: נמצאה החלטת Phase 1 subset"
+        if decided
+        else f"{profile_id}/{doc_kind}: טרם זוהתה החלטת Phase 1 subset מפורשת"
+    )
+    return {
+        "decided": decided,
+        "has_phase_related_text": has_phase_text,
+        "open_phase_questions": [str(q.get("id") or "") for q in unresolved_phase_questions],
+        "note_he": note,
+    }
+
+
 def build_knowledge_analysis(
     paths: Paths,
     profile_id: str,
@@ -564,6 +675,8 @@ def build_knowledge_analysis(
     ]
 
     missing_methods = [mid for mid in used_method_ids if mid not in derivation_catalog and mid not in {m.get("id") for m in local_methods}]
+    warnings = _extract_analysis_warnings(findings, source_observations)
+    phase1_subset = _detect_phase1_subset_decision(profile_id, doc_kind, findings, implementation_implications, open_questions)
 
     return {
         "profile_id": profile_id,
@@ -599,7 +712,10 @@ def build_knowledge_analysis(
                 "methods": len(local_methods),
                 "open_questions": len(open_questions),
             },
+            "warnings": warnings,
         },
+        "warnings": warnings,
+        "phase1_subset": phase1_subset,
     }
 
 
@@ -875,11 +991,91 @@ def summarize_autopts_for_hub(paths: Paths, autopts_guide: Optional[Dict[str, An
     }
 
 
+def build_readiness_gates(
+    profile_map: Dict[str, Any],
+    spec_research: Dict[str, Any],
+    logic_analysis: Dict[str, Any],
+    structure_analysis: Dict[str, Any],
+) -> Dict[str, Any]:
+    by_id = {str(r.get("profile_id") or "").upper(): r for r in profile_map.get("profiles", []) if isinstance(r, dict)}
+    profiles: Dict[str, Any] = {}
+    rows: List[Dict[str, Any]] = []
+    for pid in PROFILE_IDS:
+        p_row = by_id.get(pid, {})
+        spec = (spec_research.get("profiles", {}) or {}).get(pid, {})
+        logic = logic_analysis.get(pid, {})
+        structure = structure_analysis.get(pid, {})
+
+        logic_findings = len(logic.get("core_findings", []) if isinstance(logic.get("core_findings"), list) else [])
+        struct_findings = len(structure.get("core_findings", []) if isinstance(structure.get("core_findings"), list) else [])
+        logic_obs = len(logic.get("source_observations", []) if isinstance(logic.get("source_observations"), list) else [])
+        struct_obs = len(structure.get("source_observations", []) if isinstance(structure.get("source_observations"), list) else [])
+
+        checks = [
+            ("spec_sync_complete", (spec.get("sync_status") == "synced"), "בוצע סנכרון specs רשמי"),
+            ("logic_analysis_baselined", logic_findings >= 5 and logic_obs >= 4, "לוגיקה: >=5 ממצאים ו->=4 תצפיות מקור"),
+            ("structure_analysis_baselined", struct_findings >= 5 and struct_obs >= 4, "מבנה: >=5 ממצאים ו->=4 תצפיות מקור"),
+            ("logic_analysis_reviewed", str(logic.get("status") or "").lower() in {"reviewed", "ready"}, "לוגיקה סומנה reviewed/ready"),
+            ("structure_analysis_reviewed", str(structure.get("status") or "").lower() in {"reviewed", "ready"}, "מבנה סומן reviewed/ready"),
+            (
+                "phase1_subset_decided",
+                bool((logic.get("phase1_subset") or {}).get("decided")) or bool((structure.get("phase1_subset") or {}).get("decided")),
+                "הוגדרה החלטת Phase 1 subset מפורשת",
+            ),
+        ]
+
+        required_checks = [c[0] for c in checks]
+        completed_checks = [c[0] for c in checks if c[1]]
+        blocked_checks = [
+            {
+                "id": c[0],
+                "reason_he": c[2],
+            }
+            for c in checks
+            if not c[1]
+        ]
+        ready_for_impl_phase1 = all(c[1] for c in checks)
+        decision_notes_he = [
+            f"Logic findings/source observations: {logic_findings}/{logic_obs}",
+            f"Structure findings/source observations: {struct_findings}/{struct_obs}",
+            str((logic.get("phase1_subset") or {}).get("note_he") or ""),
+            str((structure.get("phase1_subset") or {}).get("note_he") or ""),
+        ]
+        gate_row = {
+            "profile_id": pid,
+            "ui_label": p_row.get("ui_label") or ("ScPS" if pid == "SCPS" else pid),
+            "display_name_he": p_row.get("display_name_he") or pid,
+            "required_checks": required_checks,
+            "completed_checks": completed_checks,
+            "blocked_checks": blocked_checks,
+            "decision_notes_he": [x for x in decision_notes_he if x],
+            "last_reviewed_at": None,
+            "ready_for_impl_phase1": ready_for_impl_phase1,
+            "sources": [],
+        }
+        profiles[pid] = gate_row
+        rows.append(gate_row)
+
+    summary = {
+        "profiles": len(rows),
+        "spec_sync_complete": sum(1 for r in rows if "spec_sync_complete" in r.get("completed_checks", [])),
+        "logic_analysis_baselined": sum(1 for r in rows if "logic_analysis_baselined" in r.get("completed_checks", [])),
+        "structure_analysis_baselined": sum(1 for r in rows if "structure_analysis_baselined" in r.get("completed_checks", [])),
+        "logic_analysis_reviewed": sum(1 for r in rows if "logic_analysis_reviewed" in r.get("completed_checks", [])),
+        "structure_analysis_reviewed": sum(1 for r in rows if "structure_analysis_reviewed" in r.get("completed_checks", [])),
+        "phase1_subset_decided": sum(1 for r in rows if "phase1_subset_decided" in r.get("completed_checks", [])),
+        "ready_for_impl_phase1": sum(1 for r in rows if r.get("ready_for_impl_phase1")),
+    }
+    return {"profiles": profiles, "rows": rows, "summary": summary, "sources": []}
+
+
 def build_status_tracker(
     profile_map: Dict[str, Any],
     spec_research: Dict[str, Any],
     logic_analysis: Dict[str, Any],
     structure_analysis: Dict[str, Any],
+    readiness_gates: Dict[str, Any],
+    qa_meta: Dict[str, Any],
 ) -> Dict[str, Any]:
     rows = []
     for profile_row in profile_map.get("profiles", []):
@@ -891,6 +1087,7 @@ def build_status_tracker(
         spec = (spec_research.get("profiles", {}) or {}).get(pid, {})
         logic = logic_analysis.get(pid, {})
         structure = structure_analysis.get(pid, {})
+        readiness = (readiness_gates.get("profiles", {}) or {}).get(pid, {})
         row = {
             "profile_id": pid,
             "ui_label": profile_row.get("ui_label") or pid,
@@ -899,10 +1096,21 @@ def build_status_tracker(
             "spec_artifacts": (spec.get("summary") or {}).get("artifact_count", 0),
             "logic_doc_status": logic.get("status") or "unknown",
             "logic_findings": len(logic.get("core_findings", []) if isinstance(logic.get("core_findings"), list) else []),
+            "logic_source_observations": len(logic.get("source_observations", []) if isinstance(logic.get("source_observations"), list) else []),
             "logic_open_questions": len(logic.get("open_questions", []) if isinstance(logic.get("open_questions"), list) else []),
             "structure_doc_status": structure.get("status") or "unknown",
             "structure_findings": len(structure.get("core_findings", []) if isinstance(structure.get("core_findings"), list) else []),
+            "structure_source_observations": len(
+                structure.get("source_observations", []) if isinstance(structure.get("source_observations"), list) else []
+            ),
             "structure_open_questions": len(structure.get("open_questions", []) if isinstance(structure.get("open_questions"), list) else []),
+            "spec_sync_complete": "spec_sync_complete" in (readiness.get("completed_checks") or []),
+            "logic_analysis_baselined": "logic_analysis_baselined" in (readiness.get("completed_checks") or []),
+            "logic_analysis_reviewed": "logic_analysis_reviewed" in (readiness.get("completed_checks") or []),
+            "structure_analysis_baselined": "structure_analysis_baselined" in (readiness.get("completed_checks") or []),
+            "structure_analysis_reviewed": "structure_analysis_reviewed" in (readiness.get("completed_checks") or []),
+            "phase1_subset_decided": "phase1_subset_decided" in (readiness.get("completed_checks") or []),
+            "ready_for_impl_phase1": bool(readiness.get("ready_for_impl_phase1")),
             "gaps_he": [],
         }
         if (spec.get("summary") or {}).get("artifact_count", 0) == 0:
@@ -915,6 +1123,12 @@ def build_status_tracker(
             row["gaps_he"].append("טרם חולצו ממצאי לוגיקה")
         if row["structure_findings"] == 0:
             row["gaps_he"].append("טרם חולצו ממצאי מבנה")
+        if not row["phase1_subset_decided"]:
+            row["gaps_he"].append("טרם הוגדרה החלטת Phase 1 subset מפורשת")
+        if not row["logic_analysis_baselined"]:
+            row["gaps_he"].append("לוגיקה טרם עומדת בסף baseline (ממצאים/תצפיות)")
+        if not row["structure_analysis_baselined"]:
+            row["gaps_he"].append("מבנה טרם עומד בסף baseline (ממצאים/תצפיות)")
         rows.append(row)
 
     summary = {
@@ -922,10 +1136,16 @@ def build_status_tracker(
         "spec_synced": sum(1 for r in rows if r.get("spec_sync_status") == "synced"),
         "logic_with_findings": sum(1 for r in rows if int(r.get("logic_findings") or 0) > 0),
         "structure_with_findings": sum(1 for r in rows if int(r.get("structure_findings") or 0) > 0),
+        "logic_baselined": sum(1 for r in rows if r.get("logic_analysis_baselined")),
+        "structure_baselined": sum(1 for r in rows if r.get("structure_analysis_baselined")),
+        "phase1_subset_decided": sum(1 for r in rows if r.get("phase1_subset_decided")),
+        "ready_for_impl_phase1": sum(1 for r in rows if r.get("ready_for_impl_phase1")),
         "all_logic_scaffold": all(str(r.get("logic_doc_status")) in ("scaffold", "draft", "scaffold_partial") for r in rows) if rows else True,
         "all_structure_scaffold": all(str(r.get("structure_doc_status")) in ("scaffold", "draft", "scaffold_partial") for r in rows) if rows else True,
+        "last_smoke_test_at": qa_meta.get("last_smoke_test_at"),
+        "smoke_test_mode": qa_meta.get("smoke_test_mode"),
     }
-    return {"rows": rows, "summary": summary, "sources": []}
+    return {"rows": rows, "summary": summary, "sources": qa_meta.get("sources", [])}
 
 
 def _walk_sources(obj: Any) -> Iterator[Tuple[str, Dict[str, Any]]]:
@@ -979,10 +1199,12 @@ def build_group_b_hub_data(repo_root: Path | str = ".", autopts_guide: Optional[
     paths = _paths(repo_root)
     profile_map = load_profile_map(paths)
     manifests = load_group_b_manifests(paths)
+    qa_meta = load_group_b_qa_meta(paths)
     spec_research = build_spec_research(paths, profile_map, manifests)
     logic_files, structure_files, logic_analysis, structure_analysis = build_md_file_inventory(paths, profile_map, manifests)
     autopts_summary = summarize_autopts_for_hub(paths, autopts_guide=autopts_guide)
-    status_tracker = build_status_tracker(profile_map, spec_research, logic_analysis, structure_analysis)
+    readiness_gates = build_readiness_gates(profile_map, spec_research, logic_analysis, structure_analysis)
+    status_tracker = build_status_tracker(profile_map, spec_research, logic_analysis, structure_analysis, readiness_gates, qa_meta)
 
     official_manifest = manifests.get("official", {}).get("manifest", {})
     sdk_manifest = manifests.get("sdk", {}).get("manifest", {})
@@ -1046,6 +1268,11 @@ def build_group_b_hub_data(repo_root: Path | str = ".", autopts_guide: Optional[
             "sources": manifests.get("spec_sync", {}).get("sources", []),
         },
         "traceability_index": {},
+        "readiness_gates": readiness_gates,
+        "qa_meta": {
+            **qa_meta,
+            "sources": qa_meta.get("sources", []),
+        },
         "sources": (
             profile_map.get("sources", [])
             + spec_research.get("sources", [])
@@ -1053,6 +1280,7 @@ def build_group_b_hub_data(repo_root: Path | str = ".", autopts_guide: Optional[
             + manifests.get("sdk", {}).get("sources", [])
             + manifests.get("methods", {}).get("sources", [])
             + manifests.get("spec_sync", {}).get("sources", [])
+            + qa_meta.get("sources", [])
         ),
     }
 
@@ -1092,9 +1320,9 @@ def build_group_b_hub_data(repo_root: Path | str = ".", autopts_guide: Optional[
         "known_limits": {
             "items": [
                 {
-                    "title_he": "קבצי Logic/Structure מוגדרים כטיוטת scaffold בשלב זה",
-                    "detail_he": "ה-parser והתצוגה מוכנים, אך רוב הממצאים הטכניים טרם חולצו מ-Nordic/TI בפועל.",
-                    "tags": ["scaffold", "group_b"],
+                    "title_he": "ממצאי Group B קיימים אך עדיין מסומנים in_progress",
+                    "detail_he": "יש תשתית ותוכן baseline, אך נדרש review והכרעות Phase 1 subset לפני מעבר למימוש.",
+                    "tags": ["in_progress", "group_b", "readiness"],
                 },
                 {
                     "title_he": "תצוגת Raw MD זמינה רק לצורכי review/debug",
@@ -1107,7 +1335,7 @@ def build_group_b_hub_data(repo_root: Path | str = ".", autopts_guide: Optional[
                     "tags": ["autopts", "runtime"],
                 },
             ],
-            "sources": autopts_summary.get("sources", []),
+            "sources": autopts_summary.get("sources", []) + qa_meta.get("sources", []),
         },
     }
 
@@ -1135,6 +1363,10 @@ def enforce_group_b_hub_source_policy(data: Dict[str, Any]) -> None:
     group_b = data.get("group_b", {})
     if not isinstance(group_b, dict):
         raise ValueError("group_b must be a dict")
+    if not isinstance(group_b.get("readiness_gates"), dict):
+        raise ValueError("group_b.readiness_gates must be a dict")
+    if not isinstance(group_b.get("qa_meta"), dict):
+        raise ValueError("group_b.qa_meta must be a dict")
 
     policy = group_b.get("sources_policy", {})
     if not isinstance(policy, dict):
@@ -1175,12 +1407,48 @@ def enforce_group_b_hub_source_policy(data: Dict[str, Any]) -> None:
                     raise ValueError(f"{analysis_key}.{pid} finding missing confidence")
                 if not isinstance(finding.get("source_ids"), list):
                     raise ValueError(f"{analysis_key}.{pid} finding missing source_ids list")
+                if not [x for x in finding.get("source_ids", []) if str(x).strip()]:
+                    raise ValueError(f"{analysis_key}.{pid} finding source_ids list is empty")
                 if not isinstance(finding.get("derivation_method_ids"), list):
                     raise ValueError(f"{analysis_key}.{pid} finding missing derivation_method_ids list")
+                if not [x for x in finding.get("derivation_method_ids", []) if str(x).strip()]:
+                    raise ValueError(f"{analysis_key}.{pid} finding derivation_method_ids list is empty")
                 if not finding.get("sources"):
                     raise ValueError(f"{analysis_key}.{pid} finding missing sources")
+                if str(finding.get("status") or "").lower() == "inferred" and str(finding.get("confidence") or "").lower() == "high":
+                    evidence_refs = finding.get("evidence_refs")
+                    if not isinstance(evidence_refs, list) or len(evidence_refs) < 2:
+                        # warning-level rule enforced as data warning, not hard-fail
+                        pass
             for obs in row.get("source_observations", []) if isinstance(row.get("source_observations"), list) else []:
                 if not str(obs.get("source_id") or "").strip():
                     raise ValueError(f"{analysis_key}.{pid} source observation missing source_id")
                 if not str(obs.get("confidence") or "").strip():
                     raise ValueError(f"{analysis_key}.{pid} source observation missing confidence")
+                if not str(obs.get("what_identified_he") or "").strip():
+                    raise ValueError(f"{analysis_key}.{pid} source observation missing what_identified_he")
+                if not str(obs.get("how_identified_he") or "").strip():
+                    raise ValueError(f"{analysis_key}.{pid} source observation missing how_identified_he")
+
+    readiness = group_b.get("readiness_gates", {})
+    profiles_readiness = readiness.get("profiles", {}) if isinstance(readiness, dict) else {}
+    if not isinstance(profiles_readiness, dict):
+        raise ValueError("group_b.readiness_gates.profiles must be a dict")
+    for pid in PROFILE_IDS:
+        gate = profiles_readiness.get(pid)
+        if not isinstance(gate, dict):
+            raise ValueError(f"group_b.readiness_gates.profiles.{pid} missing or invalid")
+        for list_key in ("required_checks", "completed_checks", "blocked_checks", "decision_notes_he"):
+            if not isinstance(gate.get(list_key), list):
+                raise ValueError(f"group_b.readiness_gates.profiles.{pid}.{list_key} must be a list")
+        if "ready_for_impl_phase1" not in gate:
+            raise ValueError(f"group_b.readiness_gates.profiles.{pid} missing ready_for_impl_phase1")
+
+    qa_meta = group_b.get("qa_meta", {})
+    for key in ("smoke_test_mode", "known_expected_console_errors", "last_manual_review_notes_he"):
+        if key not in qa_meta:
+            raise ValueError(f"group_b.qa_meta missing {key}")
+    if not isinstance(qa_meta.get("known_expected_console_errors"), list):
+        raise ValueError("group_b.qa_meta.known_expected_console_errors must be a list")
+    if not isinstance(qa_meta.get("last_manual_review_notes_he"), list):
+        raise ValueError("group_b.qa_meta.last_manual_review_notes_he must be a list")
