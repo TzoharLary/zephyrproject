@@ -95,6 +95,41 @@ schema_version: 1
 }
 ```
 
+```groupb_finding
+{
+  "id": "scps_logic_phase1_subset_write_and_refresh_split",
+  "title_he": "החלטת Phase 1 לוגית: לממש write path בסיסי + Refresh path מפורש ולהשאיר policy scan מתקדם לשלב 2",
+  "statement_he": "לשלב ראשון מומלץ לממש לוגיקה בסיסית של write handling עבור Scan Interval Window, שמירת state, ו-Refresh path מפורש (API/trigger), תוך דחיית policy scan מתקדם ואופטימיזציות runtime לשלב 2.",
+  "why_it_matters_he": "הפרדה כזו מייצבת את התאימות לשירות GATT עצמו ומקטינה coupling מוקדם עם scan runtime behavior.",
+  "confidence": "medium",
+  "status": "inferred",
+  "derivation_method_ids": ["api_call_sequence_analysis", "profile_similarity_inference", "callback_registration_pattern"],
+  "source_ids": ["sig_scps_spec_page", "ti_scanparamservice_doxygen_h", "nordic_ncs_sample_shorter_conn_intervals_main"],
+  "evidence_refs": [
+    {
+      "source_id": "ti_scanparamservice_doxygen_h",
+      "what_identified_he": "קיום API מפורש ScanParam_RefreshNotify בנוסף ל-Set/Get/Register.",
+      "how_identified_he": "קריאת declarations ב-header Doxygen.",
+      "artifact_ref": "TI Doxygen: scanparamservice_8h.html",
+      "line_refs": ["216-224", "243-322"],
+      "confidence": "high"
+    },
+    {
+      "source_id": "nordic_ncs_sample_shorter_conn_intervals_main",
+      "what_identified_he": "פיצול בין GATT service לבין scan runtime callbacks/init.",
+      "how_identified_he": "קריאת service definition מול scan_init/scan callbacks.",
+      "artifact_ref": ".cache/vendor_src/sdk-nrf/samples/bluetooth/shorter_conn_intervals/src/main.c",
+      "line_refs": ["86-99", "130-182"],
+      "confidence": "high"
+    }
+  ],
+  "implementation_notes_he": [
+    "שלב 2: policy מלא של scan runtime, retries, ותיאום מתקדם עם callbacks אפליקטיביים.",
+    "לשמור את החלטת שלב 1 גם במסמך המבנה כדי לקבע גבולות מודולים."
+  ]
+}
+```
+
 ## תצפיות לפי מקור
 
 ```groupb_source_observation
@@ -139,6 +174,21 @@ schema_version: 1
 }
 ```
 
+```groupb_source_observation
+{
+  "id": "scps_logic_obs_sig_scps_page_scope",
+  "profile_id": "SCPS",
+  "doc_kind": "logic",
+  "source_id": "sig_scps_spec_page",
+  "what_identified_he": "עמוד spec רשמי adopted (Scan Parameters Service 1.0) וסט ארטיפקטים רשמי לתיחום תכולת Phase 1.",
+  "how_identified_he": "קריאת עמוד spec רשמי והצלבה עם inventory המסונכרן ב-Hub (Spec/TS/ICS/TCRL).",
+  "artifact_ref": "Bluetooth SIG spec page + docs/profiles/SCPS",
+  "line_refs": ["spec page metadata", "hub spec inventory row"],
+  "confidence": "high",
+  "notes_he": "משמש להחלטות scope ושלבים; flow לוגי מפורט נגזר ממקורות TI/NCS."
+}
+```
+
 ## שיטות חילוץ/ניתוח
 
 ```groupb_method
@@ -171,7 +221,7 @@ schema_version: 1
   "detail_he": "יש למפות מול spec את תנאי ההוצאה של Scan Refresh (טריגרים ותנאי subscription), ולא להסתמך רק על API surface של TI/NCS patterns.",
   "priority": "high",
   "status": "open",
-  "source_ids": ["sig_scps_spec_page", "ti_scanparamservice_d  "source_ids": ["sig_scps_spee_doxygen_c"]
+  "source_ids": ["sig_scps_spec_page", "ti_scanparamservice_doxygen_c"]
 }
 ```
 

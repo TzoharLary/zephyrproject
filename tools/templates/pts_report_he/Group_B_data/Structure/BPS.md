@@ -139,6 +139,41 @@ schema_version: 1
 }
 ```
 
+```groupb_finding
+{
+  "id": "bps_structure_phase1_subset_service_logic_split",
+  "title_he": "החלטת Phase 1 מבנית: מודול שירות + לוגיקה בסיסית למדידה ראשית, ללא הרחבת feature set מלא",
+  "statement_he": "לשלב ראשון מומלץ לבנות `bps_service` + `bps_logic` + `bps_app_adapter` עם תמיכה במסלול המדידה הראשית וה-CCC/gating הבסיסי, תוך דחיית הרחבות מודוליות למסלולי Control Point/Intermediate Cuff לשלב 2.",
+  "why_it_matters_he": "זה מאפשר להקפיא גבולות מודולים ו-API מוקדם, בלי להתחייב לכל וריאציות ה-BPS כבר בגרסה הראשונה.",
+  "confidence": "medium",
+  "status": "inferred",
+  "derivation_method_ids": ["vendor_sample_structure_pattern", "profile_similarity_inference", "data_model_struct_mapping"],
+  "source_ids": ["sig_bps_spec_page", "ti_blood_pressure_service_doxygen_c", "zephyr_bt_hrs_service_c"],
+  "evidence_refs": [
+    {
+      "source_id": "ti_blood_pressure_service_doxygen_c",
+      "what_identified_he": "שירות self-contained עם attr table/callbacks פנימיים מתאים לבסיס `bps_service`.",
+      "how_identified_he": "קריאת File Reference של blood_pressure_service.c.",
+      "artifact_ref": "TI Doxygen: blood_pressure_service_8c.html",
+      "line_refs": ["167-233"],
+      "confidence": "high"
+    },
+    {
+      "source_id": "zephyr_bt_hrs_service_c",
+      "what_identified_he": "תבנית Zephyr לשירות עם CCC callback + publish API ציבורי.",
+      "how_identified_he": "קריאת hrs.c (service definition + notify API).",
+      "artifact_ref": "zephyr/subsys/bluetooth/services/hrs.c",
+      "line_refs": ["58-73", "82-95", "129-140"],
+      "confidence": "high"
+    }
+  ],
+  "implementation_notes_he": [
+    "להגדיר Phase 2 backlog מפורש למסלולי BPS שנדחו, כדי למנוע זליגה לא מתוכננת ל-Phase 1.",
+    "לעדכן readiness gate ברגע שמחליטים רשמית על subset בתיעוד/סקירה."
+  ]
+}
+```
+
 ## תצפיות לפי מקור
 
 ```groupb_source_observation
@@ -183,6 +218,21 @@ schema_version: 1
   "line_refs": ["the-application: 470-580, 611-631", "gatt-profile: 651-700"],
   "confidence": "high",
   "notes_he": "לא מעתיקים ארכיטקטורת TI 1:1, אלא מאמצים את עקרון ההפרדה."
+}
+```
+
+```groupb_source_observation
+{
+  "id": "bps_structure_obs_sig_bps_page_scope",
+  "profile_id": "BPS",
+  "doc_kind": "structure",
+  "source_id": "sig_bps_spec_page",
+  "what_identified_he": "עמוד spec רשמי וארטיפקטים (Spec/TS/ICS/TCRL) שמאפשרים לתחום את תכולת Phase 1 ברמת מודולים.",
+  "how_identified_he": "קריאת עמוד spec רשמי והצלבה עם inventory המסונכרן ב-Hub עבור BPS.",
+  "artifact_ref": "Bluetooth SIG spec page + docs/profiles/BPS",
+  "line_refs": ["spec page metadata", "hub spec inventory row"],
+  "confidence": "high",
+  "notes_he": "משמש לתיחום scope והחלטות build-up של מודולים, לא למבנה API קונקרטי מתוך קוד."
 }
 ```
 

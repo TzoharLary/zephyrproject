@@ -148,6 +148,41 @@ schema_version: 1
 }
 ```
 
+```groupb_finding
+{
+  "id": "bps_logic_phase1_subset_publish_measurement_first",
+  "title_he": "החלטת Phase 1 לוגית: להתחיל ב-init + subscription gating + publish מדידה ראשית",
+  "statement_he": "לשלב ראשון מומלץ למקד את הלוגיקה ב-init מסודר, רישום callbacks, מעקב CCC/subscription, ו-publish של המדידה הראשית בלבד; מסלולי Control Point / Intermediate Cuff יידחו לשלב 2.",
+  "why_it_matters_he": "החלטת subset מפחיתה סיכון ומאפשרת לאמת מוקדם את ציר ה-runtime המרכזי (service init -> enable -> publish/error handling) לפני הרחבת feature set.",
+  "confidence": "medium",
+  "status": "inferred",
+  "derivation_method_ids": ["profile_similarity_inference", "api_call_sequence_analysis", "callback_registration_pattern"],
+  "source_ids": ["sig_bps_spec_page", "zephyr_bt_hrs_service_c", "ti_blood_pressure_service_doxygen_h"],
+  "evidence_refs": [
+    {
+      "source_id": "zephyr_bt_hrs_service_c",
+      "what_identified_he": "דפוס CCC gating + notify API ציבורי כציר runtime בסיסי.",
+      "how_identified_he": "קריאת callback CCC ופונקציית publish בשירות HRS.",
+      "artifact_ref": "zephyr/subsys/bluetooth/services/hrs.c",
+      "line_refs": ["58-73", "129-140"],
+      "confidence": "high"
+    },
+    {
+      "source_id": "ti_blood_pressure_service_doxygen_h",
+      "what_identified_he": "ממשק שירות BPS שמאפשר API מודולרי למסלולי שירות לפני הרחבת behavior אפליקטיבי.",
+      "how_identified_he": "קריאת header Doxygen (Add/Register/Set/Get + callback types).",
+      "artifact_ref": "TI Doxygen: blood_pressure_service_8h.html",
+      "line_refs": ["235-315", "638-728"],
+      "confidence": "high"
+    }
+  ],
+  "implementation_notes_he": [
+    "בשלב 2 להרחיב למסלולי control point/indicate נוספים אחרי ייצוב publish path הראשי.",
+    "להצמיד את ההחלטה הזו למסמך המבנה כדי ליישר Phase 1 subset גם ברמת המודולים."
+  ]
+}
+```
+
 ## תצפיות לפי מקור
 
 ```groupb_source_observation
@@ -207,6 +242,21 @@ schema_version: 1
   "line_refs": ["callback types around lines 235-315", "Add/Register/Set/Get around lines 638-728"],
   "confidence": "high",
   "notes_he": "משמש לאימות שהלוגיקה ב-BPS נדרשת להיות service-module centric ולא רק אפליקטיבית."
+}
+```
+
+```groupb_source_observation
+{
+  "id": "bps_logic_obs_sig_bps_page_scope",
+  "profile_id": "BPS",
+  "doc_kind": "logic",
+  "source_id": "sig_bps_spec_page",
+  "what_identified_he": "עמוד spec רשמי adopted (BPS 1.1.1) וארטיפקטים רשמיים המשמשים לתיחום Phase 1/Phase 2.",
+  "how_identified_he": "קריאת עמוד ה-spec הרשמי והצלבה עם inventory המסונכרן ב-Hub (Spec/TS/ICS/TCRL).",
+  "artifact_ref": "Bluetooth SIG spec page + docs/profiles/BPS",
+  "line_refs": ["spec page metadata", "hub spec inventory row"],
+  "confidence": "high",
+  "notes_he": "משמש לתיחום scope וקבלת החלטות שלבי מימוש, לא לחילוץ flow לוגי ישיר מתוך קוד."
 }
 ```
 

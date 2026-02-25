@@ -135,6 +135,41 @@ schema_version: 1
 }
 ```
 
+```groupb_finding
+{
+  "id": "wss_logic_phase1_subset_single_measurement_publish_flow",
+  "title_he": "החלטת Phase 1 לוגית: מסלול publish יחיד למדידה עם gating על subscription",
+  "statement_he": "לשלב ראשון של WSS מומלץ לממש מסלול publish יחיד של weight measurement עם gating על subscription/CCC, ולהשאיר מדיניות טריגר מתקדמת ושדות אופציונליים רבים לשלב 2.",
+  "why_it_matters_he": "זה מאפשר לאמת early את מסלול המדידה והאינטגרציה מול GATT מבלי להסתבך מוקדם עם payload אופציונלי עשיר וטריגרים מורכבים.",
+  "confidence": "medium",
+  "status": "inferred",
+  "derivation_method_ids": ["profile_similarity_inference", "api_call_sequence_analysis", "callback_registration_pattern"],
+  "source_ids": ["sig_wss_spec_page", "nordic_ncs_sample_peripheral_hr_coded_main", "ti_weightservice_doxygen_h"],
+  "evidence_refs": [
+    {
+      "source_id": "nordic_ncs_sample_peripheral_hr_coded_main",
+      "what_identified_he": "דפוס publish מחזורי/work-driven שמתאים ל-Phase 1 גם לפני policy סופי.",
+      "how_identified_he": "קריאת notify_work_handler וה-reschedule flow.",
+      "artifact_ref": ".cache/vendor_src/sdk-nrf/samples/bluetooth/peripheral_hr_coded/src/main.c",
+      "line_refs": ["154-188", "190-219"],
+      "confidence": "high"
+    },
+    {
+      "source_id": "ti_weightservice_doxygen_h",
+      "what_identified_he": "API שירות מודולרי שמאפשר התחלה מ-flow בסיסי לפני הרחבת features.",
+      "how_identified_he": "קריאת header Doxygen של Weight Service.",
+      "artifact_ref": "TI Doxygen: weightservice_8h.html",
+      "line_refs": ["196-242", "254-340"],
+      "confidence": "high"
+    }
+  ],
+  "implementation_notes_he": [
+    "לשלב 2: הרחבת trigger policy ושדות payload אופציונליים לפי החלטות spec-driven.",
+    "להשאיר serializer מפוצל כאופציה אם payload phase 2 יגדל."
+  ]
+}
+```
+
 ## תצפיות לפי מקור
 
 ```groupb_source_observation
@@ -179,6 +214,21 @@ schema_version: 1
   "line_refs": ["196-242", "254-340"],
   "confidence": "high",
   "notes_he": "משמש לאימות שהלוגיקה צריכה להיות service-centric ולא רק אפליקטיבית."
+}
+```
+
+```groupb_source_observation
+{
+  "id": "wss_logic_obs_sig_wss_page_scope",
+  "profile_id": "WSS",
+  "doc_kind": "logic",
+  "source_id": "sig_wss_spec_page",
+  "what_identified_he": "עמוד spec רשמי adopted (WSS 1.0.1) וארטיפקטי TS/ICS/TCRL זמינים לתיחום שלב ראשון.",
+  "how_identified_he": "קריאת עמוד spec רשמי והצלבה עם inventory המסונכרן ב-Hub.",
+  "artifact_ref": "Bluetooth SIG spec page + docs/profiles/WSS",
+  "line_refs": ["spec page metadata", "hub spec inventory row"],
+  "confidence": "high",
+  "notes_he": "תצפית scope: משמשת לתכנון שלבים ולקישור למקורות המפרט, לא ל-flow לוגי מקוד."
 }
 ```
 

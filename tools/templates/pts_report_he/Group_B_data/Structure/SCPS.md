@@ -147,6 +147,41 @@ schema_version: 1
 }
 ```
 
+```groupb_finding
+{
+  "id": "scps_structure_phase1_subset_service_and_scan_policy_split",
+  "title_he": "החלטת Phase 1 מבנית: `scps_service` + `scps_scan_policy/app_adapter`, ללא הרחבת runtime policy מלאה",
+  "statement_he": "לשלב ראשון מומלץ להקפיא מבנה מפוצל: `scps_service` עבור GATT plumbing ו-`scps_scan_policy`/`scps_app_adapter` עבור runtime integration בסיסי, תוך דחיית אופטימיזציות ומדיניות scan מתקדמת לשלב 2.",
+  "why_it_matters_he": "החלטה זו משמרת separation of concerns קריטי ל-SCPS ומקטינה coupling מוקדם בין write handlers ל-scan runtime.",
+  "confidence": "medium",
+  "status": "inferred",
+  "derivation_method_ids": ["vendor_sample_structure_pattern", "api_call_sequence_analysis", "profile_similarity_inference"],
+  "source_ids": ["sig_scps_spec_page", "ti_scanparamservice_doxygen_c", "nordic_ncs_sample_shorter_conn_intervals_main"],
+  "evidence_refs": [
+    {
+      "source_id": "ti_scanparamservice_doxygen_c",
+      "what_identified_he": "GATT plumbing פנימי מלא + conn status callback במודול שירות.",
+      "how_identified_he": "קריאת File Reference של scanparamservice.c.",
+      "artifact_ref": "TI Doxygen: scanparamservice_8c.html",
+      "line_refs": ["139-169"],
+      "confidence": "high"
+    },
+    {
+      "source_id": "nordic_ncs_sample_shorter_conn_intervals_main",
+      "what_identified_he": "פיצול טבעי בין service GATT לבין scan runtime callbacks/init.",
+      "how_identified_he": "קריאת service definition מול scan_init/callbacks.",
+      "artifact_ref": ".cache/vendor_src/sdk-nrf/samples/bluetooth/shorter_conn_intervals/src/main.c",
+      "line_refs": ["86-99", "130-182"],
+      "confidence": "high"
+    }
+  ],
+  "implementation_notes_he": [
+    "לשמור Phase 1 scan runtime minimal ולהרחיב policy בשלב 2 בלי לשבור API של `scps_service`.",
+    "לרכז cleanup פר-connection כבר בשלב 1 במודול השירות."
+  ]
+}
+```
+
 ## תצפיות לפי מקור
 
 ```groupb_source_observation
@@ -191,6 +226,21 @@ schema_version: 1
   "line_refs": ["86-99", "130-182"],
   "confidence": "high",
   "notes_he": "זהו דפוס מבני טוב ל-target Zephyr/NCS גם אם לא דוגמת SCPS רשמית."
+}
+```
+
+```groupb_source_observation
+{
+  "id": "scps_structure_obs_sig_scps_page_scope",
+  "profile_id": "SCPS",
+  "doc_kind": "structure",
+  "source_id": "sig_scps_spec_page",
+  "what_identified_he": "עמוד spec רשמי SCPS וארטיפקטי בדיקות שמאפשרים לתחום את גבולות Phase 1 ברמת service/runtime split.",
+  "how_identified_he": "קריאת עמוד spec רשמי והצלבה עם inventory המסונכרן ב-Hub עבור SCPS.",
+  "artifact_ref": "Bluetooth SIG spec page + docs/profiles/SCPS",
+  "line_refs": ["spec page metadata", "hub spec inventory row"],
+  "confidence": "high",
+  "notes_he": "משמש כעוגן scope לשלבי מימוש, בנוסף למקורות TI/NCS המבניים."
 }
 ```
 

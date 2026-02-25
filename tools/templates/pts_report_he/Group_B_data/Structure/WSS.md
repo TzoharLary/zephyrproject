@@ -146,6 +146,41 @@ schema_version: 1
 }
 ```
 
+```groupb_finding
+{
+  "id": "wss_structure_phase1_subset_service_logic_adapter",
+  "title_he": "החלטת Phase 1 מבנית: `wss_service` + `wss_logic` + `wss_app_adapter`, serializer אופציונלי",
+  "statement_he": "לשלב ראשון מומלץ לקבע שלושה רכיבים מרכזיים (`wss_service`, `wss_logic`, `wss_app_adapter`) ולשמור את `wss_serializer` כאופציונלי שמופעל רק אם payload phase 1 מתברר כמורכב מספיק.",
+  "why_it_matters_he": "החלטה זו מאזנת בין modularity לבין מורכבות מוקדמת מיותרת, ומונעת פיצול יתר לפני שיש צורך מוכח.",
+  "confidence": "medium",
+  "status": "inferred",
+  "derivation_method_ids": ["vendor_sample_structure_pattern", "profile_similarity_inference", "data_model_struct_mapping"],
+  "source_ids": ["sig_wss_spec_page", "ti_weightservice_doxygen_c", "zephyr_bt_bas_service_c"],
+  "evidence_refs": [
+    {
+      "source_id": "ti_weightservice_doxygen_c",
+      "what_identified_he": "מודול שירות self-contained עם attr table/callbacks פנימיים.",
+      "how_identified_he": "קריאת File Reference של weightservice.c.",
+      "artifact_ref": "TI Doxygen: weightservice_8c.html",
+      "line_refs": ["157-176"],
+      "confidence": "high"
+    },
+    {
+      "source_id": "zephyr_bt_bas_service_c",
+      "what_identified_he": "תבנית Zephyr לשירות סטטי עם API wrapper ציבורי.",
+      "how_identified_he": "קריאת bas.c (BT_GATT_SERVICE_DEFINE + update/notify path).",
+      "artifact_ref": "zephyr/subsys/bluetooth/services/bas.c",
+      "line_refs": ["50-70", "83-96"],
+      "confidence": "high"
+    }
+  ],
+  "implementation_notes_he": [
+    "להחליט על serializer נפרד לפי מורכבות payload בפועל של Phase 1, לא אוטומטית.",
+    "לשמור API בין `wss_logic` ל-`wss_service` צר וניתן לבדיקה."
+  ]
+}
+```
+
 ## תצפיות לפי מקור
 
 ```groupb_source_observation
@@ -190,6 +225,21 @@ schema_version: 1
   "line_refs": ["bas.c: 50-70, 83-96", "hrs.c: 58-73, 129-140"],
   "confidence": "high",
   "notes_he": "משמש כתבנית מימוש Zephyr-side, לא כתחליף ל-spec של WSS."
+}
+```
+
+```groupb_source_observation
+{
+  "id": "wss_structure_obs_sig_wss_page_scope",
+  "profile_id": "WSS",
+  "doc_kind": "structure",
+  "source_id": "sig_wss_spec_page",
+  "what_identified_he": "עמוד spec רשמי WSS וארטיפקטי TS/ICS/TCRL לתיחום Phase 1 ו-Phase 2 ברמת מודולים.",
+  "how_identified_he": "קריאת עמוד spec רשמי והצלבה עם inventory המסונכרן ב-Hub עבור WSS.",
+  "artifact_ref": "Bluetooth SIG spec page + docs/profiles/WSS",
+  "line_refs": ["spec page metadata", "hub spec inventory row"],
+  "confidence": "high",
+  "notes_he": "תצפית scope שתומכת בהחלטת תכולת שלב ראשון, לא מקור יחיד למבנה API."
 }
 ```
 
