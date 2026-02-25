@@ -1,6 +1,6 @@
 {
   "generated_at": "2026-02-25",
-  "last_smoke_test_at": "2026-02-25T13:17:30",
+  "last_smoke_test_at": "2026-02-25T21:14:46Z",
   "smoke_test_mode": "playwright_mcp",
   "known_expected_console_errors": [
     "GET /dashboards/pts_report_he/api/run-status -> 404 (static server)",
@@ -8,9 +8,10 @@
     "GET /favicon.ico -> 404 (static server)"
   ],
   "last_manual_review_notes_he": [
-    "בוצע smoke בדסקטופ על שרת סטטי מקומי (פורט 8010): דף ראשי -> CTA -> Hub -> BPS (מפרטים/לוגיקה/מבנה) + מרכז ידע. אומתה תצוגת ה-UI הפשוטה ולשונית 'מרכז ידע'.",
-    "אומת fallback ללוח המשימות תחת static server: API מושבת, שדות ב-read-only, והודעת API מוצגת במקום שגיאת JS.",
-    "בוצע smoke נוסף מול serve_with_run_status (פורט 8050): /api/group-b-tasks GET/PUT תקינים, דחיית payload לא תקין (HTTP 400), ו-persist/reload של עריכת משימה (BPS bps_impl_phase1 assignee=tzohar).",
-    "console נקי משגיאות JS runtime; נצפו רק 404 צפויים (run-status/group-b-tasks/favicon בסביבת static server)."
+    "בוצע smoke בדסקטופ על שרת סטטי מקומי (פורט 8011): Hub נטען עם לוח המשימות החדש לפי שלבים (Stage Cards + Task Cards). אומתו כרטיסיות שלבים, counters, progress ופתיחת שלב מורחב.",
+    "אומת fallback read-only תחת static server: /api/group-b-tasks מחזיר 404 צפוי, מוצגת הודעת API ברורה, ואין שגיאות JS runtime.",
+    "בוצע smoke מול serve_with_run_status (פורט 8051): quick edit (status+assignee) בכרטיסיית משימה קומפקטית נשמר דרך /api/group-b-tasks ונשאר לאחר reload.",
+    "אומת פתיחת משימה לעריכה מלאה בתוך שלב פתוח (single task expansion) וכן חיפוש טקסט בלוח המשימות עם עדכון תצוגת שלבים/משימות.",
+    "אומת API ישיר: GET /api/group-b-tasks תקין; PUT עם payload לא תקין (depends_on string) נדחה ב-HTTP 400."
   ]
 }

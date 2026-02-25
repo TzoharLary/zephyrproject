@@ -11,10 +11,23 @@ const state = {
     WSS: "status",
     SCPS: "status",
   },
+  taskBoardUi: {
+    viewModeByProfile: { BPS: "overview", WSS: "overview", SCPS: "overview" },
+    activeGroupByProfile: { BPS: "", WSS: "", SCPS: "" },
+    expandedTaskByProfile: { BPS: null, WSS: null, SCPS: null },
+    filtersByProfile: {
+      BPS: { q: "", assignee: "", status: "", priority: "", category: "", stage: "", chip: "all" },
+      WSS: { q: "", assignee: "", status: "", priority: "", category: "", stage: "", chip: "all" },
+      SCPS: { q: "", assignee: "", status: "", priority: "", category: "", stage: "", chip: "all" },
+    },
+    sortByProfile: { BPS: "default", WSS: "default", SCPS: "default" },
+  },
 };
 
 const GROUP_B_TASKS_API_PATH = "/api/group-b-tasks";
 const TASK_STATUS_ORDER = ["todo", "in_progress", "blocked", "deferred", "done"];
+const TASK_STAGE_ORDER = ["foundations", "service_layer", "logic_layer", "app_integration", "validation_tests", "closure_decisions", "uncategorized"];
+const DEFAULT_TASK_ASSIGNEE = "tzohar";
 const TASK_STATUS_LABELS = {
   todo: "לביצוע",
   in_progress: "בתהליך",
@@ -184,6 +197,10 @@ function profileTaskTemplates(profileId) {
   return ((((DATA.group_b || {}).current_work || {}).profiles || {})[profileId] || {}).task_templates || [];
 }
 
+function profileTaskTemplateById(profileId, taskId) {
+  return profileTaskTemplates(profileId).find((t) => String(t.task_id || "") === String(taskId || "")) || null;
+}
+
 function profileTaskState(profileId) {
   const profiles = (taskStateApi.payload && taskStateApi.payload.profiles) || {};
   return (profiles[profileId] && profiles[profileId].tasks) || {};
@@ -293,8 +310,9 @@ function ensureTaskProfileState(profileId) {
 
 function updateTaskStateValue(profileId, taskId, field, value) {
   const tasks = ensureTaskProfileState(profileId);
+  const tpl = profileTaskTemplateById(profileId, taskId);
   const current = tasks[taskId] && typeof tasks[taskId] === "object" ? tasks[taskId] : {};
-  const next = { ...current, [field]: value };
+  const next = { ...(tpl ? defaultTaskStateFromTemplate(tpl) : {}), ...current, [field]: value };
   if (field === "status" && value !== "blocked") {
     next.blocked_reason = "";
   }
@@ -368,6 +386,238 @@ function taskStatusLabel(status) {
 
 function taskPriorityLabel(priority) {
   return TASK_PRIORITY_LABELS[String(priority || "")] || String(priority || "medium");
+}
+
+function profileCurrentWorkVm(profileId) {
+  return ((((DATA.group_b || {}).current_work || {}).profiles) || {})[profileId] || {};
+}
+
+function profileTaskGroups(profileId) {
+  const vm = profileCurrentWorkVm(profileId);
+  return Array.isArray(vm.task_groups) ? vm.task_groups : [];
+}
+
+function taskBoardUiProfileState(profileId) {
+  if (!state.taskBoardUi) state.taskBoardUi = { viewModeByProfile: {}, activeGroupByProfile: {}, expandedTaskByProfile: {}, filtersByProfile: {}, sortByProfile: {} };
+  const ui = state.taskBoardUi;
+  if (!ui.viewModeByProfile) ui.viewModeByProfile = {};
+  if (!ui.activeGroupByProfile) ui.activeGroupByProfile = {};
+  if (!ui.expandedTaskByProfile) ui.expandedTaskByProfile = {};
+  if (!ui.filtersByProfile) ui.filtersByProfile = {};
+  if (!ui.sortByProfile) ui.sortByProfile = {};
+  if (!ui.viewModeByProfile[profileId]) ui.viewModeByProfile[profileId] = "overview";
+  if (!(profileId in ui.activeGroupByProfile)) ui.activeGroupByProfile[profileId] = "";
+  if (!(profileId in ui.expandedTaskByProfile)) ui.expandedTaskByProfile[profileId] = null;
+  if (!ui.filtersByProfile[profileId]) {
+    ui.filtersByProfile[profileId] = { q: "", assignee: "", status: "", priority: "", category: "", stage: "", chip: "all" };
+  }
+  if (!ui.sortByProfile[profileId]) ui.sortByProfile[profileId] = "default";
+  return {
+    viewMode: ui.viewModeByProfile[profileId],
+    activeGroup: ui.activeGroupByProfile[profileId] || "",
+    expandedTask: ui.expandedTaskByProfile[profileId] || null,
+    filters: ui.filtersByProfile[profileId],
+    sort: ui.sortByProfile[profileId] || "default",
+  };
+}
+
+function setTaskBoardUiField(profileId, key, value) {
+  taskBoardUiProfileState(profileId);
+  if (key === "activeGroup") state.taskBoardUi.activeGroupByProfile[profileId] = value || "";
+  else if (key === "expandedTask") state.taskBoardUi.expandedTaskByProfile[profileId] = value || null;
+  else if (key === "sort") state.taskBoardUi.sortByProfile[profileId] = value || "default";
+  else if (key === "viewMode") state.taskBoardUi.viewModeByProfile[profileId] = value || "overview";
+}
+
+function setTaskBoardFilter(profileId, field, value) {
+  taskBoardUiProfileState(profileId);
+  const filters = state.taskBoardUi.filtersByProfile[profileId];
+  filters[field] = value == null ? "" : String(value);
+  if (field !== "chip") filters.chip = "all";
+}
+
+function setTaskBoardChip(profileId, chip) {
+  taskBoardUiProfileState(profileId);
+  state.taskBoardUi.filtersByProfile[profileId].chip = chip || "all";
+}
+
+function toggleTaskBoardGroup(profileId, groupId) {
+  taskBoardUiProfileState(profileId);
+  const current = state.taskBoardUi.activeGroupByProfile[profileId] || "";
+  const next = String(current) === String(groupId || "") ? "" : String(groupId || "");
+  state.taskBoardUi.activeGroupByProfile[profileId] = next;
+  state.taskBoardUi.expandedTaskByProfile[profileId] = null;
+}
+
+function toggleTaskBoardTaskCard(profileId, taskId) {
+  taskBoardUiProfileState(profileId);
+  const current = state.taskBoardUi.expandedTaskByProfile[profileId] || null;
+  state.taskBoardUi.expandedTaskByProfile[profileId] = String(current) === String(taskId || "") ? null : String(taskId || "");
+}
+
+function _fallbackTaskGroupMeta(groupId) {
+  const defs = {
+    foundations: { label_he: "יסודות והכנה", summary_he: "הכנה, reviews, חוזים וחתימות מוכנות.", goal_he: "לסגור תשתית והכנות לפני מימוש." },
+    service_layer: { label_he: "שכבת שירות", summary_he: "Service/GATT/CCC/API וקבצי שירות.", goal_he: "להעמיד שירות יציב ברמת GATT." },
+    logic_layer: { label_he: "שכבת לוגיקה", summary_he: "התנהגות, flow ומדיניות.", goal_he: "לממש את הלוגיקה שנגזרה מהמחקר." },
+    app_integration: { label_he: "אינטגרציית אפליקציה", summary_he: "Adapter/app integration ו-bring-up.", goal_he: "לחבר את המימוש למערכת/אפליקציה." },
+    validation_tests: { label_he: "בדיקות ואימות", summary_he: "Smoke/PTS/AutoPTS ויעדי בדיקות.", goal_he: "לאמת Phase 1 לפי יעדי בדיקות." },
+    closure_decisions: { label_he: "סגירת החלטות", summary_he: "Follow-ups והחלטות Phase 1/תיעוד.", goal_he: "לסגור חסמים והחלטות לפני סיום השלב." },
+    uncategorized: { label_he: "לא משויך", summary_he: "משימות שעדיין לא שויכו לשלב.", goal_he: "לשייך את המשימות לשלב מתאים." },
+  };
+  return defs[groupId] || defs.uncategorized;
+}
+
+function _containsAnyText(text, words) {
+  const hay = String(text || "").toLowerCase();
+  return (words || []).some((w) => hay.includes(String(w || "").toLowerCase()));
+}
+
+function fallbackTaskGroupIdForTask(task, parentGroupId = "") {
+  const explicit = String(task.task_group_id || task.task_group_override || "").trim();
+  if (explicit) return explicit;
+  if (parentGroupId) return parentGroupId;
+  const derived = String(task.derived_from || "").toLowerCase();
+  const category = String(task.category || "").toLowerCase();
+  const text = `${task.title_he || ""} ${task.description_he || ""}`.toLowerCase();
+  if (task.is_completed_seed || derived === "codex_completed") return "foundations";
+  if (derived === "test_targets" || category === "tests") return "validation_tests";
+  if (derived === "readiness") return "closure_decisions";
+  if (category === "docs") {
+    return _containsAnyText(text, ["phase 1", "review", "מוכנות", "חתימה", "החלטה", "signoff"]) ? "closure_decisions" : "foundations";
+  }
+  if (derived === "logic" || category === "logic") return "logic_layer";
+  if (_containsAnyText(text, ["pts", "autopts", "smoke", "בדיקה"])) return "validation_tests";
+  if (_containsAnyText(text, ["adapter", "app", "bring-up", "integration", "אינטגר"])) return "app_integration";
+  if (_containsAnyText(text, ["gatt", "ccc", "service", "characteristic", "attribute", "שירות"])) return "service_layer";
+  if (_containsAnyText(text, ["לוגיקה", "behavior", "policy", "flow", "gating"])) return "logic_layer";
+  if (category === "integration") return _containsAnyText(text, ["phase 1", "מימוש"]) ? "service_layer" : "app_integration";
+  if (category === "structure") return "service_layer";
+  return "uncategorized";
+}
+
+function fallbackTaskGroupsForProfile(profileId, tasks) {
+  const groupForTask = {};
+  const rootsByGroup = {};
+  (tasks || []).forEach((task) => {
+    const parentId = task.parent_task_id || null;
+    const groupId = fallbackTaskGroupIdForTask(task, parentId ? groupForTask[parentId] : "");
+    groupForTask[task.task_id] = groupId;
+    task.task_group_id = task.task_group_id || groupId;
+    if (!parentId) {
+      if (!rootsByGroup[groupId]) rootsByGroup[groupId] = [];
+      rootsByGroup[groupId].push(task);
+    }
+  });
+  const groups = [];
+  TASK_STAGE_ORDER.forEach((groupId, idx) => {
+    const roots = rootsByGroup[groupId] || [];
+    if (!roots.length) return;
+    const meta = _fallbackTaskGroupMeta(groupId);
+    groups.push({
+      group_id: groupId,
+      label_he: meta.label_he,
+      summary_he: meta.summary_he,
+      goal_he: meta.goal_he,
+      order: (idx + 1) * 10,
+      task_ids: roots.map((t) => t.task_id),
+      highlight_task_ids: roots.slice(0, 4).map((t) => t.task_id),
+      sources: [],
+    });
+  });
+  if (!profileTaskGroups(profileId).length) {
+    console.warn(`[task-board] task_groups missing in hub-data for ${profileId}; using runtime fallback grouping`);
+  }
+  return groups;
+}
+
+function taskGroupsForProfileResolved(profileId, tasks) {
+  const groups = profileTaskGroups(profileId);
+  return (groups && groups.length) ? groups : fallbackTaskGroupsForProfile(profileId, tasks);
+}
+
+function buildTaskIndexes(tasks) {
+  const byId = {};
+  const childrenByParent = {};
+  (tasks || []).forEach((task) => {
+    byId[task.task_id] = task;
+    const p = task.parent_task_id || "__root__";
+    if (!childrenByParent[p]) childrenByParent[p] = [];
+    childrenByParent[p].push(task);
+  });
+  return { byId, childrenByParent };
+}
+
+function taskStatusSortRank(status) {
+  const idx = TASK_STATUS_ORDER.indexOf(String(status || ""));
+  return idx === -1 ? TASK_STATUS_ORDER.length : idx;
+}
+
+function taskPrioritySortRank(priority) {
+  const p = String(priority || "medium");
+  if (p === "high") return 0;
+  if (p === "medium") return 1;
+  if (p === "low") return 2;
+  return 3;
+}
+
+function applyTaskBoardChip(task, filters) {
+  const chip = String(filters.chip || "all");
+  const cur = task.current || {};
+  const assignee = String(cur.assignee || "").trim().toLowerCase();
+  const status = String(cur.status || "todo");
+  const priority = String(cur.priority || "medium");
+  if (chip === "all") return true;
+  if (chip === "mine") return assignee === DEFAULT_TASK_ASSIGNEE;
+  if (chip === "todo") return status === "todo";
+  if (chip === "in_progress") return status === "in_progress";
+  if (chip === "blocked") return status === "blocked";
+  if (chip === "high") return priority === "high";
+  if (chip === "unassigned") return !assignee;
+  return true;
+}
+
+function taskMatchesBoardFilters(task, filters) {
+  const cur = task.current || {};
+  const q = String(filters.q || "").trim().toLowerCase();
+  const assignee = String(cur.assignee || "").trim();
+  const status = String(cur.status || "todo");
+  const priority = String(cur.priority || "medium");
+  const category = String(task.category || "");
+  const stage = String(task.task_group_id || "");
+  if (filters.assignee && String(filters.assignee) !== assignee) return false;
+  if (filters.status && String(filters.status) !== status) return false;
+  if (filters.priority && String(filters.priority) !== priority) return false;
+  if (filters.category && String(filters.category) !== category) return false;
+  if (filters.stage && String(filters.stage) !== stage) return false;
+  if (!applyTaskBoardChip(task, filters)) return false;
+  if (!q) return true;
+  const text = `${task.task_id || ""} ${task.title_he || ""} ${task.description_he || ""} ${task.category || ""} ${assignee} ${cur.notes || ""}`.toLowerCase();
+  return text.includes(q);
+}
+
+function descendantsOfTask(taskId, childrenByParent) {
+  const out = [];
+  const stack = [...(childrenByParent[taskId] || [])];
+  while (stack.length) {
+    const t = stack.shift();
+    if (!t) continue;
+    out.push(t);
+    (childrenByParent[t.task_id] || []).forEach((c) => stack.push(c));
+  }
+  return out;
+}
+
+function firstActionableTaskGroupId(groups, tasksById) {
+  for (const group of groups || []) {
+    const hasActionable = (group.task_ids || []).some((tid) => {
+      const t = tasksById[tid];
+      const st = String(((t || {}).current || {}).status || "todo");
+      return st !== "done" && st !== "deferred";
+    });
+    if (hasActionable) return group.group_id;
+  }
+  return (groups && groups[0] && groups[0].group_id) || "";
 }
 
 function topTabs() {
@@ -1074,35 +1324,523 @@ function renderTaskBucket(title, tasks, allTasks, readOnly, emptyText) {
   `;
 }
 
-function renderProfileCurrentWork(profileId) {
-  const vm = ((((DATA.group_b || {}).current_work || {}).profiles) || {})[profileId] || {};
+function taskBoardHasActiveFilters(filters) {
+  if (!filters) return false;
+  return !!(filters.q || filters.assignee || filters.status || filters.priority || filters.category || filters.stage || (filters.chip && filters.chip !== "all"));
+}
+
+function sortTasksForBoard(tasks, sortMode = "default") {
+  return [...(tasks || [])].sort((a, b) => {
+    const mode = String(sortMode || "default");
+    if (mode === "title") {
+      return String(a.title_he || "").localeCompare(String(b.title_he || ""), "he");
+    }
+    if (mode === "status") {
+      const sa = taskStatusSortRank((a.current || {}).status || "todo");
+      const sb = taskStatusSortRank((b.current || {}).status || "todo");
+      if (sa !== sb) return sa - sb;
+      return String(a.title_he || "").localeCompare(String(b.title_he || ""), "he");
+    }
+    const pa = taskPrioritySortRank((a.current || {}).priority || a.suggested_priority);
+    const pb = taskPrioritySortRank((b.current || {}).priority || b.suggested_priority);
+    if (pa !== pb) return pa - pb;
+    const sa = taskStatusSortRank((a.current || {}).status || "todo");
+    const sb = taskStatusSortRank((b.current || {}).status || "todo");
+    if (sa !== sb) return sa - sb;
+    return String(a.title_he || "").localeCompare(String(b.title_he || ""), "he");
+  });
+}
+
+function deriveTaskBoardContext(profileId) {
+  const vm = profileCurrentWorkVm(profileId);
   const tasks = mergedTasksForProfile(profileId).map((t) => ({ ...t, profile_id: profileId }));
-  const summary = taskSummaryFromMerged(tasks);
-  const rootTasks = tasks.filter((t) => !t.parent_task_id);
-  const openTasks = rootTasks.filter((t) => !["done", "deferred"].includes(String((t.current || {}).status || "todo")));
-  const doneTasks = rootTasks.filter((t) => String((t.current || {}).status || "") === "done");
-  const blockedTasks = rootTasks.filter((t) => String((t.current || {}).status || "") === "blocked");
-  const readOnly = !!taskStateApi.readOnly;
+  const { byId, childrenByParent } = buildTaskIndexes(tasks);
+  const groups = [...taskGroupsForProfileResolved(profileId, tasks)].sort((a, b) => Number(a.order || 999) - Number(b.order || 999));
+  const ui = taskBoardUiProfileState(profileId);
+  const sortMode = ui.sort || "default";
+  const filters = { ...(ui.filters || {}) };
+  const allFiltered = tasks.filter((t) => taskMatchesBoardFilters(t, filters));
+  const filteredTaskIds = new Set(allFiltered.map((t) => t.task_id));
+  const hasFilters = taskBoardHasActiveFilters(filters);
+
+  const stageVms = groups.map((group) => {
+    const groupId = String(group.group_id || "");
+    const groupTasksAll = tasks.filter((t) => String(t.task_group_id || fallbackTaskGroupIdForTask(t)) === groupId);
+    const groupTasksFiltered = groupTasksAll.filter((t) => filteredTaskIds.has(t.task_id));
+    const counts = taskSummaryFromMerged(groupTasksFiltered);
+    counts.todo = ((counts.byStatus || {}).todo || 0);
+    counts.deferred = ((counts.byStatus || {}).deferred || 0);
+    const totalForProgress = Math.max(1, groupTasksFiltered.length || groupTasksAll.length || 1);
+    const progressPct = Math.round(((counts.done || 0) / totalForProgress) * 100);
+
+    const visibleRoots = [];
+    for (const rootId of group.task_ids || []) {
+      const root = byId[rootId];
+      if (!root) continue;
+      const descendants = descendantsOfTask(root.task_id, childrenByParent);
+      const visible = !hasFilters || filteredTaskIds.has(root.task_id) || descendants.some((d) => filteredTaskIds.has(d.task_id));
+      if (visible) visibleRoots.push(root);
+    }
+
+    const orderedTasks = [];
+    const seen = new Set();
+    const pushTree = (task, depth) => {
+      if (!task || seen.has(task.task_id)) return;
+      const selfVisible = !hasFilters || filteredTaskIds.has(task.task_id);
+      const descendants = childrenByParent[task.task_id] || [];
+      const descendantHasVisible = descendants.some((d) => filteredTaskIds.has(d.task_id) || descendantsOfTask(d.task_id, childrenByParent).some((x) => filteredTaskIds.has(x.task_id)));
+      if (!selfVisible && !descendantHasVisible && hasFilters) return;
+      seen.add(task.task_id);
+      orderedTasks.push({ ...task, _depth: depth, _selfVisible: selfVisible });
+      sortTasksForBoard(descendants, sortMode).forEach((child) => pushTree(child, depth + 1));
+    };
+    visibleRoots.forEach((root) => pushTree(root, 0));
+    // Add orphaned tasks (fallback/migration or mismatched parent group)
+    sortTasksForBoard(groupTasksFiltered.filter((t) => !seen.has(t.task_id)), sortMode).forEach((t) => orderedTasks.push({ ...t, _depth: t.parent_task_id ? 1 : 0, _selfVisible: true }));
+
+    const highlightIds = (hasFilters ? visibleRoots.map((t) => t.task_id) : (group.highlight_task_ids || group.task_ids || []))
+      .filter(Boolean)
+      .slice(0, 4);
+    const highlightTitles = highlightIds.map((tid) => byId[tid]).filter(Boolean).map((t) => String(t.title_he || ""));
+
+    return {
+      ...group,
+      group_id: groupId,
+      counts,
+      progressPct,
+      totalVisible: groupTasksFiltered.length,
+      hasMatches: groupTasksFiltered.length > 0,
+      hasBlockers: (counts.blocked || 0) > 0,
+      visibleRoots,
+      orderedTasks,
+      highlightTitles,
+    };
+  });
+
+  let activeGroup = ui.activeGroup;
+  const validActive = stageVms.some((g) => g.group_id === activeGroup);
+  if (!validActive) {
+    const firstMatching = stageVms.find((g) => g.hasMatches);
+    activeGroup = (hasFilters && firstMatching ? firstMatching.group_id : firstActionableTaskGroupId(stageVms, byId)) || (stageVms[0] && stageVms[0].group_id) || "";
+    setTaskBoardUiField(profileId, "activeGroup", activeGroup);
+  } else if (hasFilters && !activeGroup) {
+    const firstMatching = stageVms.find((g) => g.hasMatches);
+    if (firstMatching) {
+      activeGroup = firstMatching.group_id;
+      setTaskBoardUiField(profileId, "activeGroup", activeGroup);
+    }
+  }
+
+  let expandedTaskId = ui.expandedTask;
+  if (expandedTaskId) {
+    const activeStage = stageVms.find((g) => g.group_id === activeGroup);
+    const visibleTaskIds = new Set((activeStage && activeStage.orderedTasks || []).map((t) => t.task_id));
+    if (!visibleTaskIds.has(expandedTaskId)) {
+      expandedTaskId = null;
+      setTaskBoardUiField(profileId, "expandedTask", null);
+    }
+  }
+
+  const summaryAll = taskSummaryFromMerged(tasks);
+  summaryAll.todo = ((summaryAll.byStatus || {}).todo || 0);
+  summaryAll.deferred = ((summaryAll.byStatus || {}).deferred || 0);
+  const summaryFiltered = taskSummaryFromMerged(allFiltered);
+  summaryFiltered.todo = ((summaryFiltered.byStatus || {}).todo || 0);
+  summaryFiltered.deferred = ((summaryFiltered.byStatus || {}).deferred || 0);
+
+  const actionablePool = sortTasksForBoard((hasFilters ? allFiltered : tasks).filter((t) => {
+    const st = String((t.current || {}).status || "todo");
+    return st === "todo" || st === "in_progress";
+  }), sortMode);
+  const topActions = actionablePool
+    .map((t) => {
+      const deps = (t.current || {}).depends_on || [];
+      const openDeps = Array.isArray(deps) ? deps.filter((id) => {
+        const dep = byId[id];
+        return dep && !["done", "deferred"].includes(String(((dep.current || {}).status || "todo")));
+      }) : [];
+      return { ...t, _openDepsCount: openDeps.length };
+    })
+    .filter((t) => String((t.current || {}).status || "") !== "blocked")
+    .sort((a, b) => {
+      if (a._openDepsCount !== b._openDepsCount) return a._openDepsCount - b._openDepsCount;
+      if (!!a.parent_task_id !== !!b.parent_task_id) return a.parent_task_id ? 1 : -1;
+      return 0;
+    })
+    .slice(0, 5);
+
+  const assigneeSummary = {};
+  (hasFilters ? allFiltered : tasks).forEach((t) => {
+    const st = String((t.current || {}).status || "todo");
+    if (["done", "deferred"].includes(st)) return;
+    const key = String((t.current || {}).assignee || "").trim() || "לא משויך";
+    assigneeSummary[key] = (assigneeSummary[key] || 0) + 1;
+  });
+
+  const categorySummary = {};
+  (hasFilters ? allFiltered : tasks).forEach((t) => {
+    const key = String(t.category || "other");
+    categorySummary[key] = (categorySummary[key] || 0) + 1;
+  });
+
+  return {
+    profileId,
+    vm,
+    readOnly: !!taskStateApi.readOnly,
+    hasFilters,
+    filters,
+    uiMode: ui.viewMode,
+    activeGroup,
+    expandedTaskId,
+    tasks,
+    taskById: byId,
+    childrenByParent,
+    stageVms,
+    summaryAll,
+    summaryFiltered,
+    topActions,
+    assigneeSummary,
+    categorySummary,
+    assigneeOptions: Array.from(new Set(tasks.map((t) => String(((t.current || {}).assignee || "")).trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, "he")),
+  };
+}
+
+function renderTaskBoardSummaryCards(ctx) {
+  const summary = ctx.hasFilters ? ctx.summaryFiltered : ctx.summaryAll;
+  const assignees = Object.entries(ctx.assigneeSummary || {}).sort((a, b) => b[1] - a[1]);
+  const topActions = ctx.topActions || [];
+  const categoryBits = Object.entries(ctx.categorySummary || {})
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => `<span>${esc(TASK_CATEGORY_LABELS[k] || k)} <strong>${esc(String(v))}</strong></span>`)
+    .join("");
+  return `
+    <div class="task-summary-strip">
+      <section class="hub-card nested-card">
+        <h4>מה עושים עכשיו</h4>
+        <p class="muted">3-5 משימות מומלצות להתחלה לפי סטטוס/עדיפות/תלויות פתוחות.</p>
+        ${topActions.length ? `<ul class="compact-list">${topActions.map((t) => `<li data-searchable="true"><strong>${esc(t.title_he || t.task_id)}</strong> — ${taskStatusPill((t.current || {}).status)} ${pill(`עדיפות: ${taskPriorityLabel((t.current || {}).priority)}`)} ${t._openDepsCount ? pill(`תלויות פתוחות: ${t._openDepsCount}`, "conditional") : ""}</li>`).join("")}</ul>` : '<p class="muted">אין כרגע משימות מומלצות (ייתכן שהכל בוצע/חסום/מסונן).</p>'}
+      </section>
+      <section class="hub-card nested-card">
+        <h4>מי עושה מה</h4>
+        ${assignees.length ? `<div class="mini-metrics-grid">${assignees.map(([name, count]) => `<div><span>${esc(name)}</span><strong>${esc(String(count))}</strong></div>`).join("")}</div>` : '<p class="muted">אין משימות פתוחות משויכות כרגע.</p>'}
+      </section>
+      <section class="hub-card nested-card">
+        <h4>תמונת מצב${ctx.hasFilters ? " (מסונן)" : ""}</h4>
+        <div class="mini-metrics-grid">
+          <div><span>סה\"כ</span><strong>${esc(String(summary.total || 0))}</strong></div>
+          <div><span>בוצע</span><strong>${esc(String(summary.done || 0))}</strong></div>
+          <div><span>בתהליך</span><strong>${esc(String(summary.in_progress || 0))}</strong></div>
+          <div><span>לא בוצע</span><strong>${esc(String(summary.todo || 0))}</strong></div>
+          <div><span>חסום</span><strong>${esc(String(summary.blocked || 0))}</strong></div>
+          <div><span>נדחה</span><strong>${esc(String(summary.deferred || 0))}</strong></div>
+        </div>
+        ${categoryBits ? `<div class="mini-meta task-category-breakdown">${categoryBits}</div>` : ""}
+      </section>
+    </div>
+  `;
+}
+
+function renderTaskBoardControls(profileId, ctx) {
+  const f = ctx.filters || {};
+  const chipDefs = [
+    ["all", "הכל"],
+    ["mine", "שלי"],
+    ["todo", "לביצוע"],
+    ["in_progress", "בתהליך"],
+    ["blocked", "חסום"],
+    ["high", "עדיפות גבוהה"],
+    ["unassigned", "ללא משויך"],
+  ];
+  const assigneeOpts = ["", "codex", DEFAULT_TASK_ASSIGNEE, ...ctx.assigneeOptions.filter((x) => !["codex", DEFAULT_TASK_ASSIGNEE].includes(x))];
+  const stageOpts = ["", ...(ctx.stageVms || []).map((g) => g.group_id)];
+  const sortVal = (state.taskBoardUi.sortByProfile || {})[profileId] || "default";
+  const mode = (state.taskBoardUi.viewModeByProfile || {})[profileId] || "overview";
+  return `
+    <section class="hub-card task-board-controls">
+      <div class="task-board-controls-head">
+        <div>
+          <h3>לוח עבודה לפי שלבים — ${esc(uiLabel(profileId))}</h3>
+          <p class="muted">כאן עובדים לפי שלבים: בוחרים שלב, רואים משימות, ופותחים משימה לעריכה מלאה רק כשצריך.</p>
+        </div>
+        <div class="chip-row">
+          <button type="button" class="mini-btn ${mode === "overview" ? "active" : ""}" data-task-view-mode="${esc(profileId)}:overview">סקירה</button>
+          <button type="button" class="mini-btn ${mode === "edit" ? "active" : ""}" data-task-view-mode="${esc(profileId)}:edit">עריכה</button>
+          ${ctx.readOnly ? pill("קריאה בלבד", "conditional") : pill("שמירה פעילה", "mandatory")}
+        </div>
+      </div>
+      ${taskStateApi.loading ? '<p class="muted">טוען מצב משימות מהשרת...</p>' : ""}
+      ${taskStateApi.error ? `<div class="warning-box"><strong>הערת API:</strong> ${esc(taskStateApi.error)}</div>` : ""}
+      <div class="task-filter-bar">
+        <label>חיפוש
+          <input type="text" value="${esc(f.q || "")}" data-task-board-filter="q" data-profile-id="${esc(profileId)}" placeholder="חיפוש שם משימה / assignee / notes..." />
+        </label>
+        <label>מבצע
+          <select data-task-board-filter="assignee" data-profile-id="${esc(profileId)}">
+            ${assigneeOpts.map((opt) => `<option value="${esc(opt)}" ${String(f.assignee || "") === String(opt) ? "selected" : ""}>${esc(opt || "הכל")}</option>`).join("")}
+          </select>
+        </label>
+        <label>סטטוס
+          <select data-task-board-filter="status" data-profile-id="${esc(profileId)}">
+            <option value="" ${!f.status ? "selected" : ""}>הכל</option>
+            ${Object.entries(TASK_STATUS_LABELS).map(([k, v]) => `<option value="${esc(k)}" ${String(f.status || "") === k ? "selected" : ""}>${esc(v)}</option>`).join("")}
+          </select>
+        </label>
+        <label>עדיפות
+          <select data-task-board-filter="priority" data-profile-id="${esc(profileId)}">
+            <option value="" ${!f.priority ? "selected" : ""}>הכל</option>
+            ${Object.entries(TASK_PRIORITY_LABELS).map(([k, v]) => `<option value="${esc(k)}" ${String(f.priority || "") === k ? "selected" : ""}>${esc(v)}</option>`).join("")}
+          </select>
+        </label>
+        <label>קטגוריה
+          <select data-task-board-filter="category" data-profile-id="${esc(profileId)}">
+            <option value="" ${!f.category ? "selected" : ""}>הכל</option>
+            ${Object.entries(TASK_CATEGORY_LABELS).map(([k, v]) => `<option value="${esc(k)}" ${String(f.category || "") === k ? "selected" : ""}>${esc(v)}</option>`).join("")}
+          </select>
+        </label>
+        <label>שלב
+          <select data-task-board-filter="stage" data-profile-id="${esc(profileId)}">
+            ${stageOpts.map((gid) => {
+              const g = (ctx.stageVms || []).find((x) => x.group_id === gid);
+              const label = gid ? ((g && g.label_he) || gid) : "הכל";
+              return `<option value="${esc(gid)}" ${String(f.stage || "") === String(gid) ? "selected" : ""}>${esc(label)}</option>`;
+            }).join("")}
+          </select>
+        </label>
+        <label>מיון
+          <select data-task-board-sort="1" data-profile-id="${esc(profileId)}">
+            <option value="default" ${sortVal === "default" ? "selected" : ""}>ברירת מחדל (עדיפות/סטטוס/שם)</option>
+            <option value="title" ${sortVal === "title" ? "selected" : ""}>לפי שם</option>
+            <option value="status" ${sortVal === "status" ? "selected" : ""}>לפי סטטוס</option>
+          </select>
+        </label>
+      </div>
+      <div class="task-filter-chips">
+        ${chipDefs.map(([id, label]) => `<button type="button" class="chip-btn ${String(f.chip || "all") === id ? "active" : ""}" data-task-chip="${esc(profileId)}:${esc(id)}">${esc(label)}</button>`).join("")}
+      </div>
+      ${sourceDetails(ctx.vm.sources || [], "מקורות תבניות משימות")}
+    </section>
+  `;
+}
+
+function renderTaskStageCardCompact(profileId, stage, ctx) {
+  const isActive = String(ctx.activeGroup || "") === String(stage.group_id || "");
+  const counts = stage.counts || {};
+  return `
+    <button type="button"
+      class="task-stage-card ${isActive ? "active" : ""} ${stage.hasBlockers ? "has-blocker" : ""}"
+      data-task-group-toggle="${esc(profileId)}:${esc(stage.group_id)}"
+      data-searchable="true"
+      data-search-text="${esc(`${stage.label_he || ""} ${(stage.highlightTitles || []).join(" ")}`)}">
+      <div class="task-stage-card-head">
+        <div>
+          <h4>${esc(stage.label_he || stage.group_id || "שלב")}</h4>
+          <p class="muted">${esc(stage.goal_he || stage.summary_he || "")}</p>
+        </div>
+        <div class="chip-row">
+          ${stage.hasBlockers ? pill("יש חסימה", "conditional") : ""}
+          ${stage.totalVisible ? pill(`${stage.totalVisible} משימות`) : pill("אין התאמות", "optional")}
+        </div>
+      </div>
+      <div class="task-stage-progress">
+        <div class="task-stage-progress-bar"><span style="width:${Math.max(0, Math.min(100, Number(stage.progressPct || 0)))}%"></span></div>
+        <strong>${esc(String(stage.progressPct || 0))}%</strong>
+      </div>
+      <div class="task-stage-metrics">
+        <div><span>בוצע</span><strong>${esc(String(counts.done || 0))}</strong></div>
+        <div><span>בתהליך</span><strong>${esc(String(counts.in_progress || 0))}</strong></div>
+        <div><span>לא בוצע</span><strong>${esc(String(counts.todo || 0))}</strong></div>
+        <div><span>חסום</span><strong>${esc(String(counts.blocked || 0))}</strong></div>
+        ${(counts.deferred || 0) ? `<div><span>נדחה</span><strong>${esc(String(counts.deferred || 0))}</strong></div>` : ""}
+      </div>
+      <div class="task-stage-highlights">
+        ${(stage.highlightTitles || []).length ? `<ul>${(stage.highlightTitles || []).map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : '<p class="muted">אין משימות עיקריות להצגה בשלב זה.</p>'}
+      </div>
+    </button>
+  `;
+}
+
+function compactAssigneeOptions(selected, extraOptions) {
+  const opts = ["", "codex", DEFAULT_TASK_ASSIGNEE, ...((extraOptions || []).filter((x) => !["", "codex", DEFAULT_TASK_ASSIGNEE].includes(x)))];
+  return Array.from(new Set(opts))
+    .map((v) => `<option value="${esc(v)}" ${String(selected || "") === String(v) ? "selected" : ""}>${esc(v || "לא משויך")}</option>`)
+    .join("");
+}
+
+function renderTaskMiniCardCompact(profileId, task, ctx) {
+  const cur = task.current || {};
+  const children = (ctx.childrenByParent[task.task_id] || []);
+  const mode = ctx.uiMode || "overview";
+  const readOnly = ctx.readOnly;
+  const disabled = readOnly ? "disabled" : "";
+  const parentTitle = task.parent_task_id && ctx.taskById[task.parent_task_id] ? String((ctx.taskById[task.parent_task_id] || {}).title_he || "") : "";
+  return `
+    <article class="hub-card nested-card task-mini-card depth-${Math.min(Number(task._depth || 0), 3)} ${String(ctx.expandedTaskId || "") === String(task.task_id || "") ? "active" : ""}"
+      data-task-card-toggle="${esc(profileId)}:${esc(task.task_id)}"
+      data-searchable="true"
+      data-search-text="${esc(`${task.title_he || ""} ${task.description_he || ""} ${cur.assignee || ""}`)}">
+      <div class="task-mini-head">
+        <div>
+          <h4>${esc(task.title_he || "משימה")}</h4>
+          ${parentTitle ? `<p class="muted">תת-משימה של: ${esc(parentTitle)}</p>` : ""}
+        </div>
+        <div class="chip-row">
+          ${taskStatusPill(cur.status)}
+          ${pill(`עדיפות: ${taskPriorityLabel(cur.priority)}`)}
+          ${pill(TASK_CATEGORY_LABELS[String(task.category || "")] || String(task.category || "task"))}
+          ${children.length ? pill(`${children.length} תתי־משימות`) : ""}
+        </div>
+      </div>
+      <div class="task-mini-meta">
+        <span>מבצע: <strong>${esc(cur.assignee || "לא משויך")}</strong></span>
+        ${cur.updated_at ? `<span>עודכן: <code>${esc(cur.updated_at)}</code></span>` : ""}
+        ${String(cur.status || "") === "blocked" && cur.blocked_reason ? `<span class="muted">סיבת חסימה: ${esc(cur.blocked_reason)}</span>` : ""}
+      </div>
+      ${(mode === "edit" && !readOnly) ? `
+        <div class="task-inline-quick-edit" data-task-field-container="true">
+          <label>מבצע
+            <select data-task-field="assignee" data-task-compact-edit="1" data-task-id="${esc(task.task_id)}" data-profile-id="${esc(profileId)}" ${disabled}>
+              ${compactAssigneeOptions(cur.assignee || "", ctx.assigneeOptions)}
+            </select>
+          </label>
+          <label>סטטוס
+            <select data-task-field="status" data-task-compact-edit="1" data-task-id="${esc(task.task_id)}" data-profile-id="${esc(profileId)}" ${disabled}>
+              ${renderTaskOptions(cur.status || "todo", TASK_STATUS_LABELS)}
+            </select>
+          </label>
+        </div>` : ""}
+    </article>
+  `;
+}
+
+function renderTaskMiniCardExpanded(profileId, task, ctx) {
+  const cur = task.current || {};
+  const readOnly = ctx.readOnly;
+  const disabled = readOnly ? "disabled" : "";
+  const parentTitle = task.parent_task_id && ctx.taskById[task.parent_task_id] ? String((ctx.taskById[task.parent_task_id] || {}).title_he || "") : "";
+  const assigneeListId = `assigneeSuggestions-${esc(task.task_id)}-mini`;
+  return `
+    <article class="hub-card nested-card task-mini-card task-mini-card-expanded depth-${Math.min(Number(task._depth || 0), 3)} active"
+      data-searchable="true"
+      data-search-text="${esc(`${task.title_he || ""} ${task.description_he || ""} ${task.category || ""} ${cur.assignee || ""}`)}">
+      <div class="task-card-head">
+        <div>
+          <h4>${esc(task.title_he || "משימה")}</h4>
+          ${parentTitle ? `<p class="muted">תת-משימה של: ${esc(parentTitle)}</p>` : ""}
+          <p class="muted">${esc(task.description_he || "")}</p>
+        </div>
+        <div class="chip-row">
+          ${taskStatusPill(cur.status)}
+          ${pill(`עדיפות: ${taskPriorityLabel(cur.priority)}`)}
+          ${pill(TASK_CATEGORY_LABELS[String(task.category || "")] || String(task.category || "task"))}
+          ${task.is_completed_seed ? pill('בוצע קודם ע"י Codex', "mandatory") : ""}
+          <button type="button" class="mini-btn" data-task-card-toggle="${esc(profileId)}:${esc(task.task_id)}">סגור</button>
+        </div>
+      </div>
+      <div class="task-form-grid">
+        <label>מי עושה
+          <input type="text" list="${assigneeListId}" data-task-field="assignee" data-task-id="${esc(task.task_id)}" data-profile-id="${esc(profileId)}" value="${esc(cur.assignee || "")}" ${disabled} />
+          <datalist id="${assigneeListId}">
+            <option value="codex"></option>
+            <option value="${esc(DEFAULT_TASK_ASSIGNEE)}"></option>
+            <option value="manual"></option>
+          </datalist>
+        </label>
+        <label>סטטוס
+          <select data-task-field="status" data-task-id="${esc(task.task_id)}" data-profile-id="${esc(profileId)}" ${disabled}>
+            ${renderTaskOptions(cur.status || "todo", TASK_STATUS_LABELS)}
+          </select>
+        </label>
+        <label>עדיפות
+          <select data-task-field="priority" data-task-id="${esc(task.task_id)}" data-profile-id="${esc(profileId)}" ${disabled}>
+            ${renderTaskOptions(cur.priority || task.suggested_priority || "medium", TASK_PRIORITY_LABELS)}
+          </select>
+        </label>
+        <label>תלויות (IDs, מופרד בפסיקים)
+          <input type="text" data-task-field="depends_on" data-task-id="${esc(task.task_id)}" data-profile-id="${esc(profileId)}" value="${esc((cur.depends_on || []).join(", "))}" ${disabled} />
+        </label>
+        <label class="task-field-wide">הערות
+          <textarea rows="2" data-task-field="notes" data-task-id="${esc(task.task_id)}" data-profile-id="${esc(profileId)}" ${disabled}>${esc(cur.notes || "")}</textarea>
+        </label>
+        ${String(cur.status || "") === "blocked" ? `
+          <label class="task-field-wide">סיבת חסימה
+            <input type="text" data-task-field="blocked_reason" data-task-id="${esc(task.task_id)}" data-profile-id="${esc(profileId)}" value="${esc(cur.blocked_reason || "")}" ${disabled} />
+          </label>` : ""}
+      </div>
+      <div class="task-card-meta">
+        <span>${task.derived_from ? `נגזר מ: ${esc(task.derived_from)}` : ""}</span>
+        <span>${cur.updated_at ? `עודכן: ${esc(cur.updated_at)}` : ""}</span>
+      </div>
+      <details class="inline-detail">
+        <summary>פרטים מתקדמים / מקורות</summary>
+        <div class="detail-body">
+          ${sourceDetails(task.source_refs || [], "מקורות משימה")}
+        </div>
+      </details>
+    </article>
+  `;
+}
+
+function renderTaskStageExpanded(profileId, stage, ctx) {
+  const visibleTasks = stage.orderedTasks || [];
+  return `
+    <section class="hub-card task-stage-expanded-row" data-searchable="true" data-search-text="${esc(`${stage.label_he || ""} ${(stage.highlightTitles || []).join(" ")}`)}">
+      <div class="task-stage-expanded-head">
+        <div>
+          <h3>${esc(stage.label_he || stage.group_id || "שלב")}</h3>
+          <p class="lead">${esc(stage.goal_he || stage.summary_he || "")}</p>
+          ${stage.summary_he ? `<p class="muted">${esc(stage.summary_he)}</p>` : ""}
+        </div>
+        <div class="chip-row">
+          ${stage.hasBlockers ? pill("יש חסימות", "conditional") : pill("ללא חסימות", "mandatory")}
+          <button type="button" class="mini-btn" data-task-group-toggle="${esc(profileId)}:${esc(stage.group_id)}">כיווץ שלב</button>
+        </div>
+      </div>
+      <div class="task-stage-progress task-stage-progress-inline">
+        <div class="task-stage-progress-bar"><span style="width:${Math.max(0, Math.min(100, Number(stage.progressPct || 0)))}%"></span></div>
+        <strong>${esc(String(stage.progressPct || 0))}%</strong>
+        <div class="task-stage-metrics inline">
+          <div><span>בוצע</span><strong>${esc(String((stage.counts || {}).done || 0))}</strong></div>
+          <div><span>בתהליך</span><strong>${esc(String((stage.counts || {}).in_progress || 0))}</strong></div>
+          <div><span>לא בוצע</span><strong>${esc(String((stage.counts || {}).todo || 0))}</strong></div>
+          <div><span>חסום</span><strong>${esc(String((stage.counts || {}).blocked || 0))}</strong></div>
+        </div>
+      </div>
+      ${visibleTasks.length ? `
+        <div class="task-mini-grid">
+          ${visibleTasks.map((task) => {
+            const isExpanded = String(ctx.expandedTaskId || "") === String(task.task_id);
+            return isExpanded
+              ? renderTaskMiniCardExpanded(profileId, task, ctx)
+              : renderTaskMiniCardCompact(profileId, task, ctx);
+          }).join("")}
+        </div>` : '<p class="muted task-empty-state-inline">אין התאמות בשלב זה לפי החיפוש/הפילטרים הנוכחיים.</p>'}
+      ${sourceDetails(stage.sources || [], "מקורות stage grouping")}
+    </section>
+  `;
+}
+
+function renderTaskBoardStageLayout(profileId, ctx) {
+  const active = (ctx.stageVms || []).find((g) => g.group_id === ctx.activeGroup) || null;
+  const others = (ctx.stageVms || []).filter((g) => !active || g.group_id !== active.group_id);
+  return `
+    <section class="hub-card">
+      <h3>שלבי עבודה</h3>
+      <p class="muted">בחר שלב כדי לפתוח אותו. בתוך השלב המשימות מוצגות בכרטיסיות קומפקטיות, ולחיצה על משימה פותחת עריכה מלאה.</p>
+      <div class="task-stage-grid">
+        ${active ? renderTaskStageExpanded(profileId, active, ctx) : ""}
+        ${(active ? others : (ctx.stageVms || [])).map((g) => renderTaskStageCardCompact(profileId, g, ctx)).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderProfileCurrentWork(profileId) {
+  const ctx = deriveTaskBoardContext(profileId);
   return `
     <div class="profile-sections">
-      <section class="hub-card">
-        <h3>מצב עבודה נוכחי — ${esc(uiLabel(profileId))}</h3>
-        <p class="muted">זו לשונית העבודה המרכזית: מה ממשיכים לעשות עכשיו, מי אחראי, מה הושלם, ומה חסום. המשימות נגזרות מהלוגיקה, המבנה, חוזה המימוש ויעדי הבדיקות.</p>
-        <div class="kv-grid">
-          <div><span>סה\"כ משימות</span><strong>${esc(String(summary.total || 0))}</strong></div>
-          <div><span>בוצעו</span><strong>${esc(String(summary.done || 0))}</strong></div>
-          <div><span>בתהליך</span><strong>${esc(String(summary.in_progress || 0))}</strong></div>
-          <div><span>חסומות</span><strong>${esc(String(summary.blocked || 0))}</strong></div>
-          <div><span>נדחו</span><strong>${esc(String(summary.deferred || 0))}</strong></div>
-          <div><span>מצב שמירה</span>${readOnly ? pill("קריאה בלבד", "conditional") : pill("שמירה פעילה", "mandatory")}</div>
-        </div>
-        ${taskStateApi.loading ? '<p class="muted">טוען מצב משימות מהשרת...</p>' : ""}
-        ${taskStateApi.error ? `<div class="warning-box"><strong>הערת API:</strong> ${esc(taskStateApi.error)}</div>` : ""}
-        ${sourceDetails(vm.sources || [], "מקורות תבניות משימות")}
-      </section>
-      ${renderTaskBucket("משימות פתוחות / להמשך", openTasks, tasks, readOnly, "אין משימות פתוחות להצגה.")}
-      ${blockedTasks.length ? renderTaskBucket("משימות חסומות", blockedTasks, tasks, readOnly, "אין משימות חסומות.") : ""}
-      ${renderTaskBucket("משימות שבוצעו (כולל Codex)", doneTasks, tasks, readOnly, "אין משימות מסומנות כבוצעו.")}
+      ${renderTaskBoardControls(profileId, ctx)}
+      ${renderTaskBoardSummaryCards(ctx)}
+      ${renderTaskBoardStageLayout(profileId, ctx)}
     </div>
   `;
 }
@@ -1946,6 +2684,72 @@ function bindEvents() {
       target.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
+
+    if (event.target.closest && (event.target.closest("[data-task-field]") || event.target.closest(".task-inline-quick-edit"))) {
+      return;
+    }
+
+    const modeBtn = event.target.closest ? event.target.closest("[data-task-view-mode]") : null;
+    if (modeBtn) {
+      const raw = modeBtn.getAttribute("data-task-view-mode") || "";
+      const [profileId, mode] = raw.split(":");
+      if (!profileId || !mode) return;
+      setTaskBoardUiField(profileId, "viewMode", mode);
+      renderProfilePanel(profileId);
+      return;
+    }
+
+    const chipBtn = event.target.closest ? event.target.closest("[data-task-chip]") : null;
+    if (chipBtn) {
+      const raw = chipBtn.getAttribute("data-task-chip") || "";
+      const [profileId, chip] = raw.split(":");
+      if (!profileId) return;
+      setTaskBoardChip(profileId, chip || "all");
+      setTaskBoardUiField(profileId, "expandedTask", null);
+      renderProfilePanel(profileId);
+      return;
+    }
+
+    const stageBtn = event.target.closest ? event.target.closest("[data-task-group-toggle]") : null;
+    if (stageBtn) {
+      const raw = stageBtn.getAttribute("data-task-group-toggle") || "";
+      const [profileId, groupId] = raw.split(":");
+      if (!profileId || !groupId) return;
+      toggleTaskBoardGroup(profileId, groupId);
+      renderProfilePanel(profileId);
+      return;
+    }
+
+    const taskCard = event.target.closest ? event.target.closest("[data-task-card-toggle]") : null;
+    if (taskCard) {
+      const raw = taskCard.getAttribute("data-task-card-toggle") || "";
+      const [profileId, taskId] = raw.split(":");
+      if (!profileId || !taskId) return;
+      toggleTaskBoardTaskCard(profileId, taskId);
+      renderProfilePanel(profileId);
+      return;
+    }
+  });
+
+  document.addEventListener("change", (event) => {
+    const filterEl = event.target && event.target.closest ? event.target.closest("[data-task-board-filter]") : null;
+    if (filterEl) {
+      const profileId = filterEl.getAttribute("data-profile-id") || "";
+      const field = filterEl.getAttribute("data-task-board-filter") || "";
+      if (!profileId || !field) return;
+      setTaskBoardFilter(profileId, field, "value" in filterEl ? filterEl.value : "");
+      setTaskBoardUiField(profileId, "expandedTask", null);
+      renderProfilePanel(profileId);
+      return;
+    }
+    const sortEl = event.target && event.target.closest ? event.target.closest("[data-task-board-sort]") : null;
+    if (sortEl) {
+      const profileId = sortEl.getAttribute("data-profile-id") || "";
+      if (!profileId) return;
+      setTaskBoardUiField(profileId, "sort", "value" in sortEl ? sortEl.value : "default");
+      setTaskBoardUiField(profileId, "expandedTask", null);
+      renderProfilePanel(profileId);
+    }
   });
 
   const handleTaskFieldEvent = (event) => {
@@ -1959,7 +2763,8 @@ function bindEvents() {
     const value = normalizeTaskFieldValue(field, rawValue);
     updateTaskStateValue(profileId, taskId, field, value);
 
-    if (field === "status") {
+    const compactEdit = el.hasAttribute && el.hasAttribute("data-task-compact-edit");
+    if (field === "status" || (compactEdit && field === "assignee")) {
       renderProfilePanel(profileId);
     }
 
@@ -1968,6 +2773,16 @@ function bindEvents() {
 
   document.addEventListener("change", handleTaskFieldEvent);
   document.addEventListener("input", (event) => {
+    const filterEl = event.target && event.target.closest ? event.target.closest("[data-task-board-filter]") : null;
+    if (filterEl && (filterEl.tagName || "").toLowerCase() === "input") {
+      const profileId = filterEl.getAttribute("data-profile-id") || "";
+      const field = filterEl.getAttribute("data-task-board-filter") || "";
+      if (!profileId || !field) return;
+      setTaskBoardFilter(profileId, field, filterEl.value || "");
+      setTaskBoardUiField(profileId, "expandedTask", null);
+      renderProfilePanel(profileId);
+      return;
+    }
     const el = event.target && event.target.closest ? event.target.closest("[data-task-field]") : null;
     if (!el) return;
     const tag = String(el.tagName || "").toLowerCase();
