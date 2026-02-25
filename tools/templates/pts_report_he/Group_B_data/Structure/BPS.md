@@ -2,8 +2,8 @@
 profile_id: BPS
 display_name_he: שירות לחץ דם
 doc_kind: structure
-status: in_progress
-updated_at: 2026-02-24
+status: reviewed
+updated_at: 2026-02-25
 primary_sdk_source_policy: ti_official_only
 secondary_pattern_sources_policy: local_or_official_only
 language: he
@@ -267,8 +267,11 @@ schema_version: 1
   "title_he": "מהו subset ראשוני של BPS לשלב ראשון",
   "detail_he": "יש להחליט אילו characteristics/flows ייכנסו לשלב ראשון (Measurement בלבד / גם Intermediate Cuff / גם Control Point), כי זה משנה את מבנה state וה-CCCs במודול השירות.",
   "priority": "high",
-  "status": "open",
-  "source_ids": ["sig_bps_spec_page", "ti_blood_pressure_service_doxygen_c"]
+  "status": "resolved",
+  "source_ids": [
+    "sig_bps_spec_page",
+    "ti_blood_pressure_service_doxygen_c"
+  ]
 }
 ```
 
@@ -279,8 +282,11 @@ schema_version: 1
   "title_he": "האם להפריד serializer של BPS ליחידת קוד נפרדת",
   "detail_he": "אם payload של BPS מורכב (flags/optional fields), ייתכן שכדאי להפריד serialization/helpers מתוך service.c כדי לשמור קריאות ו-testability.",
   "priority": "medium",
-  "status": "open",
-  "source_ids": ["ti_blood_pressure_service_doxygen_c", "zephyr_bt_hrs_service_c"]
+  "status": "deferred_phase2",
+  "source_ids": [
+    "ti_blood_pressure_service_doxygen_c",
+    "zephyr_bt_hrs_service_c"
+  ]
 }
 ```
 
@@ -290,6 +296,214 @@ schema_version: 1
 - להגדיר callback registration ברור לשכבת לוגיקה/אפליקציה במקום תלות ישירה בחיישן או scheduler.
 - להכין state struct שמסוגל לנהל כמה CCCs ו-capability flags בנפרד.
 - לשקול פיצול serializer/helpers כדי למנוע `service.c` גדול מדי.
+
+## החלטות Phase 1
+
+```groupb_decision
+{
+  "id": "bps_structure_phase1_subset_and_serializer_decision",
+  "profile_id": "BPS",
+  "doc_kind": "structure",
+  "phase": "phase1",
+  "title_he": "Phase 1: subset מצומצם + serializer helper פנימי (לא מודול נפרד)",
+  "decision_he": "בשלב ראשון ייכנסו characteristic המדידה המרכזית ו-feature read, בעוד מסלולים אופציונליים יידחו. serializer ימומש כפונקציות עזר פנימיות בשירות/לוגיקה ולא כמודול נפרד.",
+  "rationale_he": "סוגר את שתי השאלות הפתוחות (subset + split) בלי להעמיס מבנה מוקדם מדי.",
+  "status": "decided",
+  "confidence": "high",
+  "derivation_method_ids": [
+    "vendor_sample_structure_pattern",
+    "profile_similarity_inference"
+  ],
+  "source_ids": [
+    "ti_simplelink_sdk",
+    "ti_ble5stack_docs_root",
+    "ti_blood_pressure_service_doxygen_h",
+    "ti_blood_pressure_service_doxygen_c"
+  ],
+  "impacts_he": [
+    "מצמצם surface area למימוש Phase 1",
+    "דוחה פיצול serializer לשלב 2 אם יידרש לפי מורכבות payload"
+  ],
+  "applies_to_checks": [
+    "phase1_subset_decided",
+    "implementation_contract_defined"
+  ]
+}
+```
+
+## חוזה מימוש (Implementation Contract)
+
+```groupb_impl_contract
+{
+  "id": "bps_phase1_impl_contract",
+  "profile_id": "BPS",
+  "doc_kind": "structure",
+  "phase": "phase1",
+  "scope_in": [
+    "BPS: service module בסיסי עם attribute/CCC handling",
+    "API פנימי ל-init/register callbacks/publish או update",
+    "חיבור app adapter מינימלי לבדיקות bring-up",
+    "לוגיקה בסיסית ל-gating ול-flow runtime עיקרי"
+  ],
+  "scope_out": [
+    "אופטימיזציות performance או buffering מתקדם",
+    "פיצולי מודולים נוספים שאינם נדרשים ל-Phase 1",
+    "יכולות אופציונליות שסומנו ל-Phase 2 במסמכי הפרופיל"
+  ],
+  "service_api_contract": {
+    "public_functions_he": [
+      "bps_service_init/register_callbacks",
+      "bps_service_publish_or_update (לפי semantics של הפרופיל)",
+      "bps_service_set_feature_or_config (אם רלוונטי)"
+    ],
+    "callback_contract_he": "callbacks נרשמים ע\"י שכבת adapter/app; אין תלות ישירה בחיישן מתוך service module.",
+    "notes_he": "שמות פונקציות סופיים ייקבעו במימוש, אך החוזה המבני נשמר."
+  },
+  "runtime_flow_contract": {
+    "steps_he": [
+      "init service + register callbacks",
+      "adapter מספק events/data ללוגיקה",
+      "לוגיקה מבצעת validation/gating",
+      "service בונה/שולח payload לפי כללי CCC והפרופיל",
+      "כשלי שליחה נרשמים ומוחזרים לשכבה מעל"
+    ]
+  },
+  "data_model_contract": {
+    "items_he": [
+      "state לשירות (subscriptions/flags/capabilities)",
+      "מבנה מדידה/פרמטרים לוגי נפרד מ-BLE serialization",
+      "metadata מינימלי ל-debug/last publish result"
+    ]
+  },
+  "ccc_and_notify_indicate_contract": {
+    "rules_he": [
+      "אין שליחה ללא enable מתאים ב-CCC",
+      "בחירת notify/indicate נשלטת בשכבת service לפי characteristic requirements",
+      "שכבת לוגיקה נשארת transport-agnostic ככל האפשר"
+    ]
+  },
+  "error_policy_contract": {
+    "rules_he": [
+      "service מחזיר status/error code לשכבה מעל",
+      "אין retry blocking בתוך callback של GATT",
+      "logging ברור עבור validation failure ו-send failure"
+    ]
+  },
+  "dependency_contract": {
+    "items_he": [
+      "תלות ב-Zephyr Bluetooth/GATT APIs",
+      "adapter/app מספק מקור נתונים/אירועים",
+      "אין תלות חובה ב-persistence ב-Phase 1"
+    ]
+  },
+  "module_boundaries": {
+    "modules_he": [
+      "bps_service",
+      "bps_logic",
+      "bps_app_adapter"
+    ],
+    "boundaries_he": [
+      "service אחראי על GATT plumbing ו-CCC",
+      "logic אחראי על policy/gating/flow",
+      "adapter אחראי על חיבור לאפליקציה/stack events"
+    ]
+  },
+  "implementation_order": [
+    "service skeleton + UUID/attributes/CCCs",
+    "callback contract + app adapter hooks",
+    "logic gating + publish/update path",
+    "feature/config read-write path (אם רלוונטי)",
+    "logging + smoke validation"
+  ],
+  "blocking_assumptions": [],
+  "non_blocking_deferred": [
+    "refactor לפיצול helper/serializer אם יגדל complexity",
+    "הרחבת capabilities אופציונליות ל-Phase 2"
+  ],
+  "summary_he": "חוזה מימוש Phase 1 ל-BPS: service+logic+adapter עם CCC gating, API פנימי ברור ותחום אחריות מודולרי.",
+  "source_ids": [
+    "ti_simplelink_sdk",
+    "ti_ble5stack_docs_root",
+    "ti_blood_pressure_service_doxygen_h",
+    "ti_blood_pressure_service_doxygen_c",
+    "ti_ble5stack_application_arch_page",
+    "ti_ble5stack_custom_app_guide"
+  ]
+}
+```
+
+## יעדי בדיקות Phase 1
+
+```groupb_test_target
+{
+  "id": "bps_phase1_test_targets",
+  "profile_id": "BPS",
+  "doc_kind": "structure",
+  "phase": "phase1",
+  "manual_smoke_checks": [
+    "BPS: init/register ללא crash ועם logs צפויים",
+    "שינוי/הזנת נתון דרך adapter -> publish/update path מופעל",
+    "gating לפי CCC/enable חוסם שליחה לא מורשית",
+    "כשל שליחה מחזיר סטטוס ונרשם בלוג"
+  ],
+  "pts_autopts_target_areas": [
+    "GATT behavior בסיסי של characteristics/CCCs בפרופיל",
+    "publish/indicate/notify gating לפי enable",
+    "flow תקין של read/write/callbacks רלוונטיים ל-Phase 1"
+  ],
+  "ics_ixit_assumptions": [
+    "ICS/IXIT יוגדרו בהתאם ל-subset Phase 1 בלבד",
+    "יכולות אופציונליות שלא מומשו יסומנו כלא נתמכות",
+    "נדרש מיפוי PIXIT/behavior לפני הרצת PTS מלאה"
+  ],
+  "phase1_done_criteria": [
+    "build + smoke app runtime תקין",
+    "manual smoke checks עוברים",
+    "אין JS/data regression ב-Hub after docs update",
+    "יעדי PTS/AutoPTS ל-Phase 1 מזוהים וממופים"
+  ],
+  "known_non_goals": [
+    "כיסוי מלא של כל feature אופציונלי בפרופיל",
+    "אופטימיזציה/cleanup מתקדם שאינו חוסם פונקציונליות"
+  ],
+  "summary_he": "יעדי בדיקות Phase 1 ל-BPS: smoke ידני + מיקוד ב-GATT/CCC/runtime flow לפני הרחבת כיסוי.",
+  "source_ids": [
+    "ti_simplelink_sdk",
+    "ti_ble5stack_docs_root",
+    "ti_blood_pressure_service_doxygen_h",
+    "ti_blood_pressure_service_doxygen_c"
+  ]
+}
+```
+
+## חתימת Review / מוכנות
+
+```groupb_review_signoff
+{
+  "id": "bps_phase1_review_signoff",
+  "profile_id": "BPS",
+  "doc_kind": "structure",
+  "logic_reviewed": true,
+  "structure_reviewed": true,
+  "logic_reviewed_at": "2026-02-25",
+  "structure_reviewed_at": "2026-02-25",
+  "review_summary_he": "בוצע review הנדסי ל-Logic/Structure של BPS, נסגרו החלטות Phase 1 ונוסח חוזה מימוש + יעדי בדיקות.",
+  "reviewer_notes_he": [
+    "החלטות Phase 1 סומנו מפורשות ומקושרות למקורות.",
+    "פריטים שנדחו ל-Phase 2 אינם חוסמים bring-up ומימוש בסיסי.",
+    "נדרש בשלב הבא לעבור לכתיבת קוד לפי חוזה המימוש המוגדר."
+  ],
+  "remaining_phase1_blockers": [],
+  "ready_for_impl_phase1": true,
+  "ready_decision_reason_he": "BPS עומד בקריטריוני מוכנות Phase 1: review מלא, חוזה מימוש מוגדר, יעדי בדיקות מוגדרים, ללא blockers פתוחים.",
+  "source_ids": [
+    "ti_simplelink_sdk",
+    "ti_ble5stack_docs_root",
+    "ti_blood_pressure_service_doxygen_h",
+    "ti_blood_pressure_service_doxygen_c"
+  ]
+}
+```
 
 ## מקורות
 

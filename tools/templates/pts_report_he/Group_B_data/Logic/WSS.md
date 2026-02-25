@@ -2,8 +2,8 @@
 profile_id: WSS
 display_name_he: שירות משקל
 doc_kind: logic
-status: in_progress
-updated_at: 2026-02-24
+status: reviewed
+updated_at: 2026-02-25
 primary_sdk_source_policy: nordic_official_only
 secondary_pattern_sources_policy: local_or_official_only
 language: he
@@ -263,8 +263,11 @@ schema_version: 1
   "title_he": "מהו טריגר הפרסום במימוש היעד של WSS",
   "detail_he": "יש להכריע אם publish יתבצע מחזורית, על מדידה יציבה, או על event ייעודי (למשל יציאת משתמש מהמשקל), כדי לעצב נכון work queue/state machine.",
   "priority": "high",
-  "status": "open",
-  "source_ids": ["sig_wss_spec_page", "nordic_ncs_sample_peripheral_hr_coded_main"]
+  "status": "resolved",
+  "source_ids": [
+    "sig_wss_spec_page",
+    "nordic_ncs_sample_peripheral_hr_coded_main"
+  ]
 }
 ```
 
@@ -273,6 +276,57 @@ schema_version: 1
 - להגדיר publish flow מבוסס work/event עם gating ברור על subscription.
 - להפריד בין data acquisition / stabilization לבין BLE publish כדי לפשט בדיקות.
 - לאמץ API שירות פנימי שמאפשר גם update feature/state וגם publish measurement בנפרד.
+
+## החלטות Phase 1
+
+```groupb_decision
+{
+  "id": "wss_logic_phase1_measurement_trigger_policy_decision",
+  "profile_id": "WSS",
+  "doc_kind": "logic",
+  "phase": "phase1",
+  "title_he": "Phase 1: policy טריגר מדידה מבוסס אירוע מוכן + fallback ידני לבדיקות",
+  "decision_he": "המימוש הראשוני יתמקד ב-trigger מדידה מאירוע אפליקטיבי/דגימה יציבה, ובנוסף יאפשר trigger ידני/בדיקה לצורך bring-up ו-validation.",
+  "rationale_he": "מאפשר התקדמות למימוש ולבדיקות בלי תלות מיידית במודל חיישן מלא.",
+  "status": "decided",
+  "confidence": "high",
+  "derivation_method_ids": [
+    "profile_similarity_inference",
+    "api_call_sequence_analysis"
+  ],
+  "source_ids": [
+    "nordic_sdk_nrf_repo",
+    "nordic_ncs_docs",
+    "nordic_ncs_sample_peripheral_hr_coded_main",
+    "zephyr_bt_bas_service_c"
+  ],
+  "impacts_he": [
+    "מחייב API לוגי שמפריד בין prepare measurement לבין publish",
+    "מקל על smoke tests ידניים לפני אינטגרציית חיישן מלאה"
+  ],
+  "applies_to_checks": [
+    "phase1_subset_decided",
+    "phase1_test_targets_defined"
+  ]
+}
+```
+
+## חוזה מימוש (Implementation Contract)
+
+חוזה המימוש המלא ל-Phase 1 מרוכז במסמך ה-Structure של הפרופיל כדי לשמור מקור אמת אחד לחוזה המבני/ריצתי.
+
+- מסמך זה (Logic) מספק את ההחלטות הלוגיות והצדקת ה-flow.
+- מסמך Structure מכיל את `groupb_impl_contract`, `groupb_test_target`, `groupb_review_signoff`.
+
+## יעדי בדיקות Phase 1
+
+- יעדי הבדיקות המלאים מרוכזים ב-Structure כדי למנוע כפילות.
+- ברמת Logic יש לוודא בפרט: gating, trigger policy, ו-return status עקבי.
+
+## חתימת Review / מוכנות
+
+- review לוגיקה עבור WSS נסגר ומסוכם בחתימת ה-review שבמסמך Structure.
+- מסמך זה נשאר מקור ההסברים וההסקות הלוגיות, לא מקור חתימה כפול.
 
 ## מקורות
 

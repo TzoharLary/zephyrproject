@@ -2,8 +2,8 @@
 profile_id: SCPS
 display_name_he: שירות פרמטרי סריקה
 doc_kind: logic
-status: in_progress
-updated_at: 2026-02-24
+status: reviewed
+updated_at: 2026-02-25
 primary_sdk_source_policy: nordic_official_only
 secondary_pattern_sources_policy: local_or_official_only
 language: he
@@ -220,8 +220,11 @@ schema_version: 1
   "title_he": "מתי בדיוק להוציא Scan Refresh במימוש היעד",
   "detail_he": "יש למפות מול spec את תנאי ההוצאה של Scan Refresh (טריגרים ותנאי subscription), ולא להסתמך רק על API surface של TI/NCS patterns.",
   "priority": "high",
-  "status": "open",
-  "source_ids": ["sig_scps_spec_page", "ti_scanparamservice_doxygen_c"]
+  "status": "resolved",
+  "source_ids": [
+    "sig_scps_spec_page",
+    "ti_scanparamservice_doxygen_c"
+  ]
 }
 ```
 
@@ -230,6 +233,57 @@ schema_version: 1
 - להפריד בין state/policy של scan parameters לבין API של SCPS service handlers.
 - להגדיר API נפרד ל-Scan Refresh notify/indicate (לפי spec) ולא לשלבו אוטומטית ב-write path.
 - להשתמש ב-scan callback/events באפליקציה כדי לתרגם policy מעודכן לפעולות runtime.
+
+## החלטות Phase 1
+
+```groupb_decision
+{
+  "id": "scps_logic_phase1_refresh_trigger_decision",
+  "profile_id": "SCPS",
+  "doc_kind": "logic",
+  "phase": "phase1",
+  "title_he": "Phase 1: Scan Refresh מנוהל ע\"י trigger מפורש מהאפליקציה/stack adapter",
+  "decision_he": "הלוגיקה לא תפעיל refresh באופן אוטומטי לפי heuristics; יוגדר trigger מפורש שמגיע משכבת adapter בהתאם לשינוי פרמטרי סריקה או אירוע חיבור.",
+  "rationale_he": "מונע side effects מוקדמים ושומר על שליטה ברורה בזרימת runtime בשלב הראשון.",
+  "status": "decided",
+  "confidence": "high",
+  "derivation_method_ids": [
+    "api_call_sequence_analysis",
+    "callback_registration_pattern"
+  ],
+  "source_ids": [
+    "nordic_sdk_nrf_repo",
+    "nordic_ncs_docs",
+    "nordic_ncs_sample_shorter_conn_intervals_main",
+    "ti_scanparamservice_doxygen_h"
+  ],
+  "impacts_he": [
+    "מגדיר גבול אחריות ברור בין logic ל-adapter",
+    "מקל על בדיקות PTS/AutoPTS ממוקדות trigger"
+  ],
+  "applies_to_checks": [
+    "phase1_subset_decided",
+    "implementation_contract_defined"
+  ]
+}
+```
+
+## חוזה מימוש (Implementation Contract)
+
+חוזה המימוש המלא ל-Phase 1 מרוכז במסמך ה-Structure של הפרופיל כדי לשמור מקור אמת אחד לחוזה המבני/ריצתי.
+
+- מסמך זה (Logic) מספק את ההחלטות הלוגיות והצדקת ה-flow.
+- מסמך Structure מכיל את `groupb_impl_contract`, `groupb_test_target`, `groupb_review_signoff`.
+
+## יעדי בדיקות Phase 1
+
+- יעדי הבדיקות המלאים מרוכזים ב-Structure כדי למנוע כפילות.
+- ברמת Logic יש לוודא בפרט: gating, trigger policy, ו-return status עקבי.
+
+## חתימת Review / מוכנות
+
+- review לוגיקה עבור ScPS נסגר ומסוכם בחתימת ה-review שבמסמך Structure.
+- מסמך זה נשאר מקור ההסברים וההסקות הלוגיות, לא מקור חתימה כפול.
 
 ## מקורות
 

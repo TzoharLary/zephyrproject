@@ -2,8 +2,8 @@
 profile_id: SCPS
 display_name_he: שירות פרמטרי סריקה
 doc_kind: structure
-status: in_progress
-updated_at: 2026-02-24
+status: reviewed
+updated_at: 2026-02-25
 primary_sdk_source_policy: ti_official_only
 secondary_pattern_sources_policy: local_or_official_only
 language: he
@@ -275,8 +275,10 @@ schema_version: 1
   "title_he": "איזה state פר-connection צריך cleanup ב-disconnect",
   "detail_he": "קיום conn status callback ב-TI מרמז על cleanup/state reset. צריך להחליט אילו שדות subscription/refresh/pending updates נשמרים פר-connection במימוש היעד.",
   "priority": "medium",
-  "status": "open",
-  "source_ids": ["ti_scanparamservice_doxygen_c"]
+  "status": "resolved",
+  "source_ids": [
+    "ti_scanparamservice_doxygen_c"
+  ]
 }
 ```
 
@@ -285,6 +287,214 @@ schema_version: 1
 - לפצל SCPS ל-`service` (GATT plumbing) ו-`scan_policy/app_adapter` (runtime scan control).
 - להגדיר API מפורש ל-`RefreshNotify` ולשמור אותו נפרד ממסלול write של Scan Interval Window.
 - להחזיק state פר-connection עבור subscription/pending refresh אם נדרש לפי ההתנהגות שתיקבע.
+
+## החלטות Phase 1
+
+```groupb_decision
+{
+  "id": "scps_structure_phase1_conn_cleanup_scope_decision",
+  "profile_id": "SCPS",
+  "doc_kind": "structure",
+  "phase": "phase1",
+  "title_he": "Phase 1: cleanup ממוקד חיבור/CCC/state, ללא session-history",
+  "decision_he": "ב-Phase 1 cleanup יתמקד באיפוס state חיבור, פרמטרים זמניים ו-CCC/refresh flags. לא יתווסף מנגנון session-history או persistence.",
+  "rationale_he": "מספיק ליציבות runtime ולבדיקות, בלי להעמיס state management מתקדם שאינו נדרש לשלב ראשון.",
+  "status": "decided",
+  "confidence": "high",
+  "derivation_method_ids": [
+    "state_machine_flow_read",
+    "vendor_sample_structure_pattern"
+  ],
+  "source_ids": [
+    "ti_simplelink_sdk",
+    "ti_ble5stack_docs_root",
+    "ti_scanparamservice_doxygen_h",
+    "ti_scanparamservice_doxygen_c"
+  ],
+  "impacts_he": [
+    "מבהיר scope cleanup לשכבת service/adapter",
+    "מונע חסימה על תכנון persistence מוקדם"
+  ],
+  "applies_to_checks": [
+    "implementation_contract_defined",
+    "phase1_blockers_closed_or_deferred"
+  ]
+}
+```
+
+## חוזה מימוש (Implementation Contract)
+
+```groupb_impl_contract
+{
+  "id": "scps_phase1_impl_contract",
+  "profile_id": "SCPS",
+  "doc_kind": "structure",
+  "phase": "phase1",
+  "scope_in": [
+    "ScPS: service module בסיסי עם attribute/CCC handling",
+    "API פנימי ל-init/register callbacks/publish או update",
+    "חיבור app adapter מינימלי לבדיקות bring-up",
+    "לוגיקה בסיסית ל-gating ול-flow runtime עיקרי"
+  ],
+  "scope_out": [
+    "אופטימיזציות performance או buffering מתקדם",
+    "פיצולי מודולים נוספים שאינם נדרשים ל-Phase 1",
+    "יכולות אופציונליות שסומנו ל-Phase 2 במסמכי הפרופיל"
+  ],
+  "service_api_contract": {
+    "public_functions_he": [
+      "scps_service_init/register_callbacks",
+      "scps_service_publish_or_update (לפי semantics של הפרופיל)",
+      "scps_service_set_feature_or_config (אם רלוונטי)"
+    ],
+    "callback_contract_he": "callbacks נרשמים ע\"י שכבת adapter/app; אין תלות ישירה בחיישן מתוך service module.",
+    "notes_he": "שמות פונקציות סופיים ייקבעו במימוש, אך החוזה המבני נשמר."
+  },
+  "runtime_flow_contract": {
+    "steps_he": [
+      "init service + register callbacks",
+      "adapter מספק events/data ללוגיקה",
+      "לוגיקה מבצעת validation/gating",
+      "service בונה/שולח payload לפי כללי CCC והפרופיל",
+      "כשלי שליחה נרשמים ומוחזרים לשכבה מעל"
+    ]
+  },
+  "data_model_contract": {
+    "items_he": [
+      "state לשירות (subscriptions/flags/capabilities)",
+      "מבנה מדידה/פרמטרים לוגי נפרד מ-BLE serialization",
+      "metadata מינימלי ל-debug/last publish result"
+    ]
+  },
+  "ccc_and_notify_indicate_contract": {
+    "rules_he": [
+      "אין שליחה ללא enable מתאים ב-CCC",
+      "בחירת notify/indicate נשלטת בשכבת service לפי characteristic requirements",
+      "שכבת לוגיקה נשארת transport-agnostic ככל האפשר"
+    ]
+  },
+  "error_policy_contract": {
+    "rules_he": [
+      "service מחזיר status/error code לשכבה מעל",
+      "אין retry blocking בתוך callback של GATT",
+      "logging ברור עבור validation failure ו-send failure"
+    ]
+  },
+  "dependency_contract": {
+    "items_he": [
+      "תלות ב-Zephyr Bluetooth/GATT APIs",
+      "adapter/app מספק מקור נתונים/אירועים",
+      "אין תלות חובה ב-persistence ב-Phase 1"
+    ]
+  },
+  "module_boundaries": {
+    "modules_he": [
+      "scps_service",
+      "scps_logic",
+      "scps_app_adapter"
+    ],
+    "boundaries_he": [
+      "service אחראי על GATT plumbing ו-CCC",
+      "logic אחראי על policy/gating/flow",
+      "adapter אחראי על חיבור לאפליקציה/stack events"
+    ]
+  },
+  "implementation_order": [
+    "service skeleton + UUID/attributes/CCCs",
+    "callback contract + app adapter hooks",
+    "logic gating + publish/update path",
+    "feature/config read-write path (אם רלוונטי)",
+    "logging + smoke validation"
+  ],
+  "blocking_assumptions": [],
+  "non_blocking_deferred": [
+    "refactor לפיצול helper/serializer אם יגדל complexity",
+    "הרחבת capabilities אופציונליות ל-Phase 2"
+  ],
+  "summary_he": "חוזה מימוש Phase 1 ל-ScPS: service+logic+adapter עם CCC gating, API פנימי ברור ותחום אחריות מודולרי.",
+  "source_ids": [
+    "ti_simplelink_sdk",
+    "ti_ble5stack_docs_root",
+    "ti_scanparamservice_doxygen_h",
+    "ti_scanparamservice_doxygen_c",
+    "nordic_ncs_sample_shorter_conn_intervals_main",
+    "zephyr_bt_bas_service_c"
+  ]
+}
+```
+
+## יעדי בדיקות Phase 1
+
+```groupb_test_target
+{
+  "id": "scps_phase1_test_targets",
+  "profile_id": "SCPS",
+  "doc_kind": "structure",
+  "phase": "phase1",
+  "manual_smoke_checks": [
+    "ScPS: init/register ללא crash ועם logs צפויים",
+    "שינוי/הזנת נתון דרך adapter -> publish/update path מופעל",
+    "gating לפי CCC/enable חוסם שליחה לא מורשית",
+    "כשל שליחה מחזיר סטטוס ונרשם בלוג"
+  ],
+  "pts_autopts_target_areas": [
+    "GATT behavior בסיסי של characteristics/CCCs בפרופיל",
+    "publish/indicate/notify gating לפי enable",
+    "flow תקין של read/write/callbacks רלוונטיים ל-Phase 1"
+  ],
+  "ics_ixit_assumptions": [
+    "ICS/IXIT יוגדרו בהתאם ל-subset Phase 1 בלבד",
+    "יכולות אופציונליות שלא מומשו יסומנו כלא נתמכות",
+    "נדרש מיפוי PIXIT/behavior לפני הרצת PTS מלאה"
+  ],
+  "phase1_done_criteria": [
+    "build + smoke app runtime תקין",
+    "manual smoke checks עוברים",
+    "אין JS/data regression ב-Hub after docs update",
+    "יעדי PTS/AutoPTS ל-Phase 1 מזוהים וממופים"
+  ],
+  "known_non_goals": [
+    "כיסוי מלא של כל feature אופציונלי בפרופיל",
+    "אופטימיזציה/cleanup מתקדם שאינו חוסם פונקציונליות"
+  ],
+  "summary_he": "יעדי בדיקות Phase 1 ל-ScPS: smoke ידני + מיקוד ב-GATT/CCC/runtime flow לפני הרחבת כיסוי.",
+  "source_ids": [
+    "ti_simplelink_sdk",
+    "ti_ble5stack_docs_root",
+    "ti_scanparamservice_doxygen_h",
+    "ti_scanparamservice_doxygen_c"
+  ]
+}
+```
+
+## חתימת Review / מוכנות
+
+```groupb_review_signoff
+{
+  "id": "scps_phase1_review_signoff",
+  "profile_id": "SCPS",
+  "doc_kind": "structure",
+  "logic_reviewed": true,
+  "structure_reviewed": true,
+  "logic_reviewed_at": "2026-02-25",
+  "structure_reviewed_at": "2026-02-25",
+  "review_summary_he": "בוצע review הנדסי ל-Logic/Structure של ScPS, נסגרו החלטות Phase 1 ונוסח חוזה מימוש + יעדי בדיקות.",
+  "reviewer_notes_he": [
+    "החלטות Phase 1 סומנו מפורשות ומקושרות למקורות.",
+    "פריטים שנדחו ל-Phase 2 אינם חוסמים bring-up ומימוש בסיסי.",
+    "נדרש בשלב הבא לעבור לכתיבת קוד לפי חוזה המימוש המוגדר."
+  ],
+  "remaining_phase1_blockers": [],
+  "ready_for_impl_phase1": true,
+  "ready_decision_reason_he": "ScPS עומד בקריטריוני מוכנות Phase 1: review מלא, חוזה מימוש מוגדר, יעדי בדיקות מוגדרים, ללא blockers פתוחים.",
+  "source_ids": [
+    "ti_simplelink_sdk",
+    "ti_ble5stack_docs_root",
+    "ti_scanparamservice_doxygen_h",
+    "ti_scanparamservice_doxygen_c"
+  ]
+}
+```
 
 ## מקורות
 

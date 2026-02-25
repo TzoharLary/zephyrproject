@@ -1,13 +1,14 @@
 {
   "generated_at": "2026-02-25",
-  "last_smoke_test_at": "2026-02-25T09:49:00",
+  "last_smoke_test_at": "2026-02-25T11:35:00",
   "smoke_test_mode": "playwright_mcp",
   "known_expected_console_errors": [
     "GET /dashboards/pts_report_he/api/run-status -> 404 (static server)",
     "GET /favicon.ico -> 404 (static server)"
   ],
   "last_manual_review_notes_he": [
-    "בוצע smoke בדסקטופ על פורט נקי (8001): דף ראשי -> CTA -> Hub, כולל BPS/Logic ו-BPS/מצב עבודה/פערים.",
-    "נבדק console: רק 404 צפויים של static server (run-status בדף הראשי ו-favicon)."
+    "בוצע smoke בדסקטופ על שרת סטטי מקומי (פורט 8000): דף ראשי -> CTA -> Hub.",
+    "אומתו לשוניות BPS/WSS/ScPS ותתי-לשוניות לוגיקה/מבנה/מצב עבודה, כולל הסקשנים החדשים: החלטות Phase 1, חוזה מימוש, יעדי בדיקות, חתימת Review.",
+    "console נקי משגיאות JS runtime; נצפו רק 404 צפויים של static server (run-status בדף הראשי + favicon)."
   ]
 }

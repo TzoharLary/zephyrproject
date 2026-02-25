@@ -2,8 +2,8 @@
 profile_id: BPS
 display_name_he: שירות לחץ דם
 doc_kind: logic
-status: in_progress
-updated_at: 2026-02-24
+status: reviewed
+updated_at: 2026-02-25
 primary_sdk_source_policy: nordic_official_only
 secondary_pattern_sources_policy: local_or_official_only
 language: he
@@ -292,8 +292,12 @@ schema_version: 1
   "title_he": "איזה מסלולי publish יוגדרו כ-indication לעומת notification במימוש היעד",
   "detail_he": "יש למפות במדויק מול ה-spec של BPS אילו characteristics דורשים indication/notification ומהם תנאי ההפעלה (CCC + feature support).",
   "priority": "high",
-  "status": "open",
-  "source_ids": ["sig_bps_spec_page", "ti_blood_pressure_service_doxygen_h", "ti_blood_pressure_service_doxygen_c"]
+  "status": "resolved",
+  "source_ids": [
+    "sig_bps_spec_page",
+    "ti_blood_pressure_service_doxygen_h",
+    "ti_blood_pressure_service_doxygen_c"
+  ]
 }
 ```
 
@@ -304,8 +308,11 @@ schema_version: 1
   "title_he": "היכן למקם את בניית ה-payload של המדידה",
   "detail_he": "יש להחליט אם בניית payload תישב בשכבת השירות (service module) או בשכבת adapter/logic מעליה, כדי לשמור separation טוב בין domain data ל-BLE serialization.",
   "priority": "medium",
-  "status": "open",
-  "source_ids": ["ti_blood_pressure_service_doxygen_c", "zephyr_bt_hrs_service_c"]
+  "status": "resolved",
+  "source_ids": [
+    "ti_blood_pressure_service_doxygen_c",
+    "zephyr_bt_hrs_service_c"
+  ]
 }
 ```
 
@@ -315,6 +322,57 @@ schema_version: 1
 - להפריד מוקדם בין `CCC state tracking` לבין `measurement payload production`.
 - להגדיר מסלול retry/logging עבור publish failures (בדומה לדפוס CGMS), אבל לא לשלב retry בתוך callbacks של GATT.
 - להוסיף abstraction ל-`notify/indicate` כדי לא להינעל על דפוס HRS של notify בלבד.
+
+## החלטות Phase 1
+
+```groupb_decision
+{
+  "id": "bps_logic_phase1_publish_path_decision",
+  "profile_id": "BPS",
+  "doc_kind": "logic",
+  "phase": "phase1",
+  "title_he": "Phase 1: מסלול publish אחוד עם gating לפי CCC ו-type-aware transport",
+  "decision_he": "שכבת הלוגיקה תחשוף קריאת publish אחודה למדידה/אירוע, בעוד שכבת השירות תמפה לכל characteristic את אופן השליחה (notify/indicate) לפי דרישת ה-spec והגדרות CCC.",
+  "rationale_he": "כך נשמר separation בין domain flow לבין GATT transport ומקטינים coupling לשכבת ה-service.",
+  "status": "decided",
+  "confidence": "high",
+  "derivation_method_ids": [
+    "api_call_sequence_analysis",
+    "ccc_handling_pattern"
+  ],
+  "source_ids": [
+    "nordic_sdk_nrf_repo",
+    "nordic_ncs_docs",
+    "nordic_ncs_sample_peripheral_cgms_main",
+    "nordic_ncs_sample_peripheral_uart_main"
+  ],
+  "impacts_he": [
+    "מקטין פיצול לוגיקה לשני מסלולי publish שונים",
+    "מחייב שכבת service לשאת את חוקי transport per characteristic"
+  ],
+  "applies_to_checks": [
+    "phase1_subset_decided",
+    "implementation_contract_defined"
+  ]
+}
+```
+
+## חוזה מימוש (Implementation Contract)
+
+חוזה המימוש המלא ל-Phase 1 מרוכז במסמך ה-Structure של הפרופיל כדי לשמור מקור אמת אחד לחוזה המבני/ריצתי.
+
+- מסמך זה (Logic) מספק את ההחלטות הלוגיות והצדקת ה-flow.
+- מסמך Structure מכיל את `groupb_impl_contract`, `groupb_test_target`, `groupb_review_signoff`.
+
+## יעדי בדיקות Phase 1
+
+- יעדי הבדיקות המלאים מרוכזים ב-Structure כדי למנוע כפילות.
+- ברמת Logic יש לוודא בפרט: gating, trigger policy, ו-return status עקבי.
+
+## חתימת Review / מוכנות
+
+- review לוגיקה עבור BPS נסגר ומסוכם בחתימת ה-review שבמסמך Structure.
+- מסמך זה נשאר מקור ההסברים וההסקות הלוגיות, לא מקור חתימה כפול.
 
 ## מקורות
 
