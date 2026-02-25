@@ -1,0 +1,864 @@
+# Zephyr BLE GATT Profile Database
+# ===================================
+# This file contains metadata for every existing Zephyr BLE GATT Profile.
+# Used by the zephyr-bt-profile-builder agent for classification and generation.
+#
+# Schema version: 1.0.0
+
+version: "1.0.0"
+last_updated: "2026-02-25"
+
+profiles:
+
+  - name: "Heart Rate Service"
+    id: HRS
+    category: Health
+    type: Simple
+    complexity: Low
+    pattern: Notify
+    uuids:
+      service: "0x180D"
+      characteristics:
+        - name: "Heart Rate Measurement"
+          uuid: "0x2A37"
+          properties: [Notify]
+          mandatory: true
+        - name: "Body Sensor Location"
+          uuid: "0x2A38"
+          properties: [Read]
+          mandatory: false
+        - name: "Heart Rate Control Point"
+          uuid: "0x2A39"
+          properties: [Write]
+          mandatory: false
+    callbacks: true
+    state_management: false
+    kconfig_symbol: BT_HRS
+    reference_files:
+      header: "include/zephyr/bluetooth/services/hrs.h"
+      impl: "subsys/bluetooth/services/hrs.c"
+    similar_profiles: [BAS, DIS]
+    tags: [health, sensor, notify, simple, heart, vital-signs]
+    notes: "Canonical simple notify profile. Best starting reference for any notify-based sensor."
+
+  - name: "Device Information Service"
+    id: DIS
+    category: Device
+    type: Simple
+    complexity: Low
+    pattern: Read
+    uuids:
+      service: "0x180A"
+      characteristics:
+        - name: "Manufacturer Name String"
+          uuid: "0x2A29"
+          properties: [Read]
+          mandatory: false
+        - name: "Model Number String"
+          uuid: "0x2A24"
+          properties: [Read]
+          mandatory: false
+        - name: "Serial Number String"
+          uuid: "0x2A25"
+          properties: [Read]
+          mandatory: false
+        - name: "Hardware Revision String"
+          uuid: "0x2A27"
+          properties: [Read]
+          mandatory: false
+        - name: "Firmware Revision String"
+          uuid: "0x2A26"
+          properties: [Read]
+          mandatory: false
+        - name: "Software Revision String"
+          uuid: "0x2A28"
+          properties: [Read]
+          mandatory: false
+        - name: "System ID"
+          uuid: "0x2A23"
+          properties: [Read]
+          mandatory: false
+        - name: "PnP ID"
+          uuid: "0x2A50"
+          properties: [Read]
+          mandatory: false
+    callbacks: false
+    state_management: false
+    kconfig_symbol: BT_DIS
+    reference_files:
+      header: "include/zephyr/bluetooth/services/dis.h"
+      impl: "subsys/bluetooth/services/dis.c"
+    similar_profiles: [BAS]
+    tags: [device, info, read-only, simple, no-callback, static]
+    notes: "Pure read-only profile. Values configured via Kconfig. No callbacks needed."
+
+  - name: "Battery Service"
+    id: BAS
+    category: Power
+    type: Simple
+    complexity: Low
+    pattern: Read
+    uuids:
+      service: "0x180F"
+      characteristics:
+        - name: "Battery Level"
+          uuid: "0x2A19"
+          properties: [Read, Notify]
+          mandatory: true
+    callbacks: true
+    state_management: false
+    kconfig_symbol: BT_BAS
+    reference_files:
+      header: "include/zephyr/bluetooth/services/bas.h"
+      impl: "subsys/bluetooth/services/bas.c"
+    similar_profiles: [HRS, DIS]
+    tags: [power, battery, read, notify, simple, sensor]
+    notes: "Simple read/notify profile. Good reference for combined read+notify characteristics."
+
+  - name: "Health Thermometer Service"
+    id: HTS
+    category: Health
+    type: Simple
+    complexity: Medium
+    pattern: Indicate
+    uuids:
+      service: "0x1809"
+      characteristics:
+        - name: "Temperature Measurement"
+          uuid: "0x2A1C"
+          properties: [Indicate]
+          mandatory: true
+        - name: "Temperature Type"
+          uuid: "0x2A1D"
+          properties: [Read]
+          mandatory: false
+        - name: "Intermediate Temperature"
+          uuid: "0x2A1E"
+          properties: [Notify]
+          mandatory: false
+        - name: "Measurement Interval"
+          uuid: "0x2A21"
+          properties: [Read, Write, Indicate]
+          mandatory: false
+    callbacks: true
+    state_management: false
+    kconfig_symbol: BT_HTS
+    reference_files:
+      header: "include/zephyr/bluetooth/services/hts.h"
+      impl: "subsys/bluetooth/services/hts.c"
+    similar_profiles: [HRS, ESS]
+    tags: [health, sensor, indicate, notify, temperature, mixed]
+    notes: "Uses Indicate (acknowledged notify). Good reference for indicate-based profiles."
+
+  - name: "Environmental Sensing Service"
+    id: ESS
+    category: Environment
+    type: Complex
+    complexity: High
+    pattern: Notify
+    uuids:
+      service: "0x181A"
+      characteristics:
+        - name: "Temperature"
+          uuid: "0x2A6E"
+          properties: [Read, Notify]
+          mandatory: false
+        - name: "Humidity"
+          uuid: "0x2A6F"
+          properties: [Read, Notify]
+          mandatory: false
+        - name: "Pressure"
+          uuid: "0x2A6D"
+          properties: [Read, Notify]
+          mandatory: false
+        - name: "UV Index"
+          uuid: "0x2A76"
+          properties: [Read, Notify]
+          mandatory: false
+        - name: "Elevation"
+          uuid: "0x2A6C"
+          properties: [Read, Notify]
+          mandatory: false
+        - name: "Wind Speed"
+          uuid: "0x2A72"
+          properties: [Read, Notify]
+          mandatory: false
+        - name: "Magnetic Declination"
+          uuid: "0x2A2C"
+          properties: [Read]
+          mandatory: false
+    callbacks: true
+    state_management: true
+    kconfig_symbol: BT_ESS
+    reference_files:
+      header: "include/zephyr/bluetooth/services/ess.h"
+      impl: "subsys/bluetooth/services/ess.c"
+    similar_profiles: [HRS, HTS]
+    tags: [environment, sensor, notify, complex, multi-characteristic, weather]
+    notes: "Multi-characteristic environment sensing profile. Good for complex sensor aggregation."
+
+  - name: "Current Time Service"
+    id: CTS
+    category: Time
+    type: Simple
+    complexity: Medium
+    pattern: Read
+    uuids:
+      service: "0x1805"
+      characteristics:
+        - name: "Current Time"
+          uuid: "0x2A2B"
+          properties: [Read, Write, Notify]
+          mandatory: true
+        - name: "Local Time Information"
+          uuid: "0x2A0F"
+          properties: [Read, Write]
+          mandatory: false
+        - name: "Reference Time Information"
+          uuid: "0x2A14"
+          properties: [Read]
+          mandatory: false
+    callbacks: true
+    state_management: true
+    kconfig_symbol: BT_CTS
+    reference_files:
+      header: "include/zephyr/bluetooth/services/cts.h"
+      impl: "subsys/bluetooth/services/cts.c"
+    similar_profiles: [DIS, BAS]
+    tags: [time, read, write, notify, mixed, time-sync]
+    notes: "Mixed read/write/notify profile. Uses state for tracking time updates."
+
+  - name: "Link Loss Service"
+    id: LLS
+    category: Proximity
+    type: Simple
+    complexity: Low
+    pattern: Write
+    uuids:
+      service: "0x1803"
+      characteristics:
+        - name: "Alert Level"
+          uuid: "0x2A06"
+          properties: [Read, Write]
+          mandatory: true
+    callbacks: true
+    state_management: false
+    kconfig_symbol: BT_LLS
+    reference_files:
+      header: "include/zephyr/bluetooth/services/lls.h"
+      impl: "subsys/bluetooth/services/lls.c"
+    similar_profiles: [IAS, TPS]
+    tags: [proximity, alert, write, read, simple, connection-aware]
+    notes: "Connection-aware service. Alert triggered on link loss. Part of Proximity Profile."
+
+  - name: "TX Power Service"
+    id: TPS
+    category: Proximity
+    type: Simple
+    complexity: Low
+    pattern: Read
+    uuids:
+      service: "0x1804"
+      characteristics:
+        - name: "TX Power Level"
+          uuid: "0x2A07"
+          properties: [Read]
+          mandatory: true
+    callbacks: false
+    state_management: false
+    kconfig_symbol: BT_TPS
+    reference_files:
+      header: "include/zephyr/bluetooth/services/tps.h"
+      impl: "subsys/bluetooth/services/tps.c"
+    similar_profiles: [DIS, IAS, LLS]
+    tags: [proximity, power, read-only, simple, no-callback]
+    notes: "Simplest possible profile - single read-only characteristic. Use as minimal template."
+
+  - name: "Immediate Alert Service"
+    id: IAS
+    category: Proximity
+    type: Simple
+    complexity: Low
+    pattern: Write
+    uuids:
+      service: "0x1802"
+      characteristics:
+        - name: "Alert Level"
+          uuid: "0x2A06"
+          properties: [Write Without Response]
+          mandatory: true
+    callbacks: true
+    state_management: false
+    kconfig_symbol: BT_IAS
+    reference_files:
+      header: "include/zephyr/bluetooth/services/ias.h"
+      impl: "subsys/bluetooth/services/ias.c"
+    similar_profiles: [LLS, TPS]
+    tags: [proximity, alert, write, write-no-response, simple, immediate]
+    notes: "Write-without-response pattern. Good reference for fire-and-forget write profiles."
+
+  - name: "Object Transfer Service"
+    id: OTS
+    category: Data Transfer
+    type: Complex
+    complexity: High
+    pattern: Mixed
+    uuids:
+      service: "0x1825"
+      characteristics:
+        - name: "OTS Feature"
+          uuid: "0x2ABD"
+          properties: [Read]
+          mandatory: true
+        - name: "Object Name"
+          uuid: "0x2ABE"
+          properties: [Read, Write]
+          mandatory: true
+        - name: "Object Type"
+          uuid: "0x2ABF"
+          properties: [Read]
+          mandatory: true
+        - name: "Object Size"
+          uuid: "0x2AC0"
+          properties: [Read]
+          mandatory: true
+        - name: "Object First-Created"
+          uuid: "0x2AC1"
+          properties: [Read, Write]
+          mandatory: false
+        - name: "Object Last-Modified"
+          uuid: "0x2AC2"
+          properties: [Read, Write]
+          mandatory: false
+        - name: "Object ID"
+          uuid: "0x2AC3"
+          properties: [Read]
+          mandatory: false
+        - name: "Object Properties"
+          uuid: "0x2AC4"
+          properties: [Read, Write]
+          mandatory: true
+        - name: "Object Action Control Point"
+          uuid: "0x2AC5"
+          properties: [Write, Indicate]
+          mandatory: true
+        - name: "Object List Control Point"
+          uuid: "0x2AC6"
+          properties: [Write, Indicate]
+          mandatory: false
+        - name: "Object List Filter 0"
+          uuid: "0x2AC7"
+          properties: [Read, Write]
+          mandatory: false
+        - name: "Object Changed"
+          uuid: "0x2AC8"
+          properties: [Indicate]
+          mandatory: false
+    callbacks: true
+    state_management: true
+    kconfig_symbol: BT_OTS
+    reference_files:
+      header: "include/zephyr/bluetooth/services/ots.h"
+      impl: "subsys/bluetooth/services/ots.c"
+    similar_profiles: [HIDS]
+    tags: [data-transfer, complex, mixed, object, l2cap, state-machine, indicate]
+    notes: "Most complex Zephyr BLE service. Uses L2CAP COC for data transfer. Full state machine."
+
+  - name: "HID over GATT Profile"
+    id: HIDS
+    category: HID
+    type: Complex
+    complexity: High
+    pattern: Mixed
+    uuids:
+      service: "0x1812"
+      characteristics:
+        - name: "Protocol Mode"
+          uuid: "0x2A4E"
+          properties: [Read, Write Without Response]
+          mandatory: false
+        - name: "Report"
+          uuid: "0x2A4D"
+          properties: [Read, Write, Notify]
+          mandatory: true
+        - name: "Report Map"
+          uuid: "0x2A4B"
+          properties: [Read]
+          mandatory: true
+        - name: "Boot Keyboard Input Report"
+          uuid: "0x2A22"
+          properties: [Read, Notify]
+          mandatory: false
+        - name: "Boot Keyboard Output Report"
+          uuid: "0x2A32"
+          properties: [Read, Write, Write Without Response]
+          mandatory: false
+        - name: "Boot Mouse Input Report"
+          uuid: "0x2A33"
+          properties: [Read, Notify]
+          mandatory: false
+        - name: "HID Information"
+          uuid: "0x2A4A"
+          properties: [Read]
+          mandatory: true
+        - name: "HID Control Point"
+          uuid: "0x2A4C"
+          properties: [Write Without Response]
+          mandatory: true
+    callbacks: true
+    state_management: true
+    kconfig_symbol: BT_HIDS
+    reference_files:
+      header: "include/zephyr/bluetooth/services/hids.h"
+      impl: "subsys/bluetooth/services/hids.c"
+    similar_profiles: [OTS]
+    tags: [hid, complex, mixed, keyboard, mouse, report, state-machine, boot-mode]
+    notes: "Complex HID profile with boot and report modes. Full state machine with connection tracking."
+
+  - name: "Scan Parameters Service"
+    id: SPS
+    category: Generic
+    type: Simple
+    complexity: Low
+    pattern: Write
+    uuids:
+      service: "0x1813"
+      characteristics:
+        - name: "Scan Interval Window"
+          uuid: "0x2A4F"
+          properties: [Write Without Response]
+          mandatory: true
+        - name: "Scan Refresh"
+          uuid: "0x2A31"
+          properties: [Notify]
+          mandatory: false
+    callbacks: true
+    state_management: false
+    kconfig_symbol: BT_SPS
+    reference_files:
+      header: "include/zephyr/bluetooth/services/sps.h"
+      impl: "subsys/bluetooth/services/sps.c"
+    similar_profiles: [IAS, LLS]
+    tags: [generic, scan, write, notify, simple]
+    notes: "Used for scan parameter negotiation between GAP Central and GAP Peripheral."
+
+  - name: "Running Speed and Cadence Service"
+    id: RSCS
+    category: Sport
+    type: Simple
+    complexity: Medium
+    pattern: Notify
+    uuids:
+      service: "0x1814"
+      characteristics:
+        - name: "RSC Measurement"
+          uuid: "0x2A53"
+          properties: [Notify]
+          mandatory: true
+        - name: "RSC Feature"
+          uuid: "0x2A54"
+          properties: [Read]
+          mandatory: true
+        - name: "Sensor Location"
+          uuid: "0x2A5D"
+          properties: [Read]
+          mandatory: false
+        - name: "SC Control Point"
+          uuid: "0x2A55"
+          properties: [Write, Indicate]
+          mandatory: false
+    callbacks: true
+    state_management: false
+    kconfig_symbol: BT_RSCS
+    reference_files:
+      header: "include/zephyr/bluetooth/services/rscs.h"
+      impl: "subsys/bluetooth/services/rscs.c"
+    similar_profiles: [HRS, CSCS]
+    tags: [sport, fitness, notify, sensor, cadence, running]
+    notes: "Fitness sensor profile with optional control point. Similar to HRS in structure."
+
+  - name: "Cycling Speed and Cadence Service"
+    id: CSCS
+    category: Sport
+    type: Simple
+    complexity: Medium
+    pattern: Notify
+    uuids:
+      service: "0x1816"
+      characteristics:
+        - name: "CSC Measurement"
+          uuid: "0x2A5B"
+          properties: [Notify]
+          mandatory: true
+        - name: "CSC Feature"
+          uuid: "0x2A5C"
+          properties: [Read]
+          mandatory: true
+        - name: "Sensor Location"
+          uuid: "0x2A5D"
+          properties: [Read]
+          mandatory: false
+        - name: "SC Control Point"
+          uuid: "0x2A55"
+          properties: [Write, Indicate]
+          mandatory: false
+    callbacks: true
+    state_management: false
+    kconfig_symbol: BT_CSCS
+    reference_files:
+      header: "include/zephyr/bluetooth/services/cscs.h"
+      impl: "subsys/bluetooth/services/cscs.c"
+    similar_profiles: [RSCS, HRS]
+    tags: [sport, fitness, notify, sensor, cadence, cycling]
+    notes: "Cycling fitness sensor profile. Structurally identical to RSCS with different measurements."
+
+  - name: "Glucose Service"
+    id: GLS
+    category: Health
+    type: Complex
+    complexity: High
+    pattern: Indicate
+    uuids:
+      service: "0x1808"
+      characteristics:
+        - name: "Glucose Measurement"
+          uuid: "0x2A18"
+          properties: [Notify]
+          mandatory: true
+        - name: "Glucose Measurement Context"
+          uuid: "0x2A34"
+          properties: [Notify]
+          mandatory: false
+        - name: "Glucose Feature"
+          uuid: "0x2A51"
+          properties: [Read]
+          mandatory: true
+        - name: "Record Access Control Point"
+          uuid: "0x2A52"
+          properties: [Write, Indicate]
+          mandatory: true
+    callbacks: true
+    state_management: true
+    kconfig_symbol: BT_GLS
+    reference_files:
+      header: "include/zephyr/bluetooth/services/gls.h"
+      impl: "subsys/bluetooth/services/gls.c"
+    similar_profiles: [HTS, HRS]
+    tags: [health, medical, glucose, notify, indicate, state-machine, complex]
+    notes: "Medical profile with RACP for record access control. Full state machine required."
+
+  - name: "Alert Notification Service"
+    id: ANS
+    category: Alert
+    type: Simple
+    complexity: Medium
+    pattern: Notify
+    uuids:
+      service: "0x1811"
+      characteristics:
+        - name: "Supported New Alert Category"
+          uuid: "0x2A47"
+          properties: [Read]
+          mandatory: true
+        - name: "New Alert"
+          uuid: "0x2A46"
+          properties: [Notify]
+          mandatory: true
+        - name: "Supported Unread Alert Category"
+          uuid: "0x2A48"
+          properties: [Read]
+          mandatory: true
+        - name: "Unread Alert Status"
+          uuid: "0x2A45"
+          properties: [Notify]
+          mandatory: true
+        - name: "Alert Notification Control Point"
+          uuid: "0x2A44"
+          properties: [Write]
+          mandatory: true
+    callbacks: true
+    state_management: false
+    kconfig_symbol: BT_ANS
+    reference_files:
+      header: "include/zephyr/bluetooth/services/ans.h"
+      impl: "subsys/bluetooth/services/ans.c"
+    similar_profiles: [IAS, LLS]
+    tags: [alert, notify, write, mixed, phone-alert]
+    notes: "Phone Alert Status profile dependency. Manages alert categories and notifications."
+
+  - name: "Phone Alert Status Service"
+    id: PASS
+    category: Alert
+    type: Simple
+    complexity: Medium
+    pattern: Notify
+    uuids:
+      service: "0x180E"
+      characteristics:
+        - name: "Alert Status"
+          uuid: "0x2A3F"
+          properties: [Read, Notify]
+          mandatory: true
+        - name: "Ringer Setting"
+          uuid: "0x2A41"
+          properties: [Read, Notify]
+          mandatory: true
+        - name: "Ringer Control Point"
+          uuid: "0x2A40"
+          properties: [Write Without Response]
+          mandatory: true
+    callbacks: true
+    state_management: false
+    kconfig_symbol: BT_PASS
+    reference_files:
+      header: "include/zephyr/bluetooth/services/pass.h"
+      impl: "subsys/bluetooth/services/pass.c"
+    similar_profiles: [ANS, IAS]
+    tags: [alert, phone, ringer, notify, write, mixed]
+    notes: "Works alongside ANS for phone alert management."
+
+  - name: "User Data Service"
+    id: UDS
+    category: User
+    type: Complex
+    complexity: High
+    pattern: Mixed
+    uuids:
+      service: "0x181C"
+      characteristics:
+        - name: "First Name"
+          uuid: "0x2A8A"
+          properties: [Read, Write]
+          mandatory: false
+        - name: "Last Name"
+          uuid: "0x2A90"
+          properties: [Read, Write]
+          mandatory: false
+        - name: "Age"
+          uuid: "0x2A80"
+          properties: [Read, Write]
+          mandatory: false
+        - name: "Gender"
+          uuid: "0x2A8C"
+          properties: [Read, Write]
+          mandatory: false
+        - name: "Weight"
+          uuid: "0x2A98"
+          properties: [Read, Write]
+          mandatory: false
+        - name: "Height"
+          uuid: "0x2A8E"
+          properties: [Read, Write]
+          mandatory: false
+        - name: "Database Change Increment"
+          uuid: "0x2A99"
+          properties: [Read, Write, Notify]
+          mandatory: true
+        - name: "User Index"
+          uuid: "0x2A9A"
+          properties: [Read]
+          mandatory: true
+        - name: "User Control Point"
+          uuid: "0x2A9F"
+          properties: [Write, Indicate]
+          mandatory: true
+    callbacks: true
+    state_management: true
+    kconfig_symbol: BT_UDS
+    reference_files:
+      header: "include/zephyr/bluetooth/services/uds.h"
+      impl: "subsys/bluetooth/services/uds.c"
+    similar_profiles: [GLS, OTS]
+    tags: [user, profile, mixed, complex, multi-user, fitness, health]
+    notes: "Multi-user data storage profile. Requires user management state machine."
+
+  - name: "Body Composition Service"
+    id: BCS
+    category: Health
+    type: Simple
+    complexity: Medium
+    pattern: Indicate
+    uuids:
+      service: "0x181B"
+      characteristics:
+        - name: "Body Composition Feature"
+          uuid: "0x2A9B"
+          properties: [Read]
+          mandatory: true
+        - name: "Body Composition Measurement"
+          uuid: "0x2A9C"
+          properties: [Indicate]
+          mandatory: true
+    callbacks: true
+    state_management: false
+    kconfig_symbol: BT_BCS
+    reference_files:
+      header: "include/zephyr/bluetooth/services/bcs.h"
+      impl: "subsys/bluetooth/services/bcs.c"
+    similar_profiles: [HTS, HRS]
+    tags: [health, body, indicate, fitness, measurement]
+    notes: "Simple indicate profile for body composition data."
+
+  - name: "Weight Scale Service"
+    id: WSS
+    category: Health
+    type: Simple
+    complexity: Medium
+    pattern: Indicate
+    uuids:
+      service: "0x181D"
+      characteristics:
+        - name: "Weight Scale Feature"
+          uuid: "0x2A9E"
+          properties: [Read]
+          mandatory: true
+        - name: "Weight Measurement"
+          uuid: "0x2A9D"
+          properties: [Indicate]
+          mandatory: true
+    callbacks: true
+    state_management: false
+    kconfig_symbol: BT_WSS
+    reference_files:
+      header: "include/zephyr/bluetooth/services/wss.h"
+      impl: "subsys/bluetooth/services/wss.c"
+    similar_profiles: [BCS, HTS]
+    tags: [health, weight, indicate, fitness, measurement]
+    notes: "Weight scale profile. Similar structure to BCS - indicate-based measurement."
+
+  - name: "Continuous Glucose Monitoring Service"
+    id: CGMS
+    category: Health
+    type: Complex
+    complexity: High
+    pattern: Notify
+    uuids:
+      service: "0x181F"
+      characteristics:
+        - name: "CGM Measurement"
+          uuid: "0x2AA7"
+          properties: [Notify]
+          mandatory: true
+        - name: "CGM Feature"
+          uuid: "0x2AA8"
+          properties: [Read]
+          mandatory: true
+        - name: "CGM Status"
+          uuid: "0x2AA9"
+          properties: [Read]
+          mandatory: true
+        - name: "CGM Session Start Time"
+          uuid: "0x2AAA"
+          properties: [Read, Write]
+          mandatory: true
+        - name: "CGM Session Run Time"
+          uuid: "0x2AAB"
+          properties: [Read]
+          mandatory: true
+        - name: "Record Access Control Point"
+          uuid: "0x2A52"
+          properties: [Write, Indicate]
+          mandatory: false
+        - name: "CGM Specific Ops Control Point"
+          uuid: "0x2AAC"
+          properties: [Write, Indicate]
+          mandatory: true
+    callbacks: true
+    state_management: true
+    kconfig_symbol: BT_CGMS
+    reference_files:
+      header: "include/zephyr/bluetooth/services/cgms.h"
+      impl: "subsys/bluetooth/services/cgms.c"
+    similar_profiles: [GLS, HTS]
+    tags: [health, medical, glucose, continuous, notify, indicate, complex, state-machine]
+    notes: "Advanced glucose monitoring. Extends GLS with session management and specific ops control."
+
+  - name: "Pulse Oximeter Service"
+    id: PLXS
+    category: Health
+    type: Simple
+    complexity: Medium
+    pattern: Notify
+    uuids:
+      service: "0x1822"
+      characteristics:
+        - name: "PLX Spot-Check Measurement"
+          uuid: "0x2A5E"
+          properties: [Indicate]
+          mandatory: false
+        - name: "PLX Continuous Measurement"
+          uuid: "0x2A5F"
+          properties: [Notify]
+          mandatory: false
+        - name: "PLX Features"
+          uuid: "0x2A60"
+          properties: [Read]
+          mandatory: true
+        - name: "Record Access Control Point"
+          uuid: "0x2A52"
+          properties: [Write, Indicate]
+          mandatory: false
+    callbacks: true
+    state_management: false
+    kconfig_symbol: BT_PLXS
+    reference_files:
+      header: "include/zephyr/bluetooth/services/plxs.h"
+      impl: "subsys/bluetooth/services/plxs.c"
+    similar_profiles: [HRS, HTS]
+    tags: [health, medical, oxygen, pulse, notify, indicate, sensor]
+    notes: "Blood oxygen saturation sensor. Mix of spot-check indicate and continuous notify."
+
+  - name: "Indoor Positioning Service"
+    id: IPS
+    category: Location
+    type: Simple
+    complexity: Medium
+    pattern: Read
+    uuids:
+      service: "0x1821"
+      characteristics:
+        - name: "Indoor Positioning Configuration"
+          uuid: "0x2AAD"
+          properties: [Read, Write]
+          mandatory: true
+        - name: "Latitude"
+          uuid: "0x2AAE"
+          properties: [Read]
+          mandatory: false
+        - name: "Longitude"
+          uuid: "0x2AAF"
+          properties: [Read]
+          mandatory: false
+        - name: "Local North Coordinate"
+          uuid: "0x2AB0"
+          properties: [Read]
+          mandatory: false
+        - name: "Local East Coordinate"
+          uuid: "0x2AB1"
+          properties: [Read]
+          mandatory: false
+        - name: "Floor Number"
+          uuid: "0x2AB2"
+          properties: [Read]
+          mandatory: false
+        - name: "Altitude"
+          uuid: "0x2AB3"
+          properties: [Read]
+          mandatory: false
+        - name: "Uncertainty"
+          uuid: "0x2AB4"
+          properties: [Read]
+          mandatory: false
+        - name: "Location Name"
+          uuid: "0x2AB5"
+          properties: [Read, Write]
+          mandatory: false
+    callbacks: true
+    state_management: false
+    kconfig_symbol: BT_IPS
+    reference_files:
+      header: "include/zephyr/bluetooth/services/ips.h"
+      impl: "subsys/bluetooth/services/ips.c"
+    similar_profiles: [ESS, DIS]
+    tags: [location, indoor, position, read, write, advertising]
+    notes: "Used primarily in advertising data. Multi-characteristic location profile."
