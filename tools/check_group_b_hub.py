@@ -62,6 +62,21 @@ def _print_readiness_summary(data: dict) -> None:
         print(f"  {key}: {summary.get(key)}")
 
 
+def _warn_uncategorized_task_groups(data: dict) -> list[str]:
+    warnings: list[str] = []
+    group_b = data.get("group_b", {})
+    current_work = group_b.get("current_work", {}) if isinstance(group_b, dict) else {}
+    for pid in PROFILE_IDS:
+        row = ((current_work.get("profiles") or {}).get(pid) or {}) if isinstance(current_work, dict) else {}
+        groups = row.get("task_groups") or []
+        unc = next((g for g in groups if isinstance(g, dict) and str(g.get("group_id") or "") == "uncategorized"), None)
+        if isinstance(unc, dict):
+            count = len(unc.get("task_ids", []) if isinstance(unc.get("task_ids"), list) else [])
+            if count:
+                warnings.append(f"current_work.{pid}: uncategorized root tasks={count}")
+    return warnings
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate Group B Hub data/schema/readiness thresholds.")
     parser.add_argument("--repo-root", default=".", help="Repository root (default: current directory)")
@@ -90,6 +105,7 @@ def main() -> int:
         return 3
 
     threshold_failures, warnings = _summarize_profile_thresholds(data, args.findings_min, args.source_obs_min)
+    warnings.extend(_warn_uncategorized_task_groups(data))
     if not args.allow_threshold_fail:
         failures.extend(threshold_failures)
 

@@ -2408,6 +2408,167 @@ def _current_work_summary(tasks: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
+TASK_GROUP_DEFS: Tuple[Dict[str, Any], ...] = (
+    {
+        "group_id": "foundations",
+        "label_he": "יסודות והכנה",
+        "summary_he": "סנכרון מפרטים, reviews, חוזים, וחתימות מוכנות שכבר בוצעו/נדרשות.",
+        "goal_he": "לסגור תשתיות ותיעוד שמאפשרים מעבר בטוח למימוש.",
+        "order": 10,
+    },
+    {
+        "group_id": "service_layer",
+        "label_he": "שכבת שירות",
+        "summary_he": "Service/GATT/CCC/API ציבורי וקבצי שירות מרכזיים.",
+        "goal_he": "להעמיד שכבת שירות יציבה (GATT + CCC + API) שעליה נשענות שאר השכבות.",
+        "order": 20,
+    },
+    {
+        "group_id": "logic_layer",
+        "label_he": "שכבת לוגיקה",
+        "summary_he": "Behavior / flow / policy / gating של הפרופיל.",
+        "goal_he": "לממש את ההתנהגות והמדיניות של הפרופיל לפי סיכום הלוגיקה.",
+        "order": 30,
+    },
+    {
+        "group_id": "app_integration",
+        "label_he": "אינטגרציית אפליקציה",
+        "summary_he": "חיבור לאפליקציה/adapter/bring-up ושילוב במערכת.",
+        "goal_he": "לחבר את מימוש הפרופיל לשכבת האפליקציה ולהביא את ה-flow לעבודה.",
+        "order": 40,
+    },
+    {
+        "group_id": "validation_tests",
+        "label_he": "בדיקות ואימות",
+        "summary_he": "Smoke checks, יעדי בדיקות ידניות ו-PTS/AutoPTS.",
+        "goal_he": "לאמת שהמימוש עובד ב-Phase 1 לפי יעדי הבדיקות שהוגדרו.",
+        "order": 50,
+    },
+    {
+        "group_id": "closure_decisions",
+        "label_he": "סגירת החלטות",
+        "summary_he": "החלטות, follow-ups וסגירות Phase 1/תיעוד משלים.",
+        "goal_he": "לסגור follow-ups והחלטות כך שלא יישארו חסמי Phase 1 לא מנוהלים.",
+        "order": 60,
+    },
+    {
+        "group_id": "uncategorized",
+        "label_he": "לא משויך",
+        "summary_he": "משימות שלא הצלחנו לשייך לשלב בצורה אוטומטית.",
+        "goal_he": "למפות ידנית או לשפר כללי שיוך כדי לרוקן את הקבוצה הזו.",
+        "order": 90,
+    },
+)
+
+TASK_GROUP_INDEX = {str(row["group_id"]): row for row in TASK_GROUP_DEFS}
+
+
+def _contains_any(text: str, needles: Iterable[str]) -> bool:
+    hay = text.lower()
+    return any(str(n).lower() in hay for n in needles if str(n).strip())
+
+
+def _classify_task_group(task: Dict[str, Any], parent_group_id: Optional[str] = None) -> str:
+    override = str(task.get("task_group_override") or "").strip()
+    if override and override in TASK_GROUP_INDEX:
+        return override
+    if parent_group_id and parent_group_id in TASK_GROUP_INDEX:
+        return parent_group_id
+
+    derived = str(task.get("derived_from") or "").strip().lower()
+    category = str(task.get("category") or "").strip().lower()
+    title = str(task.get("title_he") or "")
+    desc = str(task.get("description_he") or "")
+    text = f"{title} {desc}".lower()
+    completed_seed = bool(task.get("is_completed_seed"))
+
+    if completed_seed or derived == "codex_completed":
+        return "foundations"
+    if derived == "test_targets" or category == "tests":
+        return "validation_tests"
+    if derived == "readiness":
+        return "closure_decisions"
+    if category == "docs":
+        if _contains_any(text, ("phase 1", "review", "מוכנות", "חתימה", "החלטה", "signoff")):
+            return "closure_decisions"
+        return "foundations"
+    if derived == "logic" or category == "logic":
+        return "logic_layer"
+
+    if _contains_any(text, ("pts", "autopts", "smoke", "בדיקה", "בדיקות")):
+        return "validation_tests"
+    if _contains_any(text, ("adapter", "app ", "bring-up", "bringup", "integration", "אינטגר")):
+        return "app_integration"
+    if _contains_any(text, ("gatt", "ccc", "service", "characteristic", "attribute", "שירות")):
+        return "service_layer"
+    if _contains_any(text, ("לוגיקה", "behavior", "policy", "flow", "gating")):
+        return "logic_layer"
+
+    if category == "integration":
+        return "service_layer" if _contains_any(text, ("phase 1", "מימוש")) else "app_integration"
+    if category == "structure":
+        return "service_layer"
+
+    return "uncategorized"
+
+
+def _build_task_groups_for_profile(templates: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], int]:
+    if not isinstance(templates, list):
+        return [], 1
+
+    group_for_task: Dict[str, str] = {}
+    root_tasks_by_group: Dict[str, List[Dict[str, Any]]] = {}
+
+    for task in templates:
+        if not isinstance(task, dict):
+            continue
+        task_id = str(task.get("task_id") or "").strip()
+        if not task_id:
+            continue
+        parent_task_id = str(task.get("parent_task_id") or "").strip() or None
+        parent_group_id = group_for_task.get(parent_task_id) if parent_task_id else None
+        group_id = _classify_task_group(task, parent_group_id)
+        if group_id not in TASK_GROUP_INDEX:
+            group_id = "uncategorized"
+        task["task_group_id"] = group_id
+        group_for_task[task_id] = group_id
+        if not parent_task_id:
+            root_tasks_by_group.setdefault(group_id, []).append(task)
+
+    groups: List[Dict[str, Any]] = []
+    for defn in TASK_GROUP_DEFS:
+        group_id = str(defn["group_id"])
+        roots = root_tasks_by_group.get(group_id, [])
+        if not roots:
+            continue
+        task_ids = [str(t.get("task_id") or "") for t in roots if str(t.get("task_id") or "").strip()]
+        # Prefer unfinished / higher priority tasks as compact highlights
+        sorted_roots = sorted(
+            roots,
+            key=lambda t: (
+                1 if str(t.get("default_status") or "todo") == "done" else 0,
+                {"high": 0, "medium": 1, "low": 2}.get(str(t.get("suggested_priority") or "medium"), 3),
+                str(t.get("title_he") or ""),
+            ),
+        )
+        highlight_ids = [str(t.get("task_id") or "") for t in sorted_roots[:4] if str(t.get("task_id") or "").strip()]
+        merged_sources = _merge_source_lists(*[(t.get("source_refs") or []) for t in roots if isinstance(t, dict)])
+        groups.append(
+            {
+                "group_id": group_id,
+                "label_he": defn["label_he"],
+                "summary_he": defn["summary_he"],
+                "goal_he": defn["goal_he"],
+                "order": int(defn["order"]),
+                "task_ids": task_ids,
+                "highlight_task_ids": [x for x in highlight_ids if x in task_ids],
+                "sources": merged_sources,
+            }
+        )
+
+    return groups, 1
+
+
 def build_current_work_templates(
     profile_map: Dict[str, Any],
     status_tracker: Dict[str, Any],
@@ -2439,11 +2600,14 @@ def build_current_work_templates(
         readiness = (readiness_by_id.get(pid) or {}) if isinstance(readiness_by_id, dict) else {}
         decisions = ((phase1_decisions.get(pid) or {})) if isinstance(phase1_decisions, dict) else {}
         templates = _build_task_templates_for_profile(pid, p_row, status_row, impl_contract, test_targets, logic_p, structure_p, readiness, decisions)
+        task_groups, task_group_rules_version = _build_task_groups_for_profile(templates)
         profiles[pid] = {
             "profile_id": pid,
             "ui_label": p_row.get("ui_label") or _ui_label(pid),
             "display_name_he": p_row.get("display_name_he") or _ui_label(pid),
             "task_templates": templates,
+            "task_groups": task_groups,
+            "task_group_rules_version": task_group_rules_version,
             "task_state": {"version": 1, "tasks": {}},
             "tasks_merged": templates,
             "summary": _current_work_summary(templates),
@@ -2970,6 +3134,27 @@ def enforce_group_b_hub_source_policy(data: Dict[str, Any]) -> None:
                     raise ValueError(f"group_b.current_work.profiles.{pid} task missing {key}")
             if not isinstance(task.get("source_refs"), list):
                 raise ValueError(f"group_b.current_work.profiles.{pid} task.source_refs must be a list")
+        task_groups = crow.get("task_groups")
+        if not isinstance(task_groups, list):
+            raise ValueError(f"group_b.current_work.profiles.{pid}.task_groups must be a list")
+        template_ids = {str(t.get('task_id') or '') for t in templates if isinstance(t, dict)}
+        for grp in task_groups:
+            if not isinstance(grp, dict):
+                raise ValueError(f"group_b.current_work.profiles.{pid}.task_groups contains non-dict group")
+            for key in ("group_id", "label_he", "task_ids"):
+                if key == "task_ids":
+                    if not isinstance(grp.get("task_ids"), list):
+                        raise ValueError(f"group_b.current_work.profiles.{pid}.task_groups[].task_ids must be a list")
+                elif not str(grp.get(key) or "").strip():
+                    raise ValueError(f"group_b.current_work.profiles.{pid}.task_groups missing {key}")
+            highlight_ids = grp.get("highlight_task_ids", [])
+            if not isinstance(highlight_ids, list):
+                raise ValueError(f"group_b.current_work.profiles.{pid}.task_groups[].highlight_task_ids must be a list")
+            task_ids = [str(x) for x in (grp.get("task_ids") or [])]
+            if any(tid not in template_ids for tid in task_ids):
+                raise ValueError(f"group_b.current_work.profiles.{pid}.task_groups contains unknown task_id")
+            if any(str(h) not in set(task_ids) for h in highlight_ids):
+                raise ValueError(f"group_b.current_work.profiles.{pid}.task_groups[].highlight_task_ids must be subset of task_ids")
 
     knowledge_center = group_b.get("knowledge_center", {})
     sections = knowledge_center.get("sections") if isinstance(knowledge_center, dict) else None
