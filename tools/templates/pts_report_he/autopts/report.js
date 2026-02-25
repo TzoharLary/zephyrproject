@@ -100,6 +100,8 @@ function statusPill(status) {
   if (s === "present") return pill("קיים", "optional");
   if (s === "scaffold") return pill("טיוטת שלד", "optional");
   if (s === "open") return pill("פתוח", "conditional");
+  if (s === "resolved") return pill("נסגר", "mandatory");
+  if (s === "deferred_phase2") return pill("נדחה ל-Phase 2", "optional");
   if (s === "reviewed") return pill("נסקר", "mandatory");
   if (s === "ready") return pill("מוכן", "mandatory");
   if (s === "blocked") return pill("חסום", "conditional");
@@ -109,6 +111,28 @@ function statusPill(status) {
 
 function boolPill(flag, yes = "כן", no = "לא") {
   return flag ? pill(yes, "mandatory") : pill(no, "conditional");
+}
+
+function renderListOrMuted(items, emptyText = "אין נתונים") {
+  const rows = (items || []).filter(Boolean);
+  if (!rows.length) return `<p class="muted">${esc(emptyText)}</p>`;
+  return `<ul class="compact-list">${rows.map((x) => `<li data-searchable="true">${esc(String(x))}</li>`).join("")}</ul>`;
+}
+
+function renderNamedObjectKv(obj, labels = {}) {
+  if (!obj || typeof obj !== "object" || Array.isArray(obj) || !Object.keys(obj).length) {
+    return '<p class="muted">אין נתונים</p>';
+  }
+  return `
+    <div class="kv-grid compact">
+      ${Object.entries(obj).map(([k, v]) => {
+        const label = labels[k] || k;
+        if (Array.isArray(v)) return `<div><span>${esc(label)}</span><strong>${esc(String(v.length))}</strong></div>`;
+        if (typeof v === "object" && v !== null) return `<div><span>${esc(label)}</span><strong>אובייקט</strong></div>`;
+        return `<div><span>${esc(label)}</span><strong>${esc(String(v))}</strong></div>`;
+      }).join("")}
+    </div>
+  `;
 }
 
 function topTabs() {
@@ -176,6 +200,9 @@ function renderQuickStatus() {
       <div class="quick-stat"><span>פרופילים עם ממצאי מבנה</span><strong>${esc(String(status.structure_with_findings || 0))}</strong></div>
       <div class="quick-stat"><span>לוגיקה baseline</span><strong>${esc(String(status.logic_baselined || 0))}</strong></div>
       <div class="quick-stat"><span>מבנה baseline</span><strong>${esc(String(status.structure_baselined || 0))}</strong></div>
+      <div class="quick-stat"><span>חוזה מימוש מוגדר</span><strong>${esc(String(status.implementation_contract_defined || 0))}</strong></div>
+      <div class="quick-stat"><span>יעדי בדיקות Phase 1</span><strong>${esc(String(status.phase1_test_targets_defined || 0))}</strong></div>
+      <div class="quick-stat"><span>חתימת review</span><strong>${esc(String(status.review_signoff_complete || 0))}</strong></div>
       <div class="quick-stat"><span>מוכנים ל-Phase 1</span><strong>${esc(String(status.ready_for_impl_phase1 || 0))}</strong></div>
     </div>
   `;
@@ -278,6 +305,10 @@ function renderOverviewTab() {
               <div><span>Logic baseline</span><strong>${esc(String(readinessSummary.logic_analysis_baselined || 0))}</strong></div>
               <div><span>Structure baseline</span><strong>${esc(String(readinessSummary.structure_analysis_baselined || 0))}</strong></div>
               <div><span>Phase 1 subset decided</span><strong>${esc(String(readinessSummary.phase1_subset_decided || 0))}</strong></div>
+              <div><span>Implementation contract</span><strong>${esc(String(readinessSummary.implementation_contract_defined || 0))}</strong></div>
+              <div><span>Phase 1 test targets</span><strong>${esc(String(readinessSummary.phase1_test_targets_defined || 0))}</strong></div>
+              <div><span>Phase 1 blockers closed/deferred</span><strong>${esc(String(readinessSummary.phase1_blockers_closed_or_deferred || 0))}</strong></div>
+              <div><span>Review signoff complete</span><strong>${esc(String(readinessSummary.review_signoff_complete || 0))}</strong></div>
               <div><span>Logic reviewed</span><strong>${esc(String(readinessSummary.logic_analysis_reviewed || 0))}</strong></div>
               <div><span>Structure reviewed</span><strong>${esc(String(readinessSummary.structure_analysis_reviewed || 0))}</strong></div>
               <div><span>Ready for impl phase 1</span><strong>${esc(String(readinessSummary.ready_for_impl_phase1 || 0))}</strong></div>
@@ -711,6 +742,142 @@ function renderKnowledgeDoc(profileId, kind) {
   `;
 }
 
+function renderPhase1Decisions(profileId) {
+  const decisions = ((((DATA.group_b || {}).phase1_decisions || {})[profileId]) || {}).rows || [];
+  if (!decisions.length) {
+    return '<p class="muted">אין עדיין החלטות Phase 1 מובנות.</p>';
+  }
+  return `
+    <div class="cards-grid two">
+      ${decisions.map((d) => `
+        <article class="hub-card nested-card" data-searchable="true" data-search-text="${esc(`${d.id || ""} ${d.title_he || ""} ${d.decision_he || ""}`)}">
+          <div class="profile-card-head">
+            <h4>${esc(d.title_he || d.id || "החלטה")}</h4>
+            <div class="chip-row">${statusPill(d.status)} ${confidencePill(d.confidence)}</div>
+          </div>
+          <p>${esc(d.decision_he || "")}</p>
+          ${d.rationale_he ? `<p class="muted">${esc(d.rationale_he)}</p>` : ""}
+          ${(d.impacts_he || []).length ? renderListOrMuted(d.impacts_he, "אין השלכות") : ""}
+          ${(d.applies_to_checks || []).length ? `<p class="muted">משפיע על gates: ${(d.applies_to_checks || []).map((x) => `<code>${esc(x)}</code>`).join(" ")}</p>` : ""}
+          ${sourceDetails(d.sources || [], "מקורות החלטה")}
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderImplementationContract(profileId) {
+  const c = ((((DATA.group_b || {}).implementation_contracts || {})[profileId]) || {});
+  if (!Object.keys(c).length) return '<p class="muted">אין חוזה מימוש זמין.</p>';
+  return `
+    <div class="cards-grid two">
+      <article class="hub-card nested-card" data-searchable="true">
+        <h4>תיחום Phase 1</h4>
+        ${c.summary_he ? `<p>${esc(c.summary_he)}</p>` : ""}
+        <h5>נכנס ל-Phase 1</h5>
+        ${renderListOrMuted(c.scope_in || [], "טרם הוגדר scope_in")}
+        <h5>מחוץ ל-Phase 1 / נדחה</h5>
+        ${renderListOrMuted(c.scope_out || [], "אין scope_out")}
+      </article>
+      <article class="hub-card nested-card">
+        <h4>סדר מימוש והנחות</h4>
+        <h5>סדר מימוש מומלץ</h5>
+        ${renderListOrMuted(c.implementation_order || [], "טרם הוגדר סדר מימוש")}
+        <h5>הנחות חוסמות</h5>
+        ${renderListOrMuted(c.blocking_assumptions || [], "אין הנחות חוסמות")}
+        <h5>נדחה לא חוסם</h5>
+        ${renderListOrMuted(c.non_blocking_deferred || [], "אין פריטים שנדחו")}
+      </article>
+      <article class="hub-card nested-card">
+        <h4>חוזה API/Runtime</h4>
+        <h5>Service API</h5>
+        ${renderNamedObjectKv(c.service_api_contract || {}, { public_functions_he: "פונקציות ציבוריות", callback_contract_he: "קונטרקט callbacks", notes_he: "הערות" })}
+        ${(c.service_api_contract || {}).public_functions_he ? renderListOrMuted((c.service_api_contract || {}).public_functions_he, "אין") : ""}
+        <h5>Runtime flow</h5>
+        ${(c.runtime_flow_contract || {}).steps_he ? renderListOrMuted((c.runtime_flow_contract || {}).steps_he, "אין שלבים") : renderNamedObjectKv(c.runtime_flow_contract || {})}
+      </article>
+      <article class="hub-card nested-card">
+        <h4>חוזה מבני/מדיניות</h4>
+        <h5>מודל נתונים</h5>
+        ${(c.data_model_contract || {}).items_he ? renderListOrMuted((c.data_model_contract || {}).items_he, "אין items") : renderNamedObjectKv(c.data_model_contract || {})}
+        <h5>CCC / notify / indicate</h5>
+        ${(c.ccc_and_notify_indicate_contract || {}).rules_he ? renderListOrMuted((c.ccc_and_notify_indicate_contract || {}).rules_he, "אין rules") : renderNamedObjectKv(c.ccc_and_notify_indicate_contract || {})}
+        <h5>גבולות מודולים</h5>
+        ${renderNamedObjectKv(c.module_boundaries || {}, { modules_he: "מודולים", boundaries_he: "גבולות" })}
+        ${(c.module_boundaries || {}).modules_he ? renderListOrMuted((c.module_boundaries || {}).modules_he, "אין מודולים") : ""}
+        ${(c.module_boundaries || {}).boundaries_he ? renderListOrMuted((c.module_boundaries || {}).boundaries_he, "אין גבולות") : ""}
+      </article>
+      <article class="hub-card nested-card">
+        <h4>Error / Dependencies</h4>
+        <h5>מדיניות שגיאות</h5>
+        ${(c.error_policy_contract || {}).rules_he ? renderListOrMuted((c.error_policy_contract || {}).rules_he, "אין rules") : renderNamedObjectKv(c.error_policy_contract || {})}
+        <h5>תלויות</h5>
+        ${(c.dependency_contract || {}).items_he ? renderListOrMuted((c.dependency_contract || {}).items_he, "אין תלויות") : renderNamedObjectKv(c.dependency_contract || {})}
+      </article>
+    </div>
+    ${sourceDetails(c.sources || [], "מקורות חוזה מימוש")}
+  `;
+}
+
+function renderPhase1TestTargets(profileId) {
+  const t = ((((DATA.group_b || {}).test_targets_phase1 || {})[profileId]) || {});
+  if (!Object.keys(t).length) return '<p class="muted">אין יעדי בדיקות Phase 1.</p>';
+  return `
+    <div class="cards-grid two">
+      <article class="hub-card nested-card">
+        <h4>בדיקות smoke ידניות</h4>
+        ${t.summary_he ? `<p>${esc(t.summary_he)}</p>` : ""}
+        ${renderListOrMuted(t.manual_smoke_checks || [], "טרם הוגדר")}
+      </article>
+      <article class="hub-card nested-card">
+        <h4>יעדי PTS / AutoPTS</h4>
+        ${renderListOrMuted(t.pts_autopts_target_areas || [], "טרם הוגדר")}
+      </article>
+      <article class="hub-card nested-card">
+        <h4>הנחות ICS / IXIT</h4>
+        ${renderListOrMuted(t.ics_ixit_assumptions || [], "טרם הוגדר")}
+      </article>
+      <article class="hub-card nested-card">
+        <h4>קריטריון Done ל-Phase 1</h4>
+        ${renderListOrMuted(t.phase1_done_criteria || [], "טרם הוגדר")}
+      </article>
+      <article class="hub-card nested-card">
+        <h4>Known non-goals</h4>
+        ${renderListOrMuted(t.known_non_goals || [], "אין")}
+      </article>
+    </div>
+    ${sourceDetails(t.sources || [], "מקורות יעדי בדיקות")}
+  `;
+}
+
+function renderReviewSignoff(profileId) {
+  const s = ((((DATA.group_b || {}).review_signoffs || {})[profileId]) || {});
+  if (!Object.keys(s).length) return '<p class="muted">אין חתימת review זמינה.</p>';
+  return `
+    <div class="cards-grid two">
+      <article class="hub-card nested-card">
+        <h4>חתימת Review / מוכנות</h4>
+        <div class="kv-grid compact">
+          <div><span>Logic reviewed</span>${boolPill(!!s.logic_reviewed, "כן", "לא")}</div>
+          <div><span>Structure reviewed</span>${boolPill(!!s.structure_reviewed, "כן", "לא")}</div>
+          <div><span>מוכן ל-Phase 1</span>${boolPill(!!s.ready_for_impl_phase1, "מוכן", "לא מוכן")}</div>
+          <div><span>Logic reviewed at</span><code>${esc(s.logic_reviewed_at || "-")}</code></div>
+          <div><span>Structure reviewed at</span><code>${esc(s.structure_reviewed_at || "-")}</code></div>
+        </div>
+        ${s.review_summary_he ? `<p>${esc(s.review_summary_he)}</p>` : ""}
+        ${s.ready_decision_reason_he ? `<p class="muted">${esc(s.ready_decision_reason_he)}</p>` : ""}
+      </article>
+      <article class="hub-card nested-card">
+        <h4>חסמים סופיים (Phase 1)</h4>
+        ${(s.remaining_phase1_blockers || []).length ? renderListOrMuted(s.remaining_phase1_blockers || [], "אין") : '<p class="muted">אין חסמים פתוחים ל-Phase 1.</p>'}
+        <h5>הערות reviewer</h5>
+        ${renderListOrMuted(s.reviewer_notes_he || [], "אין הערות")}
+      </article>
+    </div>
+    ${sourceDetails(s.sources || [], "מקורות חתימת review")}
+  `;
+}
+
 function renderProfileStatus(profileId) {
   const row = ((((DATA.group_b || {}).status_tracker || {}).rows) || []).find((r) => r.profile_id === profileId) || {};
   const logic = ((((DATA.group_b || {}).logic_analysis || {})[profileId]) || {});
@@ -731,8 +898,13 @@ function renderProfileStatus(profileId) {
           <div><span>ממצאי מבנה</span><strong>${esc(String(row.structure_findings || 0))}</strong></div>
           <div><span>תצפיות מקור מבנה</span><strong>${esc(String(row.structure_source_observations || 0))}</strong></div>
           <div><span>Phase 1 subset</span>${boolPill(row.phase1_subset_decided, "הוגדר", "חסר")}</div>
+          <div><span>החלטות Phase 1</span><strong>${esc(String(row.phase1_decisions_count || 0))}</strong></div>
           <div><span>Logic baseline</span>${boolPill(row.logic_analysis_baselined)}</div>
           <div><span>Structure baseline</span>${boolPill(row.structure_analysis_baselined)}</div>
+          <div><span>חוזה מימוש</span>${boolPill(row.implementation_contract_defined, "מוגדר", "חסר")}</div>
+          <div><span>יעדי בדיקות Phase 1</span>${boolPill(row.phase1_test_targets_defined, "מוגדרים", "חסרים")}</div>
+          <div><span>חתימת review</span>${boolPill(row.review_signoff_complete, "הושלמה", "חסרה")}</div>
+          <div><span>חסמי Phase 1</span>${boolPill(row.phase1_blockers_closed_or_deferred, "סגורים/נדחו", "פתוחים")}</div>
           <div><span>מוכן ל-Phase 1</span>${boolPill(row.ready_for_impl_phase1, "מוכן", "לא מוכן")}</div>
         </div>
         ${(row.gaps_he || []).length ? `<ul class="compact-list">${(row.gaps_he || []).map((g) => `<li data-searchable="true">${esc(g)}</li>`).join("")}</ul>` : '<p class="muted">אין פערים פתוחים ברשימה.</p>'}
@@ -751,6 +923,26 @@ function renderProfileStatus(profileId) {
           </article>
         </div>
         ${(readiness.decision_notes_he || []).length ? `<details class="hub-detail"><summary>הערות החלטה / מוכנות</summary><div class="detail-body"><ul class="compact-list">${(readiness.decision_notes_he || []).map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div></details>` : ""}
+      </section>
+
+      <section class="hub-card">
+        <h3>החלטות Phase 1</h3>
+        ${renderPhase1Decisions(profileId)}
+      </section>
+
+      <section class="hub-card">
+        <h3>חוזה מימוש Phase 1</h3>
+        ${renderImplementationContract(profileId)}
+      </section>
+
+      <section class="hub-card">
+        <h3>יעדי בדיקות Phase 1</h3>
+        ${renderPhase1TestTargets(profileId)}
+      </section>
+
+      <section class="hub-card">
+        <h3>חתימת Review / מוכנות</h3>
+        ${renderReviewSignoff(profileId)}
       </section>
 
       <section class="hub-card">

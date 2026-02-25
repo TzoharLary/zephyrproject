@@ -30,6 +30,10 @@ BLOCK_TYPES = {
     "groupb_source_observation",
     "groupb_method",
     "groupb_open_question",
+    "groupb_decision",
+    "groupb_impl_contract",
+    "groupb_test_target",
+    "groupb_review_signoff",
 }
 
 REQUIRED_SECTIONS_BY_KIND = {
@@ -40,6 +44,10 @@ REQUIRED_SECTIONS_BY_KIND = {
         "שיטות חילוץ/ניתוח",
         "פערים ושאלות פתוחות",
         "השלכות למימוש",
+        "החלטות Phase 1",
+        "חוזה מימוש (Implementation Contract)",
+        "יעדי בדיקות Phase 1",
+        "חתימת Review / מוכנות",
         "מקורות",
     ],
     "structure": [
@@ -49,6 +57,10 @@ REQUIRED_SECTIONS_BY_KIND = {
         "שיטות חילוץ/ניתוח",
         "פערים ושאלות פתוחות",
         "השלכות למימוש",
+        "החלטות Phase 1",
+        "חוזה מימוש (Implementation Contract)",
+        "יעדי בדיקות Phase 1",
+        "חתימת Review / מוכנות",
         "מקורות",
     ],
 }
@@ -519,6 +531,146 @@ def _normalize_local_method(raw: Dict[str, Any], profile_id: str, doc_kind: str,
     }
 
 
+def _normalize_phase1_decision(
+    raw: Dict[str, Any],
+    profile_id: str,
+    doc_kind: str,
+    source_catalog: Dict[str, Dict[str, Any]],
+    file_source: Dict[str, Any],
+) -> Dict[str, Any]:
+    source_ids = [str(x) for x in _coerce_list(raw.get("source_ids")) if str(x)]
+    method_ids = [str(x) for x in _coerce_list(raw.get("derivation_method_ids")) if str(x)]
+    return {
+        "id": str(raw.get("id") or f"{profile_id.lower()}_{doc_kind}_decision_{raw.get('_ordinal', 0):03d}"),
+        "profile_id": profile_id,
+        "doc_kind": doc_kind,
+        "phase": str(raw.get("phase") or "phase1"),
+        "title_he": str(raw.get("title_he") or "החלטה ללא כותרת"),
+        "decision_he": str(raw.get("decision_he") or ""),
+        "rationale_he": str(raw.get("rationale_he") or ""),
+        "status": str(raw.get("status") or "decided"),
+        "confidence": str(raw.get("confidence") or "medium"),
+        "source_ids": source_ids,
+        "derivation_method_ids": method_ids,
+        "impacts_he": [str(x) for x in _coerce_list(raw.get("impacts_he")) if str(x)],
+        "applies_to_checks": [str(x) for x in _coerce_list(raw.get("applies_to_checks")) if str(x)],
+        "sources": _resolve_source_refs(source_ids, source_catalog, [file_source]),
+    }
+
+
+def _normalize_impl_contract_block(
+    raw: Dict[str, Any],
+    profile_id: str,
+    doc_kind: str,
+    source_catalog: Dict[str, Dict[str, Any]],
+    file_source: Dict[str, Any],
+) -> Dict[str, Any]:
+    source_ids = [str(x) for x in _coerce_list(raw.get("source_ids")) if str(x)]
+    contract = raw.get("service_api_contract") if isinstance(raw.get("service_api_contract"), dict) else {}
+    runtime_flow = raw.get("runtime_flow_contract") if isinstance(raw.get("runtime_flow_contract"), dict) else {}
+    data_model = raw.get("data_model_contract") if isinstance(raw.get("data_model_contract"), dict) else {}
+    ccc_contract = raw.get("ccc_and_notify_indicate_contract") if isinstance(raw.get("ccc_and_notify_indicate_contract"), dict) else {}
+    error_policy = raw.get("error_policy_contract") if isinstance(raw.get("error_policy_contract"), dict) else {}
+    dependency_contract = raw.get("dependency_contract") if isinstance(raw.get("dependency_contract"), dict) else {}
+    module_boundaries = raw.get("module_boundaries") if isinstance(raw.get("module_boundaries"), dict) else {}
+    return {
+        "id": str(raw.get("id") or f"{profile_id.lower()}_{doc_kind}_impl_contract_{raw.get('_ordinal', 0):03d}"),
+        "profile_id": profile_id,
+        "doc_kind": doc_kind,
+        "phase": str(raw.get("phase") or "phase1"),
+        "scope_in": [str(x) for x in _coerce_list(raw.get("scope_in")) if str(x)],
+        "scope_out": [str(x) for x in _coerce_list(raw.get("scope_out")) if str(x)],
+        "service_api_contract": contract,
+        "runtime_flow_contract": runtime_flow,
+        "data_model_contract": data_model,
+        "ccc_and_notify_indicate_contract": ccc_contract,
+        "error_policy_contract": error_policy,
+        "dependency_contract": dependency_contract,
+        "module_boundaries": module_boundaries,
+        "implementation_order": [str(x) for x in _coerce_list(raw.get("implementation_order")) if str(x)],
+        "blocking_assumptions": [str(x) for x in _coerce_list(raw.get("blocking_assumptions")) if str(x)],
+        "non_blocking_deferred": [str(x) for x in _coerce_list(raw.get("non_blocking_deferred")) if str(x)],
+        "summary_he": str(raw.get("summary_he") or ""),
+        "source_ids": source_ids,
+        "sources": _resolve_source_refs(source_ids, source_catalog, [file_source]),
+    }
+
+
+def _normalize_test_target_block(
+    raw: Dict[str, Any],
+    profile_id: str,
+    doc_kind: str,
+    source_catalog: Dict[str, Dict[str, Any]],
+    file_source: Dict[str, Any],
+) -> Dict[str, Any]:
+    source_ids = [str(x) for x in _coerce_list(raw.get("source_ids")) if str(x)]
+    return {
+        "id": str(raw.get("id") or f"{profile_id.lower()}_{doc_kind}_test_target_{raw.get('_ordinal', 0):03d}"),
+        "profile_id": profile_id,
+        "doc_kind": doc_kind,
+        "phase": str(raw.get("phase") or "phase1"),
+        "manual_smoke_checks": [str(x) for x in _coerce_list(raw.get("manual_smoke_checks")) if str(x)],
+        "pts_autopts_target_areas": [str(x) for x in _coerce_list(raw.get("pts_autopts_target_areas")) if str(x)],
+        "ics_ixit_assumptions": [str(x) for x in _coerce_list(raw.get("ics_ixit_assumptions")) if str(x)],
+        "phase1_done_criteria": [str(x) for x in _coerce_list(raw.get("phase1_done_criteria")) if str(x)],
+        "known_non_goals": [str(x) for x in _coerce_list(raw.get("known_non_goals")) if str(x)],
+        "summary_he": str(raw.get("summary_he") or ""),
+        "source_ids": source_ids,
+        "sources": _resolve_source_refs(source_ids, source_catalog, [file_source]),
+    }
+
+
+def _normalize_review_signoff_block(
+    raw: Dict[str, Any],
+    profile_id: str,
+    doc_kind: str,
+    source_catalog: Dict[str, Dict[str, Any]],
+    file_source: Dict[str, Any],
+) -> Dict[str, Any]:
+    source_ids = [str(x) for x in _coerce_list(raw.get("source_ids")) if str(x)]
+    return {
+        "id": str(raw.get("id") or f"{profile_id.lower()}_{doc_kind}_review_signoff_{raw.get('_ordinal', 0):03d}"),
+        "profile_id": profile_id,
+        "doc_kind": doc_kind,
+        "logic_reviewed": bool(raw.get("logic_reviewed")),
+        "structure_reviewed": bool(raw.get("structure_reviewed")),
+        "logic_reviewed_at": str(raw.get("logic_reviewed_at") or ""),
+        "structure_reviewed_at": str(raw.get("structure_reviewed_at") or ""),
+        "review_summary_he": str(raw.get("review_summary_he") or ""),
+        "reviewer_notes_he": [str(x) for x in _coerce_list(raw.get("reviewer_notes_he")) if str(x)],
+        "remaining_phase1_blockers": [str(x) for x in _coerce_list(raw.get("remaining_phase1_blockers")) if str(x)],
+        "ready_for_impl_phase1": bool(raw.get("ready_for_impl_phase1")),
+        "ready_decision_reason_he": str(raw.get("ready_decision_reason_he") or ""),
+        "source_ids": source_ids,
+        "sources": _resolve_source_refs(source_ids, source_catalog, [file_source]),
+    }
+
+
+def _merge_source_lists(*groups: Any) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for group in groups:
+        items = group if isinstance(group, list) else []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            key = json.dumps(item, ensure_ascii=False, sort_keys=True)
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(item)
+    return out
+
+
+def _pick_best_block(candidates: List[Dict[str, Any]], preferred_doc_kind: str = "structure") -> Dict[str, Any]:
+    if not candidates:
+        return {}
+    for item in candidates:
+        if str(item.get("doc_kind") or "") == preferred_doc_kind:
+            return item
+    return candidates[0]
+
+
 def _extract_analysis_warnings(findings: List[Dict[str, Any]], source_observations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     warnings: List[Dict[str, Any]] = []
     for finding in findings:
@@ -635,6 +787,26 @@ def build_knowledge_analysis(
         for b in blocks
         if isinstance(b, dict) and b.get("_block_type") == "groupb_open_question"
     ]
+    phase1_decisions = [
+        _normalize_phase1_decision(b, profile_id, doc_kind, source_catalog, file_source)
+        for b in blocks
+        if isinstance(b, dict) and b.get("_block_type") == "groupb_decision"
+    ]
+    impl_contract_blocks = [
+        _normalize_impl_contract_block(b, profile_id, doc_kind, source_catalog, file_source)
+        for b in blocks
+        if isinstance(b, dict) and b.get("_block_type") == "groupb_impl_contract"
+    ]
+    test_target_blocks = [
+        _normalize_test_target_block(b, profile_id, doc_kind, source_catalog, file_source)
+        for b in blocks
+        if isinstance(b, dict) and b.get("_block_type") == "groupb_test_target"
+    ]
+    review_signoff_blocks = [
+        _normalize_review_signoff_block(b, profile_id, doc_kind, source_catalog, file_source)
+        for b in blocks
+        if isinstance(b, dict) and b.get("_block_type") == "groupb_review_signoff"
+    ]
 
     used_method_ids = set()
     for finding in findings:
@@ -690,6 +862,10 @@ def build_knowledge_analysis(
         "inference_steps": [],
         "confidence_scores": dict(sorted(confidence_counts.items())),
         "open_questions": open_questions,
+        "phase1_decisions": phase1_decisions,
+        "implementation_contract_blocks": impl_contract_blocks,
+        "test_target_blocks": test_target_blocks,
+        "review_signoff_blocks": review_signoff_blocks,
         "implementation_implications": implementation_implications,
         "sources": _resolve_source_refs(dedup_source_ids, source_catalog, [file_source]),
         "source_ids": dedup_source_ids,
@@ -711,6 +887,10 @@ def build_knowledge_analysis(
                 "source_observations": len(source_observations),
                 "methods": len(local_methods),
                 "open_questions": len(open_questions),
+                "phase1_decisions": len(phase1_decisions),
+                "impl_contracts": len(impl_contract_blocks),
+                "test_targets": len(test_target_blocks),
+                "review_signoffs": len(review_signoff_blocks),
             },
             "warnings": warnings,
         },
@@ -991,11 +1171,211 @@ def summarize_autopts_for_hub(paths: Paths, autopts_guide: Optional[Dict[str, An
     }
 
 
+def _is_contract_defined(contract: Dict[str, Any]) -> bool:
+    if not isinstance(contract, dict):
+        return False
+    required_list_keys = ("scope_in", "implementation_order")
+    if any(not isinstance(contract.get(k), list) or not contract.get(k) for k in required_list_keys):
+        return False
+    for key in (
+        "service_api_contract",
+        "runtime_flow_contract",
+        "data_model_contract",
+        "ccc_and_notify_indicate_contract",
+        "error_policy_contract",
+        "dependency_contract",
+        "module_boundaries",
+    ):
+        if not isinstance(contract.get(key), dict) or not contract.get(key):
+            return False
+    return bool(contract.get("sources"))
+
+
+def _is_test_target_defined(test_target: Dict[str, Any]) -> bool:
+    if not isinstance(test_target, dict):
+        return False
+    for key in ("manual_smoke_checks", "phase1_done_criteria", "ics_ixit_assumptions"):
+        if not isinstance(test_target.get(key), list) or not test_target.get(key):
+            return False
+    return bool(test_target.get("sources"))
+
+
+def build_phase1_profile_artifacts(
+    profile_map: Dict[str, Any],
+    logic_analysis: Dict[str, Any],
+    structure_analysis: Dict[str, Any],
+) -> Dict[str, Any]:
+    by_id = {str(r.get("profile_id") or "").upper(): r for r in profile_map.get("profiles", []) if isinstance(r, dict)}
+    implementation_contracts: Dict[str, Any] = {}
+    test_targets_phase1: Dict[str, Any] = {}
+    review_signoffs: Dict[str, Any] = {}
+    decisions_by_profile: Dict[str, Any] = {}
+    rows: List[Dict[str, Any]] = []
+
+    for pid in PROFILE_IDS:
+        p_row = by_id.get(pid, {})
+        logic = logic_analysis.get(pid, {}) if isinstance(logic_analysis, dict) else {}
+        structure = structure_analysis.get(pid, {}) if isinstance(structure_analysis, dict) else {}
+
+        logic_decisions = logic.get("phase1_decisions", []) if isinstance(logic.get("phase1_decisions"), list) else []
+        structure_decisions = (
+            structure.get("phase1_decisions", []) if isinstance(structure.get("phase1_decisions"), list) else []
+        )
+        decisions = [*logic_decisions, *structure_decisions]
+        decisions_by_profile[pid] = {
+            "profile_id": pid,
+            "ui_label": p_row.get("ui_label") or ("ScPS" if pid == "SCPS" else pid),
+            "rows": decisions,
+            "sources": _merge_source_lists(
+                *[d.get("sources", []) for d in decisions if isinstance(d, dict)],
+                logic.get("sources", []),
+                structure.get("sources", []),
+            ),
+        }
+
+        contract_candidates = []
+        for item in logic.get("implementation_contract_blocks", []) if isinstance(logic.get("implementation_contract_blocks"), list) else []:
+            if isinstance(item, dict):
+                contract_candidates.append(item)
+        for item in (
+            structure.get("implementation_contract_blocks", [])
+            if isinstance(structure.get("implementation_contract_blocks"), list)
+            else []
+        ):
+            if isinstance(item, dict):
+                contract_candidates.append(item)
+        contract = _pick_best_block(contract_candidates, preferred_doc_kind="structure")
+        if contract:
+            contract = dict(contract)
+        if not contract:
+            contract = {
+                "profile_id": pid,
+                "phase": "phase1",
+                "scope_in": [],
+                "scope_out": [],
+                "service_api_contract": {},
+                "runtime_flow_contract": {},
+                "data_model_contract": {},
+                "ccc_and_notify_indicate_contract": {},
+                "error_policy_contract": {},
+                "dependency_contract": {},
+                "module_boundaries": {},
+                "implementation_order": [],
+                "blocking_assumptions": [],
+                "non_blocking_deferred": [],
+                "summary_he": "",
+                "sources": [],
+                "source_ids": [],
+                "doc_kind": "",
+                "id": "",
+            }
+        contract["is_defined"] = _is_contract_defined(contract)
+        implementation_contracts[pid] = contract
+
+        test_target_candidates = []
+        for item in logic.get("test_target_blocks", []) if isinstance(logic.get("test_target_blocks"), list) else []:
+            if isinstance(item, dict):
+                test_target_candidates.append(item)
+        for item in structure.get("test_target_blocks", []) if isinstance(structure.get("test_target_blocks"), list) else []:
+            if isinstance(item, dict):
+                test_target_candidates.append(item)
+        test_target = _pick_best_block(test_target_candidates, preferred_doc_kind="structure")
+        if test_target:
+            test_target = dict(test_target)
+        if not test_target:
+            test_target = {
+                "profile_id": pid,
+                "phase": "phase1",
+                "manual_smoke_checks": [],
+                "pts_autopts_target_areas": [],
+                "ics_ixit_assumptions": [],
+                "phase1_done_criteria": [],
+                "known_non_goals": [],
+                "summary_he": "",
+                "sources": [],
+                "source_ids": [],
+                "doc_kind": "",
+                "id": "",
+            }
+        test_target["is_defined"] = _is_test_target_defined(test_target)
+        test_targets_phase1[pid] = test_target
+
+        signoff_candidates = []
+        for item in logic.get("review_signoff_blocks", []) if isinstance(logic.get("review_signoff_blocks"), list) else []:
+            if isinstance(item, dict):
+                signoff_candidates.append(item)
+        for item in structure.get("review_signoff_blocks", []) if isinstance(structure.get("review_signoff_blocks"), list) else []:
+            if isinstance(item, dict):
+                signoff_candidates.append(item)
+        signoff = _pick_best_block(signoff_candidates, preferred_doc_kind="structure")
+        if signoff:
+            signoff = dict(signoff)
+        else:
+            signoff = {
+                "profile_id": pid,
+                "logic_reviewed": False,
+                "structure_reviewed": False,
+                "logic_reviewed_at": "",
+                "structure_reviewed_at": "",
+                "review_summary_he": "",
+                "reviewer_notes_he": [],
+                "remaining_phase1_blockers": [],
+                "ready_for_impl_phase1": False,
+                "ready_decision_reason_he": "",
+                "sources": [],
+                "source_ids": [],
+                "doc_kind": "",
+                "id": "",
+            }
+        signoff["review_signoff_complete"] = bool(
+            signoff.get("logic_reviewed")
+            and signoff.get("structure_reviewed")
+            and str(signoff.get("review_summary_he") or "").strip()
+            and str(signoff.get("ready_decision_reason_he") or "").strip()
+        )
+        signoff["phase1_blockers_closed_or_deferred"] = len(signoff.get("remaining_phase1_blockers", []) or []) == 0
+        review_signoffs[pid] = signoff
+
+        rows.append(
+            {
+                "profile_id": pid,
+                "ui_label": p_row.get("ui_label") or ("ScPS" if pid == "SCPS" else pid),
+                "decisions_count": len(decisions),
+                "implementation_contract_defined": bool(contract.get("is_defined")),
+                "phase1_test_targets_defined": bool(test_target.get("is_defined")),
+                "review_signoff_complete": bool(signoff.get("review_signoff_complete")),
+                "phase1_blockers_closed_or_deferred": bool(signoff.get("phase1_blockers_closed_or_deferred")),
+                "ready_for_impl_phase1": bool(signoff.get("ready_for_impl_phase1")),
+            }
+        )
+
+    summary = {
+        "profiles": len(rows),
+        "implementation_contract_defined": sum(1 for r in rows if r.get("implementation_contract_defined")),
+        "phase1_test_targets_defined": sum(1 for r in rows if r.get("phase1_test_targets_defined")),
+        "review_signoff_complete": sum(1 for r in rows if r.get("review_signoff_complete")),
+        "phase1_blockers_closed_or_deferred": sum(1 for r in rows if r.get("phase1_blockers_closed_or_deferred")),
+        "ready_for_impl_phase1": sum(1 for r in rows if r.get("ready_for_impl_phase1")),
+    }
+    return {
+        "implementation_contracts": implementation_contracts,
+        "test_targets_phase1": test_targets_phase1,
+        "review_signoffs": review_signoffs,
+        "phase1_decisions": decisions_by_profile,
+        "summary": summary,
+        "rows": rows,
+        "sources": [],
+    }
+
+
 def build_readiness_gates(
     profile_map: Dict[str, Any],
     spec_research: Dict[str, Any],
     logic_analysis: Dict[str, Any],
     structure_analysis: Dict[str, Any],
+    implementation_contracts: Dict[str, Any],
+    test_targets_phase1: Dict[str, Any],
+    review_signoffs: Dict[str, Any],
 ) -> Dict[str, Any]:
     by_id = {str(r.get("profile_id") or "").upper(): r for r in profile_map.get("profiles", []) if isinstance(r, dict)}
     profiles: Dict[str, Any] = {}
@@ -1005,6 +1385,9 @@ def build_readiness_gates(
         spec = (spec_research.get("profiles", {}) or {}).get(pid, {})
         logic = logic_analysis.get(pid, {})
         structure = structure_analysis.get(pid, {})
+        impl_contract = implementation_contracts.get(pid, {}) if isinstance(implementation_contracts, dict) else {}
+        test_targets = test_targets_phase1.get(pid, {}) if isinstance(test_targets_phase1, dict) else {}
+        signoff = review_signoffs.get(pid, {}) if isinstance(review_signoffs, dict) else {}
 
         logic_findings = len(logic.get("core_findings", []) if isinstance(logic.get("core_findings"), list) else [])
         struct_findings = len(structure.get("core_findings", []) if isinstance(structure.get("core_findings"), list) else [])
@@ -1021,6 +1404,26 @@ def build_readiness_gates(
                 "phase1_subset_decided",
                 bool((logic.get("phase1_subset") or {}).get("decided")) or bool((structure.get("phase1_subset") or {}).get("decided")),
                 "הוגדרה החלטת Phase 1 subset מפורשת",
+            ),
+            (
+                "implementation_contract_defined",
+                bool(impl_contract.get("is_defined")),
+                "הוגדר חוזה מימוש Phase 1 מלא",
+            ),
+            (
+                "phase1_test_targets_defined",
+                bool(test_targets.get("is_defined")),
+                "הוגדרו יעדי בדיקות Phase 1",
+            ),
+            (
+                "phase1_blockers_closed_or_deferred",
+                bool(signoff.get("phase1_blockers_closed_or_deferred")),
+                "אין blockers של Phase 1 (או שסומנו deferred שאינם חוסמים)",
+            ),
+            (
+                "review_signoff_complete",
+                bool(signoff.get("review_signoff_complete")) and bool(signoff.get("ready_for_impl_phase1")),
+                "קיימת חתימת review מלאה עם ready_for_impl_phase1=true",
             ),
         ]
 
@@ -1040,6 +1443,9 @@ def build_readiness_gates(
             f"Structure findings/source observations: {struct_findings}/{struct_obs}",
             str((logic.get("phase1_subset") or {}).get("note_he") or ""),
             str((structure.get("phase1_subset") or {}).get("note_he") or ""),
+            f"Implementation contract defined: {'yes' if impl_contract.get('is_defined') else 'no'}",
+            f"Test targets defined: {'yes' if test_targets.get('is_defined') else 'no'}",
+            str(signoff.get("ready_decision_reason_he") or ""),
         ]
         gate_row = {
             "profile_id": pid,
@@ -1049,9 +1455,9 @@ def build_readiness_gates(
             "completed_checks": completed_checks,
             "blocked_checks": blocked_checks,
             "decision_notes_he": [x for x in decision_notes_he if x],
-            "last_reviewed_at": None,
+            "last_reviewed_at": signoff.get("structure_reviewed_at") or signoff.get("logic_reviewed_at") or None,
             "ready_for_impl_phase1": ready_for_impl_phase1,
-            "sources": [],
+            "sources": _merge_source_lists(impl_contract.get("sources", []), test_targets.get("sources", []), signoff.get("sources", [])),
         }
         profiles[pid] = gate_row
         rows.append(gate_row)
@@ -1064,6 +1470,12 @@ def build_readiness_gates(
         "logic_analysis_reviewed": sum(1 for r in rows if "logic_analysis_reviewed" in r.get("completed_checks", [])),
         "structure_analysis_reviewed": sum(1 for r in rows if "structure_analysis_reviewed" in r.get("completed_checks", [])),
         "phase1_subset_decided": sum(1 for r in rows if "phase1_subset_decided" in r.get("completed_checks", [])),
+        "implementation_contract_defined": sum(1 for r in rows if "implementation_contract_defined" in r.get("completed_checks", [])),
+        "phase1_test_targets_defined": sum(1 for r in rows if "phase1_test_targets_defined" in r.get("completed_checks", [])),
+        "phase1_blockers_closed_or_deferred": sum(
+            1 for r in rows if "phase1_blockers_closed_or_deferred" in r.get("completed_checks", [])
+        ),
+        "review_signoff_complete": sum(1 for r in rows if "review_signoff_complete" in r.get("completed_checks", [])),
         "ready_for_impl_phase1": sum(1 for r in rows if r.get("ready_for_impl_phase1")),
     }
     return {"profiles": profiles, "rows": rows, "summary": summary, "sources": []}
@@ -1074,6 +1486,9 @@ def build_status_tracker(
     spec_research: Dict[str, Any],
     logic_analysis: Dict[str, Any],
     structure_analysis: Dict[str, Any],
+    implementation_contracts: Dict[str, Any],
+    test_targets_phase1: Dict[str, Any],
+    review_signoffs: Dict[str, Any],
     readiness_gates: Dict[str, Any],
     qa_meta: Dict[str, Any],
 ) -> Dict[str, Any]:
@@ -1087,6 +1502,9 @@ def build_status_tracker(
         spec = (spec_research.get("profiles", {}) or {}).get(pid, {})
         logic = logic_analysis.get(pid, {})
         structure = structure_analysis.get(pid, {})
+        impl_contract = implementation_contracts.get(pid, {}) if isinstance(implementation_contracts, dict) else {}
+        test_targets = test_targets_phase1.get(pid, {}) if isinstance(test_targets_phase1, dict) else {}
+        signoff = review_signoffs.get(pid, {}) if isinstance(review_signoffs, dict) else {}
         readiness = (readiness_gates.get("profiles", {}) or {}).get(pid, {})
         row = {
             "profile_id": pid,
@@ -1110,6 +1528,19 @@ def build_status_tracker(
             "structure_analysis_baselined": "structure_analysis_baselined" in (readiness.get("completed_checks") or []),
             "structure_analysis_reviewed": "structure_analysis_reviewed" in (readiness.get("completed_checks") or []),
             "phase1_subset_decided": "phase1_subset_decided" in (readiness.get("completed_checks") or []),
+            "implementation_contract_defined": "implementation_contract_defined" in (readiness.get("completed_checks") or []),
+            "phase1_test_targets_defined": "phase1_test_targets_defined" in (readiness.get("completed_checks") or []),
+            "phase1_blockers_closed_or_deferred": "phase1_blockers_closed_or_deferred" in (readiness.get("completed_checks") or []),
+            "review_signoff_complete": "review_signoff_complete" in (readiness.get("completed_checks") or []),
+            "phase1_decisions_count": len(
+                (
+                    (logic.get("phase1_decisions") if isinstance(logic.get("phase1_decisions"), list) else [])
+                    + (structure.get("phase1_decisions") if isinstance(structure.get("phase1_decisions"), list) else [])
+                )
+            ),
+            "implementation_contract_summary_he": str(impl_contract.get("summary_he") or ""),
+            "test_targets_summary_he": str(test_targets.get("summary_he") or ""),
+            "review_signoff_summary_he": str(signoff.get("review_summary_he") or ""),
             "ready_for_impl_phase1": bool(readiness.get("ready_for_impl_phase1")),
             "gaps_he": [],
         }
@@ -1125,6 +1556,14 @@ def build_status_tracker(
             row["gaps_he"].append("טרם חולצו ממצאי מבנה")
         if not row["phase1_subset_decided"]:
             row["gaps_he"].append("טרם הוגדרה החלטת Phase 1 subset מפורשת")
+        if not row["implementation_contract_defined"]:
+            row["gaps_he"].append("טרם הוגדר חוזה מימוש Phase 1 מלא")
+        if not row["phase1_test_targets_defined"]:
+            row["gaps_he"].append("טרם הוגדרו יעדי בדיקות Phase 1")
+        if not row["phase1_blockers_closed_or_deferred"]:
+            row["gaps_he"].append("יש blockers של Phase 1 שטרם נסגרו/סומנו כנדחים")
+        if not row["review_signoff_complete"]:
+            row["gaps_he"].append("טרם הושלמה חתימת review ומוכנות Phase 1")
         if not row["logic_analysis_baselined"]:
             row["gaps_he"].append("לוגיקה טרם עומדת בסף baseline (ממצאים/תצפיות)")
         if not row["structure_analysis_baselined"]:
@@ -1139,6 +1578,10 @@ def build_status_tracker(
         "logic_baselined": sum(1 for r in rows if r.get("logic_analysis_baselined")),
         "structure_baselined": sum(1 for r in rows if r.get("structure_analysis_baselined")),
         "phase1_subset_decided": sum(1 for r in rows if r.get("phase1_subset_decided")),
+        "implementation_contract_defined": sum(1 for r in rows if r.get("implementation_contract_defined")),
+        "phase1_test_targets_defined": sum(1 for r in rows if r.get("phase1_test_targets_defined")),
+        "phase1_blockers_closed_or_deferred": sum(1 for r in rows if r.get("phase1_blockers_closed_or_deferred")),
+        "review_signoff_complete": sum(1 for r in rows if r.get("review_signoff_complete")),
         "ready_for_impl_phase1": sum(1 for r in rows if r.get("ready_for_impl_phase1")),
         "all_logic_scaffold": all(str(r.get("logic_doc_status")) in ("scaffold", "draft", "scaffold_partial") for r in rows) if rows else True,
         "all_structure_scaffold": all(str(r.get("structure_doc_status")) in ("scaffold", "draft", "scaffold_partial") for r in rows) if rows else True,
@@ -1203,8 +1646,30 @@ def build_group_b_hub_data(repo_root: Path | str = ".", autopts_guide: Optional[
     spec_research = build_spec_research(paths, profile_map, manifests)
     logic_files, structure_files, logic_analysis, structure_analysis = build_md_file_inventory(paths, profile_map, manifests)
     autopts_summary = summarize_autopts_for_hub(paths, autopts_guide=autopts_guide)
-    readiness_gates = build_readiness_gates(profile_map, spec_research, logic_analysis, structure_analysis)
-    status_tracker = build_status_tracker(profile_map, spec_research, logic_analysis, structure_analysis, readiness_gates, qa_meta)
+    phase1_artifacts = build_phase1_profile_artifacts(profile_map, logic_analysis, structure_analysis)
+    implementation_contracts = phase1_artifacts.get("implementation_contracts", {})
+    test_targets_phase1 = phase1_artifacts.get("test_targets_phase1", {})
+    review_signoffs = phase1_artifacts.get("review_signoffs", {})
+    readiness_gates = build_readiness_gates(
+        profile_map,
+        spec_research,
+        logic_analysis,
+        structure_analysis,
+        implementation_contracts,
+        test_targets_phase1,
+        review_signoffs,
+    )
+    status_tracker = build_status_tracker(
+        profile_map,
+        spec_research,
+        logic_analysis,
+        structure_analysis,
+        implementation_contracts,
+        test_targets_phase1,
+        review_signoffs,
+        readiness_gates,
+        qa_meta,
+    )
 
     official_manifest = manifests.get("official", {}).get("manifest", {})
     sdk_manifest = manifests.get("sdk", {}).get("manifest", {})
@@ -1247,6 +1712,10 @@ def build_group_b_hub_data(repo_root: Path | str = ".", autopts_guide: Optional[
         "structure_files": structure_files,
         "logic_analysis": logic_analysis,
         "structure_analysis": structure_analysis,
+        "phase1_decisions": phase1_artifacts.get("phase1_decisions", {}),
+        "implementation_contracts": implementation_contracts,
+        "test_targets_phase1": test_targets_phase1,
+        "review_signoffs": review_signoffs,
         "status_tracker": status_tracker,
         "sources_policy": sources_policy,
         "official_sources": {
@@ -1320,9 +1789,9 @@ def build_group_b_hub_data(repo_root: Path | str = ".", autopts_guide: Optional[
         "known_limits": {
             "items": [
                 {
-                    "title_he": "ממצאי Group B קיימים אך עדיין מסומנים in_progress",
-                    "detail_he": "יש תשתית ותוכן baseline, אך נדרש review והכרעות Phase 1 subset לפני מעבר למימוש.",
-                    "tags": ["in_progress", "group_b", "readiness"],
+                    "title_he": "מוכנות Group B נמדדת דרך readiness gates ולא רק baseline",
+                    "detail_he": "העמוד מבחין בין baseline (ממצאים/תצפיות) לבין sign-off למוכנות מימוש Phase 1 (review, contracts, test targets).",
+                    "tags": ["group_b", "readiness", "phase1"],
                 },
                 {
                     "title_he": "תצוגת Raw MD זמינה רק לצורכי review/debug",
@@ -1367,6 +1836,9 @@ def enforce_group_b_hub_source_policy(data: Dict[str, Any]) -> None:
         raise ValueError("group_b.readiness_gates must be a dict")
     if not isinstance(group_b.get("qa_meta"), dict):
         raise ValueError("group_b.qa_meta must be a dict")
+    for key in ("implementation_contracts", "test_targets_phase1", "review_signoffs", "phase1_decisions"):
+        if not isinstance(group_b.get(key), dict):
+            raise ValueError(f"group_b.{key} must be a dict")
 
     policy = group_b.get("sources_policy", {})
     if not isinstance(policy, dict):
@@ -1430,6 +1902,72 @@ def enforce_group_b_hub_source_policy(data: Dict[str, Any]) -> None:
                 if not str(obs.get("how_identified_he") or "").strip():
                     raise ValueError(f"{analysis_key}.{pid} source observation missing how_identified_he")
 
+    for pid in PROFILE_IDS:
+        contract = (group_b.get("implementation_contracts") or {}).get(pid)
+        if not isinstance(contract, dict):
+            raise ValueError(f"group_b.implementation_contracts.{pid} missing or invalid")
+        for key in (
+            "scope_in",
+            "scope_out",
+            "implementation_order",
+            "blocking_assumptions",
+            "non_blocking_deferred",
+            "sources",
+        ):
+            if not isinstance(contract.get(key), list):
+                raise ValueError(f"implementation_contracts.{pid}.{key} must be a list")
+        for key in (
+            "service_api_contract",
+            "runtime_flow_contract",
+            "data_model_contract",
+            "ccc_and_notify_indicate_contract",
+            "error_policy_contract",
+            "dependency_contract",
+            "module_boundaries",
+        ):
+            if not isinstance(contract.get(key), dict):
+                raise ValueError(f"implementation_contracts.{pid}.{key} must be a dict")
+
+        test_target = (group_b.get("test_targets_phase1") or {}).get(pid)
+        if not isinstance(test_target, dict):
+            raise ValueError(f"group_b.test_targets_phase1.{pid} missing or invalid")
+        for key in (
+            "manual_smoke_checks",
+            "pts_autopts_target_areas",
+            "ics_ixit_assumptions",
+            "phase1_done_criteria",
+            "known_non_goals",
+            "sources",
+        ):
+            if not isinstance(test_target.get(key), list):
+                raise ValueError(f"test_targets_phase1.{pid}.{key} must be a list")
+
+        signoff = (group_b.get("review_signoffs") or {}).get(pid)
+        if not isinstance(signoff, dict):
+            raise ValueError(f"group_b.review_signoffs.{pid} missing or invalid")
+        for key in ("logic_reviewed", "structure_reviewed", "ready_for_impl_phase1"):
+            if not isinstance(signoff.get(key), bool):
+                raise ValueError(f"review_signoffs.{pid}.{key} must be a bool")
+        for key in ("reviewer_notes_he", "remaining_phase1_blockers", "sources"):
+            if not isinstance(signoff.get(key), list):
+                raise ValueError(f"review_signoffs.{pid}.{key} must be a list")
+        for key in ("review_summary_he", "ready_decision_reason_he"):
+            if not str(signoff.get(key) or "").strip():
+                raise ValueError(f"review_signoffs.{pid}.{key} missing")
+
+        decisions = ((group_b.get("phase1_decisions") or {}).get(pid) or {}).get("rows")
+        if decisions is None or not isinstance(decisions, list):
+            raise ValueError(f"group_b.phase1_decisions.{pid}.rows must be a list")
+        for dec in decisions:
+            if not isinstance(dec, dict):
+                raise ValueError(f"group_b.phase1_decisions.{pid} contains non-dict decision")
+            if not str(dec.get("title_he") or "").strip():
+                raise ValueError(f"group_b.phase1_decisions.{pid} decision missing title_he")
+            if not str(dec.get("decision_he") or "").strip():
+                raise ValueError(f"group_b.phase1_decisions.{pid} decision missing decision_he")
+            if not isinstance(dec.get("source_ids"), list) or not [x for x in dec.get("source_ids", []) if str(x).strip()]:
+                raise ValueError(f"group_b.phase1_decisions.{pid} decision missing source_ids")
+
     readiness = group_b.get("readiness_gates", {})
     profiles_readiness = readiness.get("profiles", {}) if isinstance(readiness, dict) else {}
     if not isinstance(profiles_readiness, dict):
@@ -1443,6 +1981,14 @@ def enforce_group_b_hub_source_policy(data: Dict[str, Any]) -> None:
                 raise ValueError(f"group_b.readiness_gates.profiles.{pid}.{list_key} must be a list")
         if "ready_for_impl_phase1" not in gate:
             raise ValueError(f"group_b.readiness_gates.profiles.{pid} missing ready_for_impl_phase1")
+        for check in (
+            "implementation_contract_defined",
+            "phase1_test_targets_defined",
+            "phase1_blockers_closed_or_deferred",
+            "review_signoff_complete",
+        ):
+            if check not in gate.get("required_checks", []):
+                raise ValueError(f"group_b.readiness_gates.profiles.{pid} missing required check {check}")
 
     qa_meta = group_b.get("qa_meta", {})
     for key in ("smoke_test_mode", "known_expected_console_errors", "last_manual_review_notes_he"):
