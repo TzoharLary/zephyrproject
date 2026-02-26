@@ -9,10 +9,17 @@ version: "1.1.0"
 last_updated: "2026-02-25"
 
 # Phase 1 validation status:
-# - UUID spot-check: HRS, BAS, DIS, HTS, ESS, OTS — all verified against BT SIG docs in docs/profiles/
-# - Mandatory/optional flags: verified for all 6 spot-checked profiles
-# - Coverage audit: BPS (0x1810) added — present in docs/profiles/BPS/ and tools/data/ but was missing
-# - Technical tags added: has_control_point, uses_indicate, per_connection_state_required
+# Batch 1 (HRS, BAS, DIS, HTS, ESS, OTS):
+#   - Deep UUID verification: all 6 UUIDs verified against BT SIG Assigned Numbers
+#   - HRS: complexity corrected Low→Medium (3 chars); has_control_point corrected false→true (HR CP 0x2A39)
+#   - DIS: spec_version v1.2 + docs/profiles/DIS/ cross-ref added
+#   - BAS: spec_version v1.1 + docs/profiles/BAS/ cross-ref added; spec_doc added
+#   - HTS: confirmed correct; Indicate-based pattern note added
+#   - ESS: confirmed correct; note added about 40+ optional characteristics in full BT SIG spec
+#   - OTS: confirmed correct; pts_tracked added (ots.py in Auto-PTS)
+# Batch 2–4: pending
+# Coverage audit: BPS (0x1810) added — present in docs/profiles/BPS/ and tools/data/ but was missing
+# Technical tags added: has_control_point, uses_indicate, per_connection_state_required
 
 profiles:
 
@@ -20,7 +27,7 @@ profiles:
     id: HRS
     category: Health
     type: Simple
-    complexity: Low
+    complexity: Medium
     pattern: Notify
     uuids:
       service: "0x180D"
@@ -39,16 +46,19 @@ profiles:
           mandatory: false
     callbacks: true
     state_management: false
-    has_control_point: false
+    has_control_point: true
     uses_indicate: false
     per_connection_state_required: false
     kconfig_symbol: BT_HRS
+    spec_version: "1.0"
+    spec_doc: "docs/profiles/HRS/Heart_Rate_Service_1.0.pdf"
+    pts_tracked: true
     reference_files:
       header: "include/zephyr/bluetooth/services/hrs.h"
       impl: "subsys/bluetooth/services/hrs.c"
     similar_profiles: [BAS, DIS]
-    tags: [health, sensor, notify, simple, heart, vital-signs]
-    notes: "Canonical simple notify profile. Best starting reference for any notify-based sensor."
+    tags: [health, sensor, notify, simple, heart, vital-signs, has_control_point]
+    notes: "Canonical simple notify profile. Best starting reference for any notify-based sensor. HR Control Point (0x2A39) resets Energy Expended field (optional feature, present in spec — has_control_point: true). complexity: Medium per 3-char rule (analogous to CTS at 3 chars)."
 
   - name: "Device Information Service"
     id: DIS
@@ -97,12 +107,15 @@ profiles:
     uses_indicate: false
     per_connection_state_required: false
     kconfig_symbol: BT_DIS
+    spec_version: "1.2"
+    spec_doc: "docs/profiles/DIS/Device_Information_Service_1.2.pdf"
+    pts_tracked: true
     reference_files:
       header: "include/zephyr/bluetooth/services/dis.h"
       impl: "subsys/bluetooth/services/dis.c"
     similar_profiles: [BAS]
     tags: [device, info, read-only, simple, no-callback, static]
-    notes: "Pure read-only profile. Values configured via Kconfig. No callbacks needed."
+    notes: "Pure read-only profile. Values configured via Kconfig. No callbacks needed. 8 optional characteristics (all optional per DIS v1.2 spec). UUID verified against docs/profiles/DIS/Device_Information_Service_1.2.pdf."
 
   - name: "Battery Service"
     id: BAS
@@ -123,12 +136,15 @@ profiles:
     uses_indicate: false
     per_connection_state_required: false
     kconfig_symbol: BT_BAS
+    spec_version: "1.1"
+    spec_doc: "docs/profiles/BAS/Battery_Service_1.1.pdf"
+    pts_tracked: true
     reference_files:
       header: "include/zephyr/bluetooth/services/bas.h"
       impl: "subsys/bluetooth/services/bas.c"
     similar_profiles: [HRS, DIS]
     tags: [power, battery, read, notify, simple, sensor]
-    notes: "Simple read/notify profile. Good reference for combined read+notify characteristics. BAS v1.1 added 11 optional characteristics (Battery Level Status, Estimated Service Date, etc.) — basic implementation covers v1.0 Battery Level only."
+    notes: "Simple read/notify profile. Good reference for combined read+notify characteristics. BAS v1.1 added 11 optional characteristics (Battery Level Status, Estimated Service Date, etc.) — basic implementation covers v1.0 Battery Level only. UUID verified against docs/profiles/BAS/Battery_Service_1.1.pdf."
 
   - name: "Health Thermometer Service"
     id: HTS
@@ -161,12 +177,13 @@ profiles:
     uses_indicate: true
     per_connection_state_required: false
     kconfig_symbol: BT_HTS
+    pts_tracked: false
     reference_files:
       header: "include/zephyr/bluetooth/services/hts.h"
       impl: "subsys/bluetooth/services/hts.c"
     similar_profiles: [HRS, ESS]
     tags: [health, sensor, indicate, notify, temperature, mixed, uses_indicate]
-    notes: "Uses Indicate (acknowledged notify). Good reference for indicate-based profiles."
+    notes: "Uses Indicate (acknowledged notify). Good reference for indicate-based profiles. Measurement Interval supports Read+Write+Indicate — server can indicate when interval changes. Pattern for indicate-based medical measurement: see profile-patterns.md §10.2."
 
   - name: "Environmental Sensing Service"
     id: ESS
@@ -211,12 +228,13 @@ profiles:
     uses_indicate: false
     per_connection_state_required: true
     kconfig_symbol: BT_ESS
+    pts_tracked: false
     reference_files:
       header: "include/zephyr/bluetooth/services/ess.h"
       impl: "subsys/bluetooth/services/ess.c"
     similar_profiles: [HRS, HTS]
     tags: [environment, sensor, notify, complex, multi-characteristic, weather, per_connection_state_required]
-    notes: "Multi-characteristic environment sensing profile. Good for complex sensor aggregation."
+    notes: "Multi-characteristic environment sensing profile. Good for complex sensor aggregation. NOTE: BT SIG ESS spec defines 40+ optional environmental characteristics; this database lists 7 common ones. Full ESS also supports ES Measurement, ES Trigger Setting, ES Configuration, and Valid Range descriptors per characteristic (beyond standard CCC) — see profile-patterns.md §10.3."
 
   - name: "Current Time Service"
     id: CTS
@@ -393,12 +411,13 @@ profiles:
     uses_indicate: true
     per_connection_state_required: true
     kconfig_symbol: BT_OTS
+    pts_tracked: true
     reference_files:
       header: "include/zephyr/bluetooth/services/ots.h"
       impl: "subsys/bluetooth/services/ots.c"
     similar_profiles: [HIDS]
     tags: [data-transfer, complex, mixed, object, l2cap, state-machine, indicate, has_control_point, uses_indicate, per_connection_state_required]
-    notes: "Most complex Zephyr BLE service. Uses L2CAP COC for data transfer. Full state machine."
+    notes: "Most complex Zephyr BLE service. Uses L2CAP COC for data transfer. Full state machine. OACP (0x2AC5) and OLCP (0x2AC6) are Write+Indicate control points — see RACP-style protocol pattern in profile-patterns.md §10.5."
 
   - name: "HID over GATT Profile"
     id: HIDS

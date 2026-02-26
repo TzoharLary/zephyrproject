@@ -946,8 +946,73 @@ From Phase 1 analysis, these tags reliably predict implementation complexity:
 | `connection-aware` | Profile behavior changes on connect/disconnect | Always implement connected/disconnected callbacks |
 
 **Profiles by tag:**
-- `has_control_point`: OTS, HIDS, GLS, ANS, UDS, CGMS
-- `uses_indicate`: HTS, BPS, OTS, GLS, UDS, BCS, WSS, CGMS, PLXS
+- `has_control_point`: HRS, OTS, HIDS, GLS, ANS, UDS, CGMS, RSCS, CSCS, PLXS
+- `uses_indicate`: HTS, BPS, OTS, GLS, UDS, BCS, WSS, CGMS, PLXS, RSCS, CSCS
 - `per_connection_state_required`: ESS, CTS, OTS, HIDS, GLS, UDS, CGMS
 - `server-requests-refresh`: SPS
 - `connection-aware`: LLS (alert on link loss)
+
+---
+
+### 10.5 ESS Extended Descriptor Pattern (Environmental Sensing Service)
+
+**Source:** BT SIG Environmental Sensing Service Specification, Section 3.1
+
+ESS characteristics support up to **five additional descriptors** beyond the standard CCC.
+These descriptors provide sensor metadata and trigger configuration that are unique to ESS.
+
+**ESS-specific descriptors (per optional characteristic):**
+
+| Descriptor | UUID | Purpose |
+|------------|------|---------|
+| ES Measurement | 0x290C | Sensor measurement metadata (sampling function, measurement period, update interval, application, measurement uncertainty) |
+| ES Trigger Setting | 0x290D | When to trigger a notification (e.g., minimum change, fixed interval, always) |
+| ES Configuration | 0x290B | Logical AND/OR combination of multiple trigger settings |
+| Valid Range | 0x2906 | Min/max valid sensor value |
+| CCC (standard) | 0x2902 | Standard notifications enable/disable |
+
+**Key implementation rules:**
+1. Each ESS characteristic that supports Notify SHOULD include a CCC descriptor
+2. ES Trigger Setting descriptor controls WHEN notifications are sent — the server
+   evaluates the trigger before sending a notification
+3. Multiple ES Trigger Setting descriptors can exist per characteristic (up to 3);
+   ES Configuration descriptor determines if they are AND'd or OR'd
+4. Valid Range descriptor allows the client to know the sensor's operational range
+
+**Simplified ESS pattern (without ES Trigger, just CCC + Valid Range):**
+
+```c
+/* Valid Range descriptor — uint16_t lower + uint16_t upper */
+struct ess_valid_range {
+    int16_t lower;
+    int16_t upper;
+};
+
+static const struct ess_valid_range temperature_range = {
+    .lower = -4000,  /* -40.00°C in 0.01°C units */
+    .upper =  8500,  /* +85.00°C */
+};
+
+static ssize_t read_valid_range(struct bt_conn *conn,
+                                const struct bt_gatt_attr *attr,
+                                void *buf, uint16_t len, uint16_t offset)
+{
+    const struct ess_valid_range *range = attr->user_data;
+
+    return bt_gatt_attr_read(conn, attr, buf, len, offset,
+                             range, sizeof(*range));
+}
+
+/* In service definition — Temperature with CCC + Valid Range */
+BT_GATT_CHARACTERISTIC(BT_UUID_TEMPERATURE,
+                        BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
+                        BT_GATT_PERM_READ,
+                        read_temperature, NULL, &temperature_celsius),
+BT_GATT_CCC(temperature_ccc_cfg_changed,
+             BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
+BT_GATT_DESCRIPTOR(BT_UUID_VALID_RANGE,
+                    BT_GATT_PERM_READ,
+                    read_valid_range, NULL, &temperature_range),
+```
+
+**Pattern tag:** `ess-extended-descriptors`
