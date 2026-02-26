@@ -447,12 +447,15 @@ profiles:
     uses_indicate: false
     per_connection_state_required: true
     kconfig_symbol: BT_HIDS
+    spec_version: "1.1"
+    spec_doc: "docs/profiles/HID/HID_Over_GATT_Profile_1.1.pdf"
+    pts_tracked: true
     reference_files:
       header: "include/zephyr/bluetooth/services/hids.h"
       impl: "subsys/bluetooth/services/hids.c"
     similar_profiles: [OTS]
     tags: [hid, complex, mixed, keyboard, mouse, report, state-machine, boot-mode, has_control_point, per_connection_state_required]
-    notes: "Complex HID profile with boot and report modes. Full state machine with connection tracking."
+    notes: "Complex HID profile with boot and report modes. Full state machine with connection tracking. HID over GATT Profile v1.1 spec (docs/profiles/HID/). Protocol Mode (0x2A4E) enables boot mode for simpler keyboard/mouse report format. Report characteristic (0x2A4D) uses Report Reference descriptor to distinguish input/output/feature report types. UUID verified against docs/profiles/HID/HID_Over_GATT_Profile_1.1.pdf."
 
   - name: "Scan Parameters Service"
     id: SPS
@@ -549,23 +552,24 @@ profiles:
           mandatory: false
     callbacks: true
     state_management: false
-    has_control_point: false
-    uses_indicate: false
+    has_control_point: true
+    uses_indicate: true
     per_connection_state_required: false
     kconfig_symbol: BT_CSCS
+    pts_tracked: false
     reference_files:
       header: "include/zephyr/bluetooth/services/cscs.h"
       impl: "subsys/bluetooth/services/cscs.c"
     similar_profiles: [RSCS, HRS]
-    tags: [sport, fitness, notify, sensor, cadence, cycling]
-    notes: "Cycling fitness sensor profile. Structurally identical to RSCS with different measurements."
+    tags: [sport, fitness, notify, sensor, cadence, cycling, has_control_point, uses_indicate]
+    notes: "Cycling fitness sensor profile. Structurally identical to RSCS with different measurements (wheel revolutions + last event time, vs. running distance + instantaneous cadence). has_control_point: true — SC CP (0x2A55, Write+Indicate) shared with RSCS. uses_indicate: true — SC CP responses via Indicate. All UUIDs verified: 0x1816 (CSC), 0x2A5B (CSC Measurement), 0x2A5C (CSC Feature), 0x2A5D (Sensor Location), 0x2A55 (SC CP)."
 
   - name: "Glucose Service"
     id: GLS
     category: Health
     type: Complex
     complexity: High
-    pattern: Indicate
+    pattern: Notify
     uuids:
       service: "0x1808"
       characteristics:
@@ -591,12 +595,13 @@ profiles:
     uses_indicate: true
     per_connection_state_required: true
     kconfig_symbol: BT_GLS
+    pts_tracked: false
     reference_files:
       header: "include/zephyr/bluetooth/services/gls.h"
       impl: "subsys/bluetooth/services/gls.c"
     similar_profiles: [HTS, HRS]
     tags: [health, medical, glucose, notify, indicate, state-machine, complex, has_control_point, uses_indicate, per_connection_state_required]
-    notes: "Medical profile with RACP for record access control. Full state machine required."
+    notes: "Medical profile with RACP (0x2A52, Write+Indicate) for stored record access. Primary data delivery is Notify (glucose measurements 0x2A18); RACP Indicate is the control point response. Full state machine: must track bonded clients, pending RACP procedures, and notify queue. Pattern: Notify (primary data flow) + RACP Write+Indicate (control). Comparable to CGMS (which also has Notify primary + Indicate RACP)."
 
   - name: "Alert Notification Service"
     id: ANS
@@ -633,12 +638,13 @@ profiles:
     uses_indicate: false
     per_connection_state_required: false
     kconfig_symbol: BT_ANS
+    pts_tracked: false
     reference_files:
       header: "include/zephyr/bluetooth/services/ans.h"
       impl: "subsys/bluetooth/services/ans.c"
     similar_profiles: [IAS, LLS]
     tags: [alert, notify, write, mixed, phone-alert, has_control_point]
-    notes: "Phone Alert Status profile dependency. Manages alert categories and notifications."
+    notes: "Phone Alert Status profile dependency. 5 mandatory characteristics (5+→Complex per classification rule). Alert Notification Control Point (0x2A44, Write) uses 2-byte command format: [opcode, category_id]. Opcodes: Enable New Alert (0x00), Enable Unread Alert (0x01), Disable New Alert (0x02), Disable Unread Alert (0x03), Notify New Immediately (0x04), Notify Unread Immediately (0x05). UUIDs verified against BT SIG Assigned Numbers."
 
   - name: "Phone Alert Status Service"
     id: PASS
@@ -667,12 +673,13 @@ profiles:
     uses_indicate: false
     per_connection_state_required: false
     kconfig_symbol: BT_PASS
+    pts_tracked: false
     reference_files:
       header: "include/zephyr/bluetooth/services/pass.h"
       impl: "subsys/bluetooth/services/pass.c"
     similar_profiles: [ANS, IAS]
     tags: [alert, phone, ringer, notify, write, mixed]
-    notes: "Works alongside ANS for phone alert management."
+    notes: "Works alongside ANS for phone alert management. Ringer Control Point (0x2A40, Write Without Response) accepts 3 opcodes: Silent Mode (0x01), Mute Once (0x02), Cancel Silent Mode (0x03). Alert Status (0x2A3F) and Ringer Setting (0x2A41) both support Notify — server initiates notifications on state change. All 3 characteristics mandatory. UUIDs verified against BT SIG Assigned Numbers."
 
   - name: "User Data Service"
     id: UDS
@@ -725,12 +732,13 @@ profiles:
     uses_indicate: true
     per_connection_state_required: true
     kconfig_symbol: BT_UDS
+    pts_tracked: false
     reference_files:
       header: "include/zephyr/bluetooth/services/uds.h"
       impl: "subsys/bluetooth/services/uds.c"
     similar_profiles: [GLS, OTS]
     tags: [user, profile, mixed, complex, multi-user, fitness, health, has_control_point, uses_indicate, per_connection_state_required]
-    notes: "Multi-user data storage profile. Requires user management state machine."
+    notes: "Multi-user data storage profile. User Control Point (0x2A9F, Write+Indicate): Register New User (0x01), Consent (0x02), Delete User Data (0x03). Database Change Increment (0x2A99) tracks version for synchronization. User Index (0x2A9A) identifies current user per connection. Requires per-connection state to track which user index is associated with each bonded client. UUIDs verified against BT SIG Assigned Numbers."
 
   - name: "Body Composition Service"
     id: BCS
