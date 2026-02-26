@@ -169,7 +169,8 @@ int bt_<profile>_notify(struct bt_conn *conn, uint<N>_t value)
 {
     int rc;
 
-    rc = bt_gatt_notify(conn, &bt_<profile>_svc.attrs[1], &value, sizeof(value));
+    /* attrs[0]=service decl, attrs[1]=char decl, attrs[2]=char value — target value attr */
+    rc = bt_gatt_notify(conn, &bt_<profile>_svc.attrs[2], &value, sizeof(value));
     return rc == -ENOTCONN ? 0 : rc;
 }
 ```
@@ -218,7 +219,11 @@ static ssize_t write_<char>(struct bt_conn *conn,
         return BT_GATT_ERR(BT_ATT_ERR_INVALID_OFFSET);
     }
 
-    memcpy(&value + offset, buf, len);
+    /* Use byte pointer for offset arithmetic — pointer arithmetic on typed pointer
+     * is in units of the type size, not bytes, and can silently bypass bounds check */
+    uint8_t *dst = (uint8_t *)&value;
+
+    memcpy(dst + offset, buf, len);
     process_<char>_write(value);
 
     return len;
@@ -954,7 +959,72 @@ From Phase 1 analysis, these tags reliably predict implementation complexity:
 
 ---
 
-### 10.5 Record Access Control Point Pattern (GLS, CGMS, PLXS)
+### 10.5 ESS Extended Descriptor Pattern (Environmental Sensing Service)
+
+**Source:** BT SIG Environmental Sensing Service Specification, Section 3.1
+
+ESS characteristics support up to **five additional descriptors** beyond the standard CCC.
+These descriptors provide sensor metadata and trigger configuration that are unique to ESS.
+
+**ESS-specific descriptors (per optional characteristic):**
+
+| Descriptor | UUID | Purpose |
+|------------|------|---------|
+| ES Measurement | 0x290C | Sensor measurement metadata (sampling function, measurement period, update interval, application, measurement uncertainty) |
+| ES Trigger Setting | 0x290D | When to trigger a notification (e.g., minimum change, fixed interval, always) |
+| ES Configuration | 0x290B | Logical AND/OR combination of multiple trigger settings |
+| Valid Range | 0x2906 | Min/max valid sensor value |
+| CCC (standard) | 0x2902 | Standard notifications enable/disable |
+
+**Key implementation rules:**
+1. Each ESS characteristic that supports Notify SHOULD include a CCC descriptor
+2. ES Trigger Setting descriptor controls WHEN notifications are sent — the server
+   evaluates the trigger before sending a notification
+3. Multiple ES Trigger Setting descriptors can exist per characteristic (up to 3);
+   ES Configuration descriptor determines if they are AND'd or OR'd
+4. Valid Range descriptor allows the client to know the sensor's operational range
+
+**Simplified ESS pattern (without ES Trigger, just CCC + Valid Range):**
+
+```c
+/* Valid Range descriptor — uint16_t lower + uint16_t upper */
+struct ess_valid_range {
+    int16_t lower;
+    int16_t upper;
+};
+
+static const struct ess_valid_range temperature_range = {
+    .lower = -4000,  /* -40.00°C in 0.01°C units */
+    .upper =  8500,  /* +85.00°C */
+};
+
+static ssize_t read_valid_range(struct bt_conn *conn,
+                                const struct bt_gatt_attr *attr,
+                                void *buf, uint16_t len, uint16_t offset)
+{
+    const struct ess_valid_range *range = attr->user_data;
+
+    return bt_gatt_attr_read(conn, attr, buf, len, offset,
+                             range, sizeof(*range));
+}
+
+/* In service definition — Temperature with CCC + Valid Range */
+BT_GATT_CHARACTERISTIC(BT_UUID_TEMPERATURE,
+                        BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
+                        BT_GATT_PERM_READ,
+                        read_temperature, NULL, &temperature_celsius),
+BT_GATT_CCC(temperature_ccc_cfg_changed,
+             BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
+BT_GATT_DESCRIPTOR(BT_UUID_VALID_RANGE,
+                    BT_GATT_PERM_READ,
+                    read_valid_range, NULL, &temperature_range),
+```
+
+**Pattern tag:** `ess-extended-descriptors`
+
+---
+
+### 10.6 Record Access Control Point Pattern (GLS, CGMS, PLXS)
 
 **Source:** BT SIG Glucose Service Specification, Section 3.2;
 Continuous Glucose Monitoring Service Specification, Section 3.2
@@ -1095,7 +1165,7 @@ static ssize_t write_racp(struct bt_conn *conn,
 
 ---
 
-### 10.6 SC Control Point Pattern (RSCS, CSCS)
+### 10.7 SC Control Point Pattern (RSCS, CSCS)
 
 **Source:** BT SIG Running Speed and Cadence Service Specification, Section 3.2;
 Cycling Speed and Cadence Service Specification, Section 3.2

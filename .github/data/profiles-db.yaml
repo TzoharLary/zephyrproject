@@ -34,7 +34,7 @@ profiles:
     id: HRS
     category: Health
     type: Simple
-    complexity: Low
+    complexity: Medium
     pattern: Notify
     uuids:
       service: "0x180D"
@@ -53,22 +53,25 @@ profiles:
           mandatory: false
     callbacks: true
     state_management: false
-    has_control_point: false
+    has_control_point: true
     uses_indicate: false
     per_connection_state_required: false
     kconfig_symbol: BT_HRS
+    spec_version: "1.0"
+    spec_doc: "docs/profiles/HRS/Heart_Rate_Service_1.0.pdf"
+    pts_tracked: true
     reference_files:
       header: "include/zephyr/bluetooth/services/hrs.h"
       impl: "subsys/bluetooth/services/hrs.c"
     similar_profiles: [BAS, DIS]
-    tags: [health, sensor, notify, simple, heart, vital-signs]
-    notes: "Canonical simple notify profile. Best starting reference for any notify-based sensor."
+    tags: [health, sensor, notify, simple, heart, vital-signs, has_control_point]
+    notes: "Canonical simple notify profile. Best starting reference for any notify-based sensor. HR Control Point (0x2A39) resets Energy Expended field (optional feature, present in spec — has_control_point: true). complexity: Medium per 3-char rule (analogous to CTS at 3 chars)."
 
   - name: "Device Information Service"
     id: DIS
     category: Device
-    type: Simple
-    complexity: Low
+    type: Complex
+    complexity: Medium
     pattern: Read
     uuids:
       service: "0x180A"
@@ -111,12 +114,15 @@ profiles:
     uses_indicate: false
     per_connection_state_required: false
     kconfig_symbol: BT_DIS
+    spec_version: "1.2"
+    spec_doc: "docs/profiles/DIS/Device_Information_Service_1.2.pdf"
+    pts_tracked: true
     reference_files:
       header: "include/zephyr/bluetooth/services/dis.h"
       impl: "subsys/bluetooth/services/dis.c"
     similar_profiles: [BAS]
     tags: [device, info, read-only, simple, no-callback, static]
-    notes: "Pure read-only profile. Values configured via Kconfig. No callbacks needed."
+    notes: "Pure read-only profile. Values configured via Kconfig. No callbacks needed. 8 optional characteristics (all optional per DIS v1.2 spec). UUID verified against docs/profiles/DIS/Device_Information_Service_1.2.pdf."
 
   - name: "Battery Service"
     id: BAS
@@ -137,12 +143,15 @@ profiles:
     uses_indicate: false
     per_connection_state_required: false
     kconfig_symbol: BT_BAS
+    spec_version: "1.1"
+    spec_doc: "docs/profiles/BAS/Battery_Service_1.1.pdf"
+    pts_tracked: true
     reference_files:
       header: "include/zephyr/bluetooth/services/bas.h"
       impl: "subsys/bluetooth/services/bas.c"
     similar_profiles: [HRS, DIS]
     tags: [power, battery, read, notify, simple, sensor]
-    notes: "Simple read/notify profile. Good reference for combined read+notify characteristics. BAS v1.1 added 11 optional characteristics (Battery Level Status, Estimated Service Date, etc.) — basic implementation covers v1.0 Battery Level only."
+    notes: "Simple read/notify profile. Good reference for combined read+notify characteristics. BAS v1.1 added 11 optional characteristics (Battery Level Status, Estimated Service Date, etc.) — basic implementation covers v1.0 Battery Level only. UUID verified against docs/profiles/BAS/Battery_Service_1.1.pdf."
 
   - name: "Health Thermometer Service"
     id: HTS
@@ -175,12 +184,13 @@ profiles:
     uses_indicate: true
     per_connection_state_required: false
     kconfig_symbol: BT_HTS
+    pts_tracked: false
     reference_files:
       header: "include/zephyr/bluetooth/services/hts.h"
       impl: "subsys/bluetooth/services/hts.c"
     similar_profiles: [HRS, ESS]
     tags: [health, sensor, indicate, notify, temperature, mixed, uses_indicate]
-    notes: "Uses Indicate (acknowledged notify). Good reference for indicate-based profiles."
+    notes: "Uses Indicate (acknowledged notify). Good reference for indicate-based profiles. Measurement Interval supports Read+Write+Indicate — server can indicate when interval changes. Pattern for indicate-based medical measurement: see profile-patterns.md §10.2."
 
   - name: "Environmental Sensing Service"
     id: ESS
@@ -225,12 +235,13 @@ profiles:
     uses_indicate: false
     per_connection_state_required: true
     kconfig_symbol: BT_ESS
+    pts_tracked: false
     reference_files:
       header: "include/zephyr/bluetooth/services/ess.h"
       impl: "subsys/bluetooth/services/ess.c"
     similar_profiles: [HRS, HTS]
     tags: [environment, sensor, notify, complex, multi-characteristic, weather, per_connection_state_required]
-    notes: "Multi-characteristic environment sensing profile. Good for complex sensor aggregation."
+    notes: "Multi-characteristic environment sensing profile. Good for complex sensor aggregation. NOTE: BT SIG ESS spec defines 40+ optional environmental characteristics; this database lists 7 common ones. Full ESS also supports ES Measurement, ES Trigger Setting, ES Configuration, and Valid Range descriptors per characteristic (beyond standard CCC) — see profile-patterns.md §10.3."
 
   - name: "Current Time Service"
     id: CTS
@@ -259,12 +270,13 @@ profiles:
     uses_indicate: false
     per_connection_state_required: true
     kconfig_symbol: BT_CTS
+    pts_tracked: false
     reference_files:
       header: "include/zephyr/bluetooth/services/cts.h"
       impl: "subsys/bluetooth/services/cts.c"
     similar_profiles: [DIS, BAS]
     tags: [time, read, write, notify, mixed, time-sync, per_connection_state_required]
-    notes: "Mixed read/write/notify profile. Uses state for tracking time updates."
+    notes: "Mixed read/write/notify profile. Client Time Server role: client writes current time; server notifies of time adjustments >1s. per_connection_state_required: tracks pending time-adjustment notifications per connection. UUID verified: 0x1805 (CTS), 0x2A2B (Current Time), 0x2A0F (Local TZ), 0x2A14 (Ref Time)."
 
   - name: "Link Loss Service"
     id: LLS
@@ -285,12 +297,13 @@ profiles:
     uses_indicate: false
     per_connection_state_required: false
     kconfig_symbol: BT_LLS
+    pts_tracked: false
     reference_files:
       header: "include/zephyr/bluetooth/services/lls.h"
       impl: "subsys/bluetooth/services/lls.c"
     similar_profiles: [IAS, TPS]
     tags: [proximity, alert, write, read, simple, connection-aware]
-    notes: "Connection-aware service. Alert triggered on link loss. Part of Proximity Profile."
+    notes: "Connection-aware service. Alert level written by client; server triggers local alert when disconnection is detected (connection-aware tag). Alert Level 0x2A06 shared with IAS. LLS requires BT_CONN_CB_DEFINE disconnected callback to trigger the stored alert level."
 
   - name: "TX Power Service"
     id: TPS
@@ -311,12 +324,13 @@ profiles:
     uses_indicate: false
     per_connection_state_required: false
     kconfig_symbol: BT_TPS
+    pts_tracked: false
     reference_files:
       header: "include/zephyr/bluetooth/services/tps.h"
       impl: "subsys/bluetooth/services/tps.c"
     similar_profiles: [DIS, IAS, LLS]
     tags: [proximity, power, read-only, simple, no-callback]
-    notes: "Simplest possible profile - single read-only characteristic. Use as minimal template."
+    notes: "Simplest possible profile — single read-only characteristic. Use as minimal template for read-only services. No callbacks, no state. TX Power Level (0x2A07) is int8_t in units of dBm. Part of Proximity Profile.
 
   - name: "Immediate Alert Service"
     id: IAS
@@ -337,12 +351,13 @@ profiles:
     uses_indicate: false
     per_connection_state_required: false
     kconfig_symbol: BT_IAS
+    pts_tracked: true
     reference_files:
       header: "include/zephyr/bluetooth/services/ias.h"
       impl: "subsys/bluetooth/services/ias.c"
     similar_profiles: [LLS, TPS]
     tags: [proximity, alert, write, write-no-response, simple, immediate]
-    notes: "Write-without-response pattern. Good reference for fire-and-forget write profiles."
+    notes: "Write-without-response pattern. Good reference for fire-and-forget write profiles. Alert Level (0x2A06) is 1-byte enum: 0=No Alert, 1=Mild, 2=High. No response sent. Part of Proximity Profile (alongside LLS + TPS). UUID verified against BT SIG Assigned Numbers."
 
   - name: "Object Transfer Service"
     id: OTS
@@ -407,12 +422,13 @@ profiles:
     uses_indicate: true
     per_connection_state_required: true
     kconfig_symbol: BT_OTS
+    pts_tracked: true
     reference_files:
       header: "include/zephyr/bluetooth/services/ots.h"
       impl: "subsys/bluetooth/services/ots.c"
     similar_profiles: [HIDS]
     tags: [data-transfer, complex, mixed, object, l2cap, state-machine, indicate, has_control_point, uses_indicate, per_connection_state_required]
-    notes: "Most complex Zephyr BLE service. Uses L2CAP COC for data transfer. Full state machine."
+    notes: "Most complex Zephyr BLE service. Uses L2CAP COC for data transfer. Full state machine. OACP (0x2AC5) and OLCP (0x2AC6) are Write+Indicate control points — see RACP-style protocol pattern in profile-patterns.md §10.5."
 
   - name: "HID over GATT Profile"
     id: HIDS
@@ -461,12 +477,15 @@ profiles:
     uses_indicate: false
     per_connection_state_required: true
     kconfig_symbol: BT_HIDS
+    spec_version: "1.1"
+    spec_doc: "docs/profiles/HID/HID_Over_GATT_Profile_1.1.pdf"
+    pts_tracked: true
     reference_files:
       header: "include/zephyr/bluetooth/services/hids.h"
       impl: "subsys/bluetooth/services/hids.c"
     similar_profiles: [OTS]
     tags: [hid, complex, mixed, keyboard, mouse, report, state-machine, boot-mode, has_control_point, per_connection_state_required]
-    notes: "Complex HID profile with boot and report modes. Full state machine with connection tracking."
+    notes: "Complex HID profile with boot and report modes. Full state machine with connection tracking. HID over GATT Profile v1.1 spec (docs/profiles/HID/). Protocol Mode (0x2A4E) enables boot mode for simpler keyboard/mouse report format. Report characteristic (0x2A4D) uses Report Reference descriptor to distinguish input/output/feature report types. UUID verified against docs/profiles/HID/HID_Over_GATT_Profile_1.1.pdf."
 
   - name: "Scan Parameters Service"
     id: SPS
@@ -491,12 +510,15 @@ profiles:
     uses_indicate: false
     per_connection_state_required: false
     kconfig_symbol: BT_SPS
+    spec_version: "1.0"
+    spec_doc: "docs/profiles/SCPS/Scan_Parameters_Service_1.0.pdf"
+    pts_tracked: true
     reference_files:
       header: "include/zephyr/bluetooth/services/sps.h"
       impl: "subsys/bluetooth/services/sps.c"
     similar_profiles: [IAS, LLS]
     tags: [generic, scan, write, notify, simple, server-requests-refresh]
-    notes: "Used for scan parameter negotiation between GAP Central and GAP Peripheral."
+    notes: "Scan parameter negotiation between GAP Central (collector) and GAP Peripheral (sensor). Client writes scan interval/window; server may notify client to re-send (Scan Refresh 0x2A31). UUID verified against docs/profiles/SCPS/Scan_Parameters_Service_1.0.pdf. Unique server-requests-refresh pattern — see profile-patterns.md §10.1."
 
   - name: "Running Speed and Cadence Service"
     id: RSCS
@@ -525,16 +547,17 @@ profiles:
           mandatory: false
     callbacks: true
     state_management: false
-    has_control_point: false
-    uses_indicate: false
+    has_control_point: true
+    uses_indicate: true
     per_connection_state_required: false
     kconfig_symbol: BT_RSCS
+    pts_tracked: false
     reference_files:
       header: "include/zephyr/bluetooth/services/rscs.h"
       impl: "subsys/bluetooth/services/rscs.c"
     similar_profiles: [HRS, CSCS]
-    tags: [sport, fitness, notify, sensor, cadence, running]
-    notes: "Fitness sensor profile with optional control point. Similar to HRS in structure."
+    tags: [sport, fitness, notify, sensor, cadence, running, has_control_point, uses_indicate]
+    notes: "Fitness sensor profile with optional SC Control Point (0x2A55, Write+Indicate). has_control_point: true — SC CP present in spec (Set Cumulative Value, Start Calibration, Update Sensor Location opcodes). uses_indicate: true — SC CP responses delivered via Indicate. SC CP is optional; basic implementation omits it. SC CP response protocol: opcode 0x10 + echoed request opcode + response value (Success/Not Supported/Invalid Param)."
 
   - name: "Cycling Speed and Cadence Service"
     id: CSCS
@@ -563,23 +586,24 @@ profiles:
           mandatory: false
     callbacks: true
     state_management: false
-    has_control_point: false
-    uses_indicate: false
+    has_control_point: true
+    uses_indicate: true
     per_connection_state_required: false
     kconfig_symbol: BT_CSCS
+    pts_tracked: false
     reference_files:
       header: "include/zephyr/bluetooth/services/cscs.h"
       impl: "subsys/bluetooth/services/cscs.c"
     similar_profiles: [RSCS, HRS]
-    tags: [sport, fitness, notify, sensor, cadence, cycling]
-    notes: "Cycling fitness sensor profile. Structurally identical to RSCS with different measurements."
+    tags: [sport, fitness, notify, sensor, cadence, cycling, has_control_point, uses_indicate]
+    notes: "Cycling fitness sensor profile. Structurally identical to RSCS with different measurements (wheel revolutions + last event time, vs. running distance + instantaneous cadence). has_control_point: true — SC CP (0x2A55, Write+Indicate) shared with RSCS. uses_indicate: true — SC CP responses via Indicate. All UUIDs verified: 0x1816 (CSC), 0x2A5B (CSC Measurement), 0x2A5C (CSC Feature), 0x2A5D (Sensor Location), 0x2A55 (SC CP)."
 
   - name: "Glucose Service"
     id: GLS
     category: Health
     type: Complex
     complexity: High
-    pattern: Indicate
+    pattern: Notify
     uuids:
       service: "0x1808"
       characteristics:
@@ -605,17 +629,18 @@ profiles:
     uses_indicate: true
     per_connection_state_required: true
     kconfig_symbol: BT_GLS
+    pts_tracked: false
     reference_files:
       header: "include/zephyr/bluetooth/services/gls.h"
       impl: "subsys/bluetooth/services/gls.c"
     similar_profiles: [HTS, HRS]
     tags: [health, medical, glucose, notify, indicate, state-machine, complex, has_control_point, uses_indicate, per_connection_state_required]
-    notes: "Medical profile with RACP for record access control. Full state machine required."
+    notes: "Medical profile with RACP (0x2A52, Write+Indicate) for stored record access. Primary data delivery is Notify (glucose measurements 0x2A18); RACP Indicate is the control point response. Full state machine: must track bonded clients, pending RACP procedures, and notify queue. Pattern: Notify (primary data flow) + RACP Write+Indicate (control). Comparable to CGMS (which also has Notify primary + Indicate RACP)."
 
   - name: "Alert Notification Service"
     id: ANS
     category: Alert
-    type: Simple
+    type: Complex
     complexity: Medium
     pattern: Notify
     uuids:
@@ -647,12 +672,13 @@ profiles:
     uses_indicate: false
     per_connection_state_required: false
     kconfig_symbol: BT_ANS
+    pts_tracked: false
     reference_files:
       header: "include/zephyr/bluetooth/services/ans.h"
       impl: "subsys/bluetooth/services/ans.c"
     similar_profiles: [IAS, LLS]
     tags: [alert, notify, write, mixed, phone-alert, has_control_point]
-    notes: "Phone Alert Status profile dependency. Manages alert categories and notifications."
+    notes: "Phone Alert Status profile dependency. 5 mandatory characteristics (5+→Complex per classification rule). Alert Notification Control Point (0x2A44, Write) uses 2-byte command format: [opcode, category_id]. Opcodes: Enable New Alert (0x00), Enable Unread Alert (0x01), Disable New Alert (0x02), Disable Unread Alert (0x03), Notify New Immediately (0x04), Notify Unread Immediately (0x05). UUIDs verified against BT SIG Assigned Numbers."
 
   - name: "Phone Alert Status Service"
     id: PASS
@@ -681,12 +707,13 @@ profiles:
     uses_indicate: false
     per_connection_state_required: false
     kconfig_symbol: BT_PASS
+    pts_tracked: false
     reference_files:
       header: "include/zephyr/bluetooth/services/pass.h"
       impl: "subsys/bluetooth/services/pass.c"
     similar_profiles: [ANS, IAS]
     tags: [alert, phone, ringer, notify, write, mixed]
-    notes: "Works alongside ANS for phone alert management."
+    notes: "Works alongside ANS for phone alert management. Ringer Control Point (0x2A40, Write Without Response) accepts 3 opcodes: Silent Mode (0x01), Mute Once (0x02), Cancel Silent Mode (0x03). Alert Status (0x2A3F) and Ringer Setting (0x2A41) both support Notify — server initiates notifications on state change. All 3 characteristics mandatory. UUIDs verified against BT SIG Assigned Numbers."
 
   - name: "User Data Service"
     id: UDS
@@ -739,12 +766,13 @@ profiles:
     uses_indicate: true
     per_connection_state_required: true
     kconfig_symbol: BT_UDS
+    pts_tracked: false
     reference_files:
       header: "include/zephyr/bluetooth/services/uds.h"
       impl: "subsys/bluetooth/services/uds.c"
     similar_profiles: [GLS, OTS]
     tags: [user, profile, mixed, complex, multi-user, fitness, health, has_control_point, uses_indicate, per_connection_state_required]
-    notes: "Multi-user data storage profile. Requires user management state machine."
+    notes: "Multi-user data storage profile. User Control Point (0x2A9F, Write+Indicate): Register New User (0x01), Consent (0x02), Delete User Data (0x03). Database Change Increment (0x2A99) tracks version for synchronization. User Index (0x2A9A) identifies current user per connection. Requires per-connection state to track which user index is associated with each bonded client. UUIDs verified against BT SIG Assigned Numbers."
 
   - name: "Body Composition Service"
     id: BCS
@@ -903,8 +931,8 @@ profiles:
   - name: "Indoor Positioning Service"
     id: IPS
     category: Location
-    type: Simple
-    complexity: Medium
+    type: Complex
+    complexity: High
     pattern: Read
     uuids:
       service: "0x1821"
