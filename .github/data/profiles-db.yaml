@@ -245,12 +245,13 @@ profiles:
     uses_indicate: false
     per_connection_state_required: true
     kconfig_symbol: BT_CTS
+    pts_tracked: false
     reference_files:
       header: "include/zephyr/bluetooth/services/cts.h"
       impl: "subsys/bluetooth/services/cts.c"
     similar_profiles: [DIS, BAS]
     tags: [time, read, write, notify, mixed, time-sync, per_connection_state_required]
-    notes: "Mixed read/write/notify profile. Uses state for tracking time updates."
+    notes: "Mixed read/write/notify profile. Client Time Server role: client writes current time; server notifies of time adjustments >1s. per_connection_state_required: tracks pending time-adjustment notifications per connection. UUID verified: 0x1805 (CTS), 0x2A2B (Current Time), 0x2A0F (Local TZ), 0x2A14 (Ref Time)."
 
   - name: "Link Loss Service"
     id: LLS
@@ -271,12 +272,13 @@ profiles:
     uses_indicate: false
     per_connection_state_required: false
     kconfig_symbol: BT_LLS
+    pts_tracked: false
     reference_files:
       header: "include/zephyr/bluetooth/services/lls.h"
       impl: "subsys/bluetooth/services/lls.c"
     similar_profiles: [IAS, TPS]
     tags: [proximity, alert, write, read, simple, connection-aware]
-    notes: "Connection-aware service. Alert triggered on link loss. Part of Proximity Profile."
+    notes: "Connection-aware service. Alert level written by client; server triggers local alert when disconnection is detected (connection-aware tag). Alert Level 0x2A06 shared with IAS. LLS requires BT_CONN_CB_DEFINE disconnected callback to trigger the stored alert level."
 
   - name: "TX Power Service"
     id: TPS
@@ -297,12 +299,13 @@ profiles:
     uses_indicate: false
     per_connection_state_required: false
     kconfig_symbol: BT_TPS
+    pts_tracked: false
     reference_files:
       header: "include/zephyr/bluetooth/services/tps.h"
       impl: "subsys/bluetooth/services/tps.c"
     similar_profiles: [DIS, IAS, LLS]
     tags: [proximity, power, read-only, simple, no-callback]
-    notes: "Simplest possible profile - single read-only characteristic. Use as minimal template."
+    notes: "Simplest possible profile — single read-only characteristic. Use as minimal template for read-only services. No callbacks, no state. TX Power Level (0x2A07) is int8_t in units of dBm. Part of Proximity Profile.
 
   - name: "Immediate Alert Service"
     id: IAS
@@ -323,12 +326,13 @@ profiles:
     uses_indicate: false
     per_connection_state_required: false
     kconfig_symbol: BT_IAS
+    pts_tracked: true
     reference_files:
       header: "include/zephyr/bluetooth/services/ias.h"
       impl: "subsys/bluetooth/services/ias.c"
     similar_profiles: [LLS, TPS]
     tags: [proximity, alert, write, write-no-response, simple, immediate]
-    notes: "Write-without-response pattern. Good reference for fire-and-forget write profiles."
+    notes: "Write-without-response pattern. Good reference for fire-and-forget write profiles. Alert Level (0x2A06) is 1-byte enum: 0=No Alert, 1=Mild, 2=High. No response sent. Part of Proximity Profile (alongside LLS + TPS). UUID verified against BT SIG Assigned Numbers."
 
   - name: "Object Transfer Service"
     id: OTS
@@ -477,12 +481,15 @@ profiles:
     uses_indicate: false
     per_connection_state_required: false
     kconfig_symbol: BT_SPS
+    spec_version: "1.0"
+    spec_doc: "docs/profiles/SCPS/Scan_Parameters_Service_1.0.pdf"
+    pts_tracked: true
     reference_files:
       header: "include/zephyr/bluetooth/services/sps.h"
       impl: "subsys/bluetooth/services/sps.c"
     similar_profiles: [IAS, LLS]
     tags: [generic, scan, write, notify, simple, server-requests-refresh]
-    notes: "Used for scan parameter negotiation between GAP Central and GAP Peripheral."
+    notes: "Scan parameter negotiation between GAP Central (collector) and GAP Peripheral (sensor). Client writes scan interval/window; server may notify client to re-send (Scan Refresh 0x2A31). UUID verified against docs/profiles/SCPS/Scan_Parameters_Service_1.0.pdf. Unique server-requests-refresh pattern — see profile-patterns.md §10.1."
 
   - name: "Running Speed and Cadence Service"
     id: RSCS
@@ -511,16 +518,17 @@ profiles:
           mandatory: false
     callbacks: true
     state_management: false
-    has_control_point: false
-    uses_indicate: false
+    has_control_point: true
+    uses_indicate: true
     per_connection_state_required: false
     kconfig_symbol: BT_RSCS
+    pts_tracked: false
     reference_files:
       header: "include/zephyr/bluetooth/services/rscs.h"
       impl: "subsys/bluetooth/services/rscs.c"
     similar_profiles: [HRS, CSCS]
-    tags: [sport, fitness, notify, sensor, cadence, running]
-    notes: "Fitness sensor profile with optional control point. Similar to HRS in structure."
+    tags: [sport, fitness, notify, sensor, cadence, running, has_control_point, uses_indicate]
+    notes: "Fitness sensor profile with optional SC Control Point (0x2A55, Write+Indicate). has_control_point: true — SC CP present in spec (Set Cumulative Value, Start Calibration, Update Sensor Location opcodes). uses_indicate: true — SC CP responses delivered via Indicate. SC CP is optional; basic implementation omits it. SC CP response protocol: opcode 0x10 + echoed request opcode + response value (Success/Not Supported/Invalid Param)."
 
   - name: "Cycling Speed and Cadence Service"
     id: CSCS
