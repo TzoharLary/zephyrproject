@@ -1,0 +1,211 @@
+# Zephyr BLE GATT Profile Builder — Source Map
+# ===============================================
+# This file documents every source the system can consult,
+# what data is available in it, and how it should be used.
+#
+# Usage governance: When the agent needs to research a profile,
+# it MUST consult sources in priority order and respect use/do_not_use rules.
+#
+# Schema version: 1.0.0
+
+version: "1.0.0"
+last_updated: "2026-02-25"
+
+sources:
+
+  - name: "Zephyr RTOS"
+    id: zephyr
+    type: primary
+    priority: 1
+    description: >
+      The canonical source for all Zephyr BLE GATT implementation patterns.
+      Always the first and most trusted source for implementation.
+    repository: "zephyrproject-rtos/zephyr"
+    url: "https://github.com/zephyrproject-rtos/zephyr"
+    use_for:
+      - "Implementation patterns (.h, .c, Kconfig)"
+      - "BT_GATT_SERVICE_DEFINE macro usage"
+      - "bt_gatt_attr_read / bt_gatt_attr_write callbacks"
+      - "BT_GATT_CCC / BT_GATT_CCC_INITIALIZER patterns"
+      - "bt_conn callback registration patterns"
+      - "Kconfig structure and dependency syntax"
+      - "CMakeLists.txt integration patterns"
+      - "Error handling conventions (errno, -ENOMEM, etc.)"
+      - "Logging patterns (LOG_MODULE_REGISTER, LOG_DBG, LOG_ERR)"
+      - "Memory management (k_malloc, net_buf, etc.)"
+    do_not_use_for:
+      - "Direct copy without adaptation to target profile"
+      - "Assume implementation exists without verifying"
+    paths:
+      - "subsys/bluetooth/services/"
+      - "include/zephyr/bluetooth/services/"
+      - "subsys/bluetooth/common/"
+      - "include/zephyr/bluetooth/"
+      - "samples/bluetooth/"
+      - "tests/bluetooth/bsim/"
+    key_patterns:
+      bt_gatt_service_define: "BT_GATT_SERVICE_DEFINE(name, ...)"
+      characteristic_read: "static ssize_t read_<name>(struct bt_conn *conn, const struct bt_gatt_attr *attr, void *buf, uint16_t len, uint16_t offset)"
+      characteristic_write: "static ssize_t write_<name>(struct bt_conn *conn, const struct bt_gatt_attr *attr, const void *buf, uint16_t len, uint16_t offset, uint8_t flags)"
+      ccc_changed: "static void <name>_ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t value)"
+      notify: "bt_gatt_notify(conn, attr, data, len)"
+      indicate: "bt_gatt_indicate(conn, &params)"
+    reference_profiles:
+      simple_notify: "subsys/bluetooth/services/hrs.c"
+      simple_read: "subsys/bluetooth/services/dis.c"
+      simple_write: "subsys/bluetooth/services/ias.c"
+      complex_state_machine: "subsys/bluetooth/services/hids.c"
+      indicate: "subsys/bluetooth/services/hts.c"
+      mixed: "subsys/bluetooth/services/bas.c"
+
+  - name: "TI SimpleLink Zephyr"
+    id: ti_simplelink
+    type: reference
+    priority: 2
+    description: >
+      Texas Instruments' Zephyr fork with hardware-specific extensions.
+      Contains Zephyr-compatible implementations that may include TI-specific
+      patterns. Use for alternative Zephyr implementation approaches only.
+    repository: "TexasInstruments/simplelink-zephyr"
+    url: "https://github.com/TexasInstruments/simplelink-zephyr"
+    local_path: "zephyr/"
+    use_for:
+      - "Alternative Zephyr-compatible implementations"
+      - "Hardware-specific BLE patterns (CC2652, CC1352)"
+      - "Zephyr BLE stack customizations"
+      - "BLE service implementations not yet upstream"
+      - "Low-power optimization patterns"
+    do_not_use_for:
+      - "Vendor-specific TI SDK code (TI-RTOS, SimpleLink SDK)"
+      - "TI proprietary APIs or HAL calls"
+      - "Any code that uses ti_* or TI_ namespaced APIs"
+      - "Direct copy without verification against upstream Zephyr"
+    caution: >
+      Always verify that any pattern from this source compiles against
+      upstream Zephyr headers, not TI-extended headers.
+    paths:
+      - "subsys/bluetooth/services/"
+      - "include/zephyr/bluetooth/services/"
+
+  - name: "Intel Auto-PTS"
+    id: intel_auto_pts
+    type: validation
+    priority: 3
+    description: >
+      Intel's Automated Profile Tuning Suite for Bluetooth qualification testing.
+      Contains test cases, validation logic, and compliance requirements for
+      all BT SIG profiles. Critical for understanding mandatory vs. optional features.
+    repository: "intel/auto-pts"
+    url: "https://github.com/intel/auto-pts"
+    local_path: "auto-pts/"
+    use_for:
+      - "Test cases and validation logic for profile compliance"
+      - "BT SIG qualification requirements (IXIT, PICS)"
+      - "Edge case understanding and error handling requirements"
+      - "Profile conformance test IDs (TC_XXX_BV_XXX_C)"
+      - "Understanding which characteristics are truly mandatory"
+      - "Connection/disconnection handling requirements"
+      - "CCC (Client Characteristic Configuration) behavior requirements"
+    do_not_use_for:
+      - "Implementation patterns"
+      - "Header file or source file generation"
+      - "Kconfig structure"
+    paths:
+      - "autopts/ptsprojects/zephyr/"
+      - "autopts/ptsprojects/stack/"
+      - "autopts/bot/"
+    notes: >
+      The Zephyr-specific test cases in autopts/ptsprojects/zephyr/ show
+      exactly which IUT commands are expected for each profile test case.
+      Use this to understand what a profile implementation MUST do to pass PTS.
+
+  - name: "Bluetooth SIG Specification"
+    id: bt_sig
+    type: specification
+    priority: 4
+    description: >
+      Official Bluetooth SIG specifications for all GATT profiles and services.
+      The authoritative source for UUID definitions, characteristic formats,
+      and mandatory/optional feature requirements.
+    url: "https://www.bluetooth.com/specifications/specs/"
+    assigned_numbers_url: "https://www.bluetooth.com/specifications/assigned-numbers/"
+    use_for:
+      - "Official UUID definitions (service UUIDs, characteristic UUIDs)"
+      - "Characteristic format and data layout specifications"
+      - "Mandatory vs. optional characteristic determination"
+      - "Profile behavior specification and requirements"
+      - "Security requirements (encryption, bonding)"
+      - "Permission levels (readable, writable, authenticated)"
+      - "Descriptor requirements (CCCD, User Description, etc.)"
+    do_not_use_for:
+      - "Implementation (spec describes behavior, not code)"
+      - "Zephyr-specific API usage"
+    key_documents:
+      - name: "Assigned Numbers"
+        url: "https://www.bluetooth.com/specifications/assigned-numbers/"
+        contains: "All service and characteristic UUIDs"
+      - name: "GATT Specification Supplement"
+        url: "https://www.bluetooth.com/specifications/specs/gatt-specification-supplement/"
+        contains: "Characteristic formats and data structures"
+      - name: "Core Specification"
+        url: "https://www.bluetooth.com/specifications/specs/core-specification-6-0/"
+        contains: "ATT/GATT protocol details"
+    uuid_lookup:
+      services: "https://www.bluetooth.com/specifications/assigned-numbers/ (Section: GATT Services)"
+      characteristics: "https://www.bluetooth.com/specifications/assigned-numbers/ (Section: GATT Characteristics)"
+      descriptors: "https://www.bluetooth.com/specifications/assigned-numbers/ (Section: GATT Descriptors)"
+
+  - name: "Nordic nRF Connect SDK"
+    id: nordic_nrf
+    type: reference
+    priority: 5
+    description: >
+      Nordic Semiconductor's nRF Connect SDK — a Zephyr-based SDK with extended
+      BLE service implementations. Contains well-documented profile implementations
+      that demonstrate business logic and state machine design. NEVER use Nordic
+      implementations directly — only use them to understand logic and architecture.
+    url: "https://developer.nordicsemi.com/nRF_Connect_SDK/doc/latest/nrf/libraries/bluetooth_services/"
+    repository_url: "https://github.com/nrfconnect/sdk-nrf"
+    use_for:
+      - "Profile business logic understanding"
+      - "State machine architecture design"
+      - "Characteristic behavior explanation"
+      - "Profiles not yet implemented in upstream Zephyr"
+      - "Understanding complex profile interactions"
+      - "Error handling and edge case patterns"
+    do_not_use_for:
+      - "Direct implementation copy"
+      - "Zephyr file generation"
+      - "Nordic-specific APIs (nrf_bt_*, peer_manager, etc.)"
+      - "SoftDevice API patterns"
+    caution: >
+      Nordic SDK uses Zephyr as its RTOS but adds Nordic-specific layers.
+      When studying Nordic code, identify the Zephyr-native portions
+      (BT_GATT_SERVICE_DEFINE, bt_conn, etc.) vs. Nordic extensions
+      (nrf_ble_*, pm_conn_*, etc.). Only the Zephyr-native portions
+      can inform Zephyr implementation design.
+    paths:
+      - "subsys/bluetooth/services/"
+      - "include/bluetooth/"
+
+source_priority_rules:
+  - rule: "Always check Zephyr primary source first"
+    detail: "If a similar profile exists in Zephyr, use it as the implementation base"
+  - rule: "Use Nordic only for logic, never for code"
+    detail: "Nordic implementations show WHAT to do, Zephyr sources show HOW to do it in Zephyr"
+  - rule: "Use BT Spec for UUID and mandatory requirements"
+    detail: "Always verify UUIDs against BT SIG assigned numbers"
+  - rule: "Use Auto-PTS for compliance requirements"
+    detail: "Check test cases to understand what must be implemented for PTS qualification"
+  - rule: "Never perform unguided research"
+    detail: "All research must be traceable to a mapped source in this file"
+
+implementation_rules:
+  - "Output MUST always be Zephyr RTOS native"
+  - "Must follow BT_GATT_SERVICE_DEFINE pattern"
+  - "Must use bt_gatt_attr_read / bt_gatt_attr_write for callbacks"
+  - "Must use BT_GATT_CCC for notify/indicate characteristics"
+  - "Must use Zephyr Kconfig for feature flags"
+  - "Must use Zephyr logging subsystem (LOG_MODULE_REGISTER)"
+  - "Never generate Nordic SDK style (nrf_bt_*, peer_manager_*)"
+  - "Never copy non-Zephyr implementation directly"
