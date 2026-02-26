@@ -946,8 +946,183 @@ From Phase 1 analysis, these tags reliably predict implementation complexity:
 | `connection-aware` | Profile behavior changes on connect/disconnect | Always implement connected/disconnected callbacks |
 
 **Profiles by tag:**
-- `has_control_point`: OTS, HIDS, GLS, ANS, UDS, CGMS
-- `uses_indicate`: HTS, BPS, OTS, GLS, UDS, BCS, WSS, CGMS, PLXS
+- `has_control_point`: HRS, OTS, HIDS, GLS, ANS, UDS, CGMS, RSCS, CSCS, PLXS
+- `uses_indicate`: HTS, BPS, OTS, GLS, UDS, BCS, WSS, CGMS, PLXS, RSCS, CSCS
 - `per_connection_state_required`: ESS, CTS, OTS, HIDS, GLS, UDS, CGMS
 - `server-requests-refresh`: SPS
 - `connection-aware`: LLS (alert on link loss)
+
+---
+
+### 10.5 Record Access Control Point Pattern (GLS, CGMS, PLXS)
+
+**Source:** BT SIG Glucose Service Specification, Section 3.2;
+Continuous Glucose Monitoring Service Specification, Section 3.2
+
+The **Record Access Control Point** (RACP, UUID 0x2A52, Write + Indicate) is used in
+medical profiles to request access to stored measurement records. It is a structured
+asynchronous command-response protocol.
+
+**RACP command structure (client writes):**
+```
+Byte 0: Op Code
+Byte 1: Operator
+Byte 2+: Filter (optional, depends on Op Code + Operator)
+```
+
+**Op Codes:**
+| Value | Name |
+|-------|------|
+| 0x01 | Report Stored Records |
+| 0x02 | Delete Stored Records |
+| 0x03 | Abort Operation |
+| 0x04 | Report Number of Stored Records |
+| 0x05 | (GLS: Response Code for Number of Records) |
+| 0x06 | (GLS: Response Code - General) |
+
+**Operators:**
+| Value | Name |
+|-------|------|
+| 0x00 | Null |
+| 0x01 | All Records |
+| 0x02 | Less Than or Equal To |
+| 0x03 | Greater Than or Equal To |
+| 0x04 | Within Range Of (Inclusive) |
+| 0x05 | First Record |
+| 0x06 | Last Record |
+
+**RACP response (server indicates back to client):**
+```
+Byte 0: Response Op Code (0x06 for GLS)
+Byte 1: Operator (0x00 = Null for response)
+Byte 2: Request Op Code (echo)
+Byte 3: Response Code Value
+  0x01 = Success
+  0x02 = Op Code Not Supported
+  0x03 = Invalid Operator
+  0x04 = Operator Not Supported
+  0x05 = Invalid Operand
+  0x06 = No Records Found
+  0x07 = Abort Unsuccessful
+  0x08 = Procedure Not Completed
+  0x09 = Operand Not Supported
+```
+
+**Implementation skeleton:**
+```c
+/* RACP state */
+static struct {
+    bool procedure_in_progress;
+    struct bt_conn *client_conn;
+    struct bt_gatt_indicate_params ind_params;
+} racp_ctx;
+
+static void racp_indicate_cb(struct bt_conn *conn,
+                              struct bt_gatt_indicate_params *params,
+                              uint8_t err)
+{
+    racp_ctx.procedure_in_progress = false;
+    LOG_DBG("RACP response indicated (err=%d)", err);
+}
+
+static void racp_send_response(struct bt_conn *conn,
+                                uint8_t request_opcode,
+                                uint8_t response_code)
+{
+    uint8_t rsp[4] = {
+        0x06,          /* Response Op Code */
+        0x00,          /* Null operator */
+        request_opcode,
+        response_code
+    };
+
+    racp_ctx.ind_params.attr = &bt_gls_svc.attrs[BT_GLS_ATTR_RACP];
+    racp_ctx.ind_params.func = racp_indicate_cb;
+    racp_ctx.ind_params.data = rsp;
+    racp_ctx.ind_params.len = sizeof(rsp);
+    bt_gatt_indicate(conn, &racp_ctx.ind_params);
+}
+
+static ssize_t write_racp(struct bt_conn *conn,
+                           const struct bt_gatt_attr *attr,
+                           const void *buf, uint16_t len,
+                           uint16_t offset, uint8_t flags)
+{
+    const uint8_t *data = buf;
+
+    if (len < 2) {
+        return BT_GATT_ERR(BT_ATT_ERR_INVALID_ATTRIBUTE_LEN);
+    }
+    if (racp_ctx.procedure_in_progress) {
+        racp_send_response(conn, data[0], 0x08); /* Procedure Not Completed */
+        return len;
+    }
+
+    racp_ctx.procedure_in_progress = true;
+    racp_ctx.client_conn = conn;
+
+    switch (data[0]) {  /* Op Code */
+    case 0x01:  /* Report Stored Records */
+        /* Start sending records via Notify, then send final Indicate */
+        /* (records sent asynchronously; final response sent after last record) */
+        break;
+    case 0x04:  /* Report Number of Stored Records */
+        /* Send number-of-records response */
+        racp_send_response(conn, data[0], 0x01 /* Success */);
+        break;
+    case 0x03:  /* Abort Operation */
+        racp_ctx.procedure_in_progress = false;
+        racp_send_response(conn, data[0], 0x01);
+        break;
+    default:
+        racp_ctx.procedure_in_progress = false;
+        racp_send_response(conn, data[0], 0x02 /* Op Code Not Supported */);
+        break;
+    }
+
+    return len;
+}
+```
+
+**Key rules:**
+1. RACP CCC MUST be configured for Indications before client writes RACP
+2. Only one RACP procedure may be active at a time (respond 0x08 = Procedure Not Completed if busy)
+3. For "Report Stored Records": send all matching records as Notify, then send success Indicate AFTER the last record
+4. The bonded client that started the RACP procedure is the only one that should receive the response
+5. RACP must be protected with `BT_GATT_PERM_WRITE_AUTHEN` — requires bonded/authenticated client
+
+**Pattern tag:** `racp`
+
+---
+
+### 10.6 SC Control Point Pattern (RSCS, CSCS)
+
+**Source:** BT SIG Running Speed and Cadence Service Specification, Section 3.2;
+Cycling Speed and Cadence Service Specification, Section 3.2
+
+The **SC Control Point** (0x2A55, Write + Indicate) is used in sport/fitness profiles
+(RSCS, CSCS) to send calibration and configuration commands to the sensor.
+
+**SC Control Point Operations:**
+
+| Opcode | Name |
+|--------|------|
+| 0x01 | Set Cumulative Value |
+| 0x02 | Start Sensor Calibration |
+| 0x03 | Update Sensor Location |
+| 0x04 | Request Supported Sensor Locations |
+
+**Response format (Indicate back to client):**
+```
+Byte 0: Response Code (0x10)
+Byte 1: Request Op Code (echo)
+Byte 2: Response Value (0x01=Success, 0x02=Not Supported, 0x03=Invalid Param, 0x04=Busy, 0x05=CCC Not Configured)
+Byte 3+: Optional response data (e.g., location list for opcode 0x04)
+```
+
+**Key rules:**
+1. SC CP CCC must be configured for Indications before writing to SC CP (respond 0x05 if not)
+2. Only one SC CP procedure may be in progress (respond 0x04 if busy)
+3. The `Set Cumulative Value` opcode carries a 4-byte cumulative value (little-endian)
+
+**Pattern tag:** `sc-control-point`

@@ -6,13 +6,27 @@
 # Schema version: 1.0.0
 
 version: "1.1.0"
-last_updated: "2026-02-25"
+last_updated: "2026-02-26"
 
 # Phase 1 validation status:
-# - UUID spot-check: HRS, BAS, DIS, HTS, ESS, OTS — all verified against BT SIG docs in docs/profiles/
-# - Mandatory/optional flags: verified for all 6 spot-checked profiles
-# - Coverage audit: BPS (0x1810) added — present in docs/profiles/BPS/ and tools/data/ but was missing
-# - Technical tags added: has_control_point, uses_indicate, per_connection_state_required
+# Batch 1 (HRS, BAS, DIS, HTS, ESS, OTS): COMPLETE — deep validation done
+# Batch 2 (CTS, LLS, TPS, IAS, SPS, RSCS): COMPLETE — deep validation done
+# Batch 3 (CSCS, GLS, HIDS, ANS, PASS, UDS): COMPLETE — deep validation done
+# Batch 4 (BCS, WSS, CGMS, PLXS, IPS, BPS): COMPLETE — deep validation done
+# ALL 24 PROFILES VALIDATED. Phase 1 complete.
+#
+# Summary of all corrections applied across batches:
+#   - HRS: complexity Low→Medium (3 chars); has_control_point false→true (HR CP 0x2A39)
+#   - DIS: type/complexity fixed in review-debt PR; spec_version v1.2 added
+#   - ANS: type Simple→Complex fixed in review-debt PR
+#   - IPS: type/complexity fixed in review-debt PR
+#   - RSCS/CSCS: has_control_point false→true; uses_indicate false→true (SC CP 0x2A55)
+#   - GLS: pattern Indicate→Notify (primary data is glucose Notify, not RACP Indicate)
+#   - BCS/WSS: complexity Medium→Low (2 chars, no state: Low by classification rule)
+#   - PLXS: has_control_point false→true (RACP 0x2A52 present)
+#   - All profiles: pts_tracked, spec_version, spec_doc fields added where available
+# Coverage audit: BPS (0x1810) added — present in docs/profiles/BPS/ and tools/data/ but was missing
+# Technical tags added: has_control_point, uses_indicate, per_connection_state_required
 
 profiles:
 
@@ -736,7 +750,7 @@ profiles:
     id: BCS
     category: Health
     type: Simple
-    complexity: Medium
+    complexity: Low
     pattern: Indicate
     uuids:
       service: "0x181B"
@@ -755,18 +769,19 @@ profiles:
     uses_indicate: true
     per_connection_state_required: false
     kconfig_symbol: BT_BCS
+    pts_tracked: false
     reference_files:
       header: "include/zephyr/bluetooth/services/bcs.h"
       impl: "subsys/bluetooth/services/bcs.c"
     similar_profiles: [HTS, HRS]
     tags: [health, body, indicate, fitness, measurement, uses_indicate]
-    notes: "Simple indicate profile for body composition data."
+    notes: "Simple indicate profile for body composition data. complexity: Low — 2 characteristics, no state, 1 CCC (Low = 1–2 chars, 0–1 CCC per classification rule). Body Composition Measurement (0x2A9C) is a mandatory Indicate. Body Composition Feature (0x2A9B) optional read-only bitfield. Pattern: see Indicate-Based Measurement pattern §10.2. All UUIDs verified against BT SIG Assigned Numbers."
 
   - name: "Weight Scale Service"
     id: WSS
     category: Health
     type: Simple
-    complexity: Medium
+    complexity: Low
     pattern: Indicate
     uuids:
       service: "0x181D"
@@ -785,12 +800,15 @@ profiles:
     uses_indicate: true
     per_connection_state_required: false
     kconfig_symbol: BT_WSS
+    spec_version: "1.0.1"
+    spec_doc: "docs/profiles/WSS/Weight_Scale_Service_1.0.1.pdf"
+    pts_tracked: false
     reference_files:
       header: "include/zephyr/bluetooth/services/wss.h"
       impl: "subsys/bluetooth/services/wss.c"
     similar_profiles: [BCS, HTS]
     tags: [health, weight, indicate, fitness, measurement, uses_indicate]
-    notes: "Weight scale profile. Similar structure to BCS - indicate-based measurement. Verified against docs/profiles/WSS/Weight_Scale_Service_1.0.1.pdf."
+    notes: "Weight scale profile. complexity: Low — 2 characteristics, no state, 1 CCC (Low = 1–2 chars, 0–1 CCC). Same topology as BCS. Weight Measurement (0x2A9D) mandatory Indicate; Weight Scale Feature (0x2A9E) mandatory Read. Feature supports conditional Indicate for bonding+dynamic case — see §10.3. UUID and structure verified against docs/profiles/WSS/Weight_Scale_Service_1.0.1.pdf."
 
   - name: "Continuous Glucose Monitoring Service"
     id: CGMS
@@ -835,12 +853,13 @@ profiles:
     uses_indicate: true
     per_connection_state_required: true
     kconfig_symbol: BT_CGMS
+    pts_tracked: false
     reference_files:
       header: "include/zephyr/bluetooth/services/cgms.h"
       impl: "subsys/bluetooth/services/cgms.c"
     similar_profiles: [GLS, HTS]
     tags: [health, medical, glucose, continuous, notify, indicate, complex, state-machine, has_control_point, uses_indicate, per_connection_state_required]
-    notes: "Advanced glucose monitoring. Extends GLS with session management and specific ops control."
+    notes: "Advanced continuous glucose monitoring. Extends GLS with session management. Two control points: RACP (0x2A52, optional, Write+Indicate) for stored records and CGM Specific Ops CP (0x2AAC, mandatory, Write+Indicate) for session management (Start/Stop Session, Reset Cal Level, etc.). Session state tracked per connection. Notify-primary pattern (same as GLS). All UUIDs 0x2AA7–0x2AAC verified against BT SIG Assigned Numbers."
 
   - name: "Pulse Oximeter Service"
     id: PLXS
@@ -869,16 +888,17 @@ profiles:
           mandatory: false
     callbacks: true
     state_management: false
-    has_control_point: false
+    has_control_point: true
     uses_indicate: true
     per_connection_state_required: false
     kconfig_symbol: BT_PLXS
+    pts_tracked: false
     reference_files:
       header: "include/zephyr/bluetooth/services/plxs.h"
       impl: "subsys/bluetooth/services/plxs.c"
     similar_profiles: [HRS, HTS]
-    tags: [health, medical, oxygen, pulse, notify, indicate, sensor, uses_indicate]
-    notes: "Blood oxygen saturation sensor. Mix of spot-check indicate and continuous notify."
+    tags: [health, medical, oxygen, pulse, notify, indicate, sensor, uses_indicate, has_control_point]
+    notes: "Blood oxygen saturation sensor. Spot-Check (0x2A5E, Indicate) for episodic measurements; Continuous (0x2A5F, Notify) for streaming. has_control_point: true — RACP (0x2A52, Write+Indicate) is optional but present in spec for stored spot-check records. PLX Features (0x2A60) is mandatory Read. Type: Simple (4 chars, RACP is optional and doesn't mandate Complex per 5-char rule). All UUIDs verified against BT SIG Assigned Numbers."
 
   - name: "Indoor Positioning Service"
     id: IPS
@@ -931,12 +951,13 @@ profiles:
     uses_indicate: false
     per_connection_state_required: false
     kconfig_symbol: BT_IPS
+    pts_tracked: false
     reference_files:
       header: "include/zephyr/bluetooth/services/ips.h"
       impl: "subsys/bluetooth/services/ips.c"
     similar_profiles: [ESS, DIS]
     tags: [location, indoor, position, read, write, advertising]
-    notes: "Used primarily in advertising data. Multi-characteristic location profile."
+    notes: "Multi-characteristic indoor location profile. Primarily used in advertising data (non-connectable advertising with optional Encrypted Data AD type). 9 characteristics (all optional except Indoor Positioning Configuration 0x2AAD) — 5+ chars makes this Complex (fix applied in review-debt PR #4). Latitude/Longitude in WGS-84 coordinates; Local North/East for relative positioning. All UUIDs 0x2AAD–0x2AB5 verified against BT SIG Assigned Numbers."
 
   - name: "Blood Pressure Service"
     id: BPS
@@ -973,8 +994,11 @@ profiles:
     spec_version: "v1.1.1"
     spec_doc: "docs/profiles/BPS/Blood_Pressure_Service_1.1.1.pdf"
     pts_tracked: true
-    notes: >
+    notes: >-
       Blood pressure measurement profile using Indicate for measurements (acknowledged delivery).
       BPS v1.1.1 (docs/profiles/BPS/) adds optional RACP for stored records — making it Complex
-      when RACP is implemented. Basic form (3 characteristics) is Simple. UUID verified against
-      docs/profiles/BPS/Blood_Pressure_Service_1.1.1.pdf.
+      when RACP is implemented. Basic form (3 characteristics) is Simple/Medium. Blood Pressure
+      Measurement (0x2A35, Indicate) mandatory; Intermediate Cuff Pressure (0x2A36, Notify)
+      optional for live cuff readings during measurement; Blood Pressure Feature (0x2A49, Read)
+      mandatory. UUID verified against docs/profiles/BPS/Blood_Pressure_Service_1.1.1.pdf.
+      Errata Correction 23224 (docs/profiles/BPS/) clarifies conformance section.
