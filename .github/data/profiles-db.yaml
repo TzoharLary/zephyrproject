@@ -53,8 +53,8 @@ profiles:
   - name: "Device Information Service"
     id: DIS
     category: Device
-    type: Simple
-    complexity: Low
+    type: Complex
+    complexity: Medium
     pattern: Read
     uuids:
       service: "0x180A"
@@ -601,7 +601,7 @@ profiles:
   - name: "Alert Notification Service"
     id: ANS
     category: Alert
-    type: Simple
+    type: Complex
     complexity: Medium
     pattern: Notify
     uuids:
@@ -883,8 +883,8 @@ profiles:
   - name: "Indoor Positioning Service"
     id: IPS
     category: Location
-    type: Simple
-    complexity: Medium
+    type: Complex
+    complexity: High
     pattern: Read
     uuids:
       service: "0x1821"

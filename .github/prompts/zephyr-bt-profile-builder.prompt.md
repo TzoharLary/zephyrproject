@@ -104,25 +104,25 @@ Priority 1: Zephyr RTOS tree
   → Check include/zephyr/bluetooth/services/ for existing headers
   → Extract: implementation patterns, Kconfig structure, callback patterns
 
-Priority 2: Bluetooth SIG Specification (via sources-map.yaml)
-  → Look up service UUID in Assigned Numbers
-  → Look up characteristic UUIDs
-  → Determine: mandatory vs. optional characteristics
-  → Note: permission levels and security requirements
+Priority 2: TI SimpleLink Zephyr (for alternative Zephyr patterns)
+  → Check for Zephyr-compatible implementations
+  → Verify any code uses only upstream Zephyr APIs
 
 Priority 3: Intel Auto-PTS (for compliance)
   → Check autopts/ptsprojects/zephyr/ for test cases
   → Identify: what must pass for PTS qualification
   → Note: any mandatory behaviors from test IDs
 
-Priority 4: Nordic nRF Connect SDK (for logic only)
+Priority 4: Bluetooth SIG Specification (via sources-map.yaml)
+  → Look up service UUID in Assigned Numbers
+  → Look up characteristic UUIDs
+  → Determine: mandatory vs. optional characteristics
+  → Note: permission levels and security requirements
+
+Priority 5: Nordic nRF Connect SDK (for logic only)
   → Study business logic and state machine design
   → DO NOT copy code — only understand the pattern
   → Map logic to Zephyr-native equivalents
-
-Priority 5: TI SimpleLink Zephyr (for alternative Zephyr patterns)
-  → Check for Zephyr-compatible implementations
-  → Verify any code uses only upstream Zephyr APIs
 ```
 
 **Research governance (from sources-map.yaml):**
@@ -167,7 +167,7 @@ Apply pattern from **Section 4** of profile-patterns.md:
 
 #### Output format:
 
-```
+````
 ## Generated: <Profile Name> (<PROFILE_ID>)
 
 ### Classification
@@ -176,25 +176,25 @@ Apply pattern from **Section 4** of profile-patterns.md:
 - Based on: <reference_profile> (reason: <explanation>)
 
 ### `include/zephyr/bluetooth/services/<profile>.h`
-\```c
+```c
 <header content>
-\```
+```
 
 ### `subsys/bluetooth/services/<profile>.c`
-\```c
+```c
 <implementation content>
-\```
+```
 
 ### Kconfig
-\```kconfig
+```kconfig
 <kconfig content>
-\```
+```
 
 ### CMakeLists.txt addition
-\```cmake
+```cmake
 <cmake line>
-\```
 ```
+````
 
 ---
 
