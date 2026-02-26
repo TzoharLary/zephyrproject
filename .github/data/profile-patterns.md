@@ -169,7 +169,8 @@ int bt_<profile>_notify(struct bt_conn *conn, uint<N>_t value)
 {
     int rc;
 
-    rc = bt_gatt_notify(conn, &bt_<profile>_svc.attrs[1], &value, sizeof(value));
+    /* attrs[0]=service decl, attrs[1]=char decl, attrs[2]=char value — target value attr */
+    rc = bt_gatt_notify(conn, &bt_<profile>_svc.attrs[2], &value, sizeof(value));
     return rc == -ENOTCONN ? 0 : rc;
 }
 ```
@@ -218,7 +219,11 @@ static ssize_t write_<char>(struct bt_conn *conn,
         return BT_GATT_ERR(BT_ATT_ERR_INVALID_OFFSET);
     }
 
-    memcpy(&value + offset, buf, len);
+    /* Use byte pointer for offset arithmetic — pointer arithmetic on typed pointer
+     * is in units of the type size, not bytes, and can silently bypass bounds check */
+    uint8_t *dst = (uint8_t *)&value;
+
+    memcpy(dst + offset, buf, len);
     process_<char>_write(value);
 
     return len;
