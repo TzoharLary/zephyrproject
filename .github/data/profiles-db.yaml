@@ -63,9 +63,9 @@ profiles:
     reference_files:
       header: "include/zephyr/bluetooth/services/hrs.h"
       impl: "subsys/bluetooth/services/hrs.c"
-    similar_profiles: [BAS, DIS]
+    similar_profiles: [BAS, HTS]
     tags: [health, sensor, notify, simple, heart, vital-signs, has_control_point]
-    notes: "Canonical simple notify profile. Best starting reference for any notify-based sensor. HR Control Point (0x2A39) resets Energy Expended field (optional feature, present in spec — has_control_point: true). complexity: Medium per 3-char rule (analogous to CTS at 3 chars)."
+    notes: "Canonical simple notify profile. Best starting reference for any notify-based sensor. HR Control Point (0x2A39) resets Energy Expended field (optional feature, present in spec — has_control_point: true) — see profile-patterns.md §10.7 for Write+Indicate control point, or §10.4 for Write-only variant. complexity: Medium per 3-char rule (analogous to CTS at 3 chars)."
 
   - name: "Device Information Service"
     id: DIS
@@ -121,7 +121,7 @@ profiles:
       header: "include/zephyr/bluetooth/services/dis.h"
       impl: "subsys/bluetooth/services/dis.c"
     similar_profiles: [BAS]
-    tags: [device, info, read-only, simple, no-callback, static]
+    tags: [device, info, read-only, complex, no-callback, static]
     notes: "Pure read-only profile. Values configured via Kconfig. No callbacks needed. 8 optional characteristics (all optional per DIS v1.2 spec). UUID verified against docs/profiles/DIS/Device_Information_Service_1.2.pdf."
 
   - name: "Battery Service"
@@ -428,7 +428,7 @@ profiles:
       impl: "subsys/bluetooth/services/ots.c"
     similar_profiles: [HIDS]
     tags: [data-transfer, complex, mixed, object, l2cap, state-machine, indicate, has_control_point, uses_indicate, per_connection_state_required]
-    notes: "Most complex Zephyr BLE service. Uses L2CAP COC for data transfer. Full state machine. OACP (0x2AC5) and OLCP (0x2AC6) are Write+Indicate control points — see RACP-style protocol pattern in profile-patterns.md §10.5."
+    notes: "Most complex Zephyr BLE service. Uses L2CAP COC for data transfer. Full state machine. OACP (0x2AC5) and OLCP (0x2AC6) are Write+Indicate control points — see profile-patterns.md §10.5 for RACP-style protocol pattern and §10.7 for Write+Indicate response implementation."
 
   - name: "HID over GATT Profile"
     id: HIDS
@@ -485,7 +485,7 @@ profiles:
       impl: "subsys/bluetooth/services/hids.c"
     similar_profiles: [OTS]
     tags: [hid, complex, mixed, keyboard, mouse, report, state-machine, boot-mode, has_control_point, per_connection_state_required]
-    notes: "Complex HID profile with boot and report modes. Full state machine with connection tracking. HID over GATT Profile v1.1 spec (docs/profiles/HID/). Protocol Mode (0x2A4E) enables boot mode for simpler keyboard/mouse report format. Report characteristic (0x2A4D) uses Report Reference descriptor to distinguish input/output/feature report types. UUID verified against docs/profiles/HID/HID_Over_GATT_Profile_1.1.pdf."
+    notes: "Complex HID profile with boot and report modes. Full state machine with connection tracking. HID over GATT Profile v1.1 spec (docs/profiles/HID/). Protocol Mode (0x2A4E) enables boot mode for simpler keyboard/mouse report format. Report characteristic (0x2A4D) uses Report Reference descriptor to distinguish input/output/feature report types. HID Control Point (0x2A4C, Write Without Response) is a simple device control command (opcode 0x01 = Suspend, 0x02 = Exit Suspend) — see profile-patterns.md for control point patterns. UUID verified against docs/profiles/HID/HID_Over_GATT_Profile_1.1.pdf."
 
   - name: "Scan Parameters Service"
     id: SPS
@@ -557,7 +557,7 @@ profiles:
       impl: "subsys/bluetooth/services/rscs.c"
     similar_profiles: [HRS, CSCS]
     tags: [sport, fitness, notify, sensor, cadence, running, has_control_point, uses_indicate]
-    notes: "Fitness sensor profile with optional SC Control Point (0x2A55, Write+Indicate). has_control_point: true — SC CP present in spec (Set Cumulative Value, Start Calibration, Update Sensor Location opcodes). uses_indicate: true — SC CP responses delivered via Indicate. SC CP is optional; basic implementation omits it. SC CP response protocol: opcode 0x10 + echoed request opcode + response value (Success/Not Supported/Invalid Param)."
+    notes: "Fitness sensor profile with optional SC Control Point (0x2A55, Write+Indicate). has_control_point: true — SC CP present in spec (Set Cumulative Value, Start Calibration, Update Sensor Location opcodes). uses_indicate: true — SC CP responses delivered via Indicate. SC CP is optional; basic implementation omits it. SC CP response protocol: opcode 0x10 + echoed request opcode + response value (Success/Not Supported/Invalid Param) — see profile-patterns.md §10.7 for implementation guide."
 
   - name: "Cycling Speed and Cadence Service"
     id: CSCS
@@ -596,7 +596,7 @@ profiles:
       impl: "subsys/bluetooth/services/cscs.c"
     similar_profiles: [RSCS, HRS]
     tags: [sport, fitness, notify, sensor, cadence, cycling, has_control_point, uses_indicate]
-    notes: "Cycling fitness sensor profile. Structurally identical to RSCS with different measurements (wheel revolutions + last event time, vs. running distance + instantaneous cadence). has_control_point: true — SC CP (0x2A55, Write+Indicate) shared with RSCS. uses_indicate: true — SC CP responses via Indicate. All UUIDs verified: 0x1816 (CSC), 0x2A5B (CSC Measurement), 0x2A5C (CSC Feature), 0x2A5D (Sensor Location), 0x2A55 (SC CP)."
+    notes: "Cycling fitness sensor profile. Structurally identical to RSCS with different measurements (wheel revolutions + last event time, vs. running distance + instantaneous cadence). has_control_point: true — SC CP (0x2A55, Write+Indicate) shared with RSCS. uses_indicate: true — SC CP responses via Indicate. See profile-patterns.md §10.7 for SC CP and Indicate pattern implementation. All UUIDs verified: 0x1816 (CSC), 0x2A5B (CSC Measurement), 0x2A5C (CSC Feature), 0x2A5D (Sensor Location), 0x2A55 (SC CP)."
 
   - name: "Glucose Service"
     id: GLS
@@ -678,7 +678,7 @@ profiles:
       impl: "subsys/bluetooth/services/ans.c"
     similar_profiles: [IAS, LLS]
     tags: [alert, notify, write, mixed, phone-alert, has_control_point]
-    notes: "Phone Alert Status profile dependency. 5 mandatory characteristics (5+→Complex per classification rule). Alert Notification Control Point (0x2A44, Write) uses 2-byte command format: [opcode, category_id]. Opcodes: Enable New Alert (0x00), Enable Unread Alert (0x01), Disable New Alert (0x02), Disable Unread Alert (0x03), Notify New Immediately (0x04), Notify Unread Immediately (0x05). UUIDs verified against BT SIG Assigned Numbers."
+    notes: "Phone Alert Status profile dependency. 5 mandatory characteristics (5+→Complex per classification rule). Alert Notification Control Point (0x2A44, Write) uses 2-byte command format: [opcode, category_id]. Opcodes: Enable New Alert (0x00), Enable Unread Alert (0x01), Disable New Alert (0x02), Disable Unread Alert (0x03), Notify New Immediately (0x04), Notify Unread Immediately (0x05). Write-only command pattern — see profile-patterns.md for control point patterns. UUIDs verified against BT SIG Assigned Numbers."
 
   - name: "Phone Alert Status Service"
     id: PASS
@@ -772,7 +772,7 @@ profiles:
       impl: "subsys/bluetooth/services/uds.c"
     similar_profiles: [GLS, OTS]
     tags: [user, profile, mixed, complex, multi-user, fitness, health, has_control_point, uses_indicate, per_connection_state_required]
-    notes: "Multi-user data storage profile. User Control Point (0x2A9F, Write+Indicate): Register New User (0x01), Consent (0x02), Delete User Data (0x03). Database Change Increment (0x2A99) tracks version for synchronization. User Index (0x2A9A) identifies current user per connection. Requires per-connection state to track which user index is associated with each bonded client. UUIDs verified against BT SIG Assigned Numbers."
+    notes: "Multi-user data storage profile. User Control Point (0x2A9F, Write+Indicate): Register New User (0x01), Consent (0x02), Delete User Data (0x03) — see profile-patterns.md §10.7 for SC CP implementation. Database Change Increment (0x2A99) tracks version for synchronization. User Index (0x2A9A) identifies current user per connection. Requires per-connection state to track which user index is associated with each bonded client. UUIDs verified against BT SIG Assigned Numbers."
 
   - name: "Body Composition Service"
     id: BCS
@@ -887,7 +887,7 @@ profiles:
       impl: "subsys/bluetooth/services/cgms.c"
     similar_profiles: [GLS, HTS]
     tags: [health, medical, glucose, continuous, notify, indicate, complex, state-machine, has_control_point, uses_indicate, per_connection_state_required]
-    notes: "Advanced continuous glucose monitoring. Extends GLS with session management. Two control points: RACP (0x2A52, optional, Write+Indicate) for stored records and CGM Specific Ops CP (0x2AAC, mandatory, Write+Indicate) for session management (Start/Stop Session, Reset Cal Level, etc.). Session state tracked per connection. Notify-primary pattern (same as GLS). All UUIDs 0x2AA7–0x2AAC verified against BT SIG Assigned Numbers."
+    notes: "Advanced continuous glucose monitoring. Extends GLS with session management. Two control points: RACP (0x2A52, optional, Write+Indicate) for stored records (see profile-patterns.md §10.6) and CGM Specific Ops CP (0x2AAC, mandatory, Write+Indicate) for session management (Start/Stop Session, Reset Cal Level, etc.) (see profile-patterns.md §10.7). Session state tracked per connection. Notify-primary pattern (same as GLS). All UUIDs 0x2AA7–0x2AAC verified against BT SIG Assigned Numbers."
 
   - name: "Pulse Oximeter Service"
     id: PLXS
@@ -926,7 +926,7 @@ profiles:
       impl: "subsys/bluetooth/services/plxs.c"
     similar_profiles: [HRS, HTS]
     tags: [health, medical, oxygen, pulse, notify, indicate, sensor, uses_indicate, has_control_point]
-    notes: "Blood oxygen saturation sensor. Spot-Check (0x2A5E, Indicate) for episodic measurements; Continuous (0x2A5F, Notify) for streaming. has_control_point: true — RACP (0x2A52, Write+Indicate) is optional but present in spec for stored spot-check records. PLX Features (0x2A60) is mandatory Read. Type: Simple (4 chars, RACP is optional and doesn't mandate Complex per 5-char rule). All UUIDs verified against BT SIG Assigned Numbers."
+    notes: "Blood oxygen saturation sensor. Spot-Check (0x2A5E, Indicate) for episodic measurements; Continuous (0x2A5F, Notify) for streaming. has_control_point: true — RACP (0x2A52, Write+Indicate) is optional but present in spec for stored spot-check records (see profile-patterns.md §10.6). PLX Features (0x2A60) is mandatory Read. Type: Simple (4 chars, RACP is optional and doesn't mandate Complex per 5-char rule). All UUIDs verified against BT SIG Assigned Numbers."
 
   - name: "Indoor Positioning Service"
     id: IPS

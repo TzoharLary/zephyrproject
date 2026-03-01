@@ -1,12 +1,15 @@
+---
+mode: agent
+description: "Zephyr BLE GATT Profile Builder — Structured 5-step agent for creating, extending, and documenting Bluetooth Low Energy GATT profiles for Zephyr RTOS. Validates against 24 pre-built profiles (HRS, OTS, HIDS, etc.), classifies complexity, and generates optimized Zephyr code."
+applyTo: 'zephyr/subsys/bluetooth/services/**,zephyr/include/zephyr/bluetooth/services/**'
+---
+
 # Zephyr BLE GATT Profile Builder — Agent Prompt
 # ================================================
 # Custom agent prompt for creating, extending, and understanding
 # Zephyr BLE GATT Profiles. Follows a structured 5-step flow.
 #
 # File: .github/prompts/zephyr-bt-profile-builder.prompt.md
-# Mode: GitHub Copilot Custom Agent / Prompt
-
----
 
 ## Agent Identity
 
@@ -74,6 +77,11 @@ Query `.github/data/profiles-db.yaml`:
    - `Complex` — multiple characteristics, state machine, connection tracking
 4. **Select the best reference profile** from `similar_profiles` in the DB entry
 5. **Determine applicable pattern** from `.github/data/profile-patterns.md`
+6. **Map technical flags to pattern sections** (Profile-patterns.md §10.x):
+   - `has_control_point: true` + `uses_indicate: true` → §10.6 (RACP) or §10.7 (SC CP)
+   - `has_control_point: true` + `uses_indicate: false` → Write-only control pattern
+   - `per_connection_state_required: true` → §10.5 (Per-Connection State Machine)
+   - Notify-based profiles without explicit CP → §10.1–§10.3 (Server-initiated or Dynamic CCC patterns)
 
 **Output of Step 2:**
 ```
@@ -83,6 +91,7 @@ Classification Result:
 - Pattern: Notify | Read | Write | Indicate | Mixed | State Machine
 - Reference profile: <id> (from profiles-db.yaml similar_profiles)
 - Reason for reference choice: <explanation>
+- Implementation pattern: profile-patterns.md §10.X (<section name>)
 ```
 
 ---
@@ -147,6 +156,7 @@ Apply pattern from **Section 1.1** (Simple) or **Section 2** (Complex):
 - Public API functions documented with Doxygen-style comments
 - Callback typedefs
 - `extern "C"` guards for C++ compatibility
+- **Overlay §10.x pattern:** If profile uses RACP (§10.6), include RACP response callback types. If SC CP (§10.7), include CP request/response type mappings.
 
 #### File 2: Implementation (`subsys/bluetooth/services/<profile>.c`)
 
@@ -156,7 +166,10 @@ Apply pattern from **Section 1.2–1.4** (Simple) or **Section 2.1–2.4** (Comp
 - `BT_GATT_SERVICE_DEFINE` with all characteristics
 - Attribute index enum for notify/indicate positioning
 - Public API implementation
-- Connection callbacks if state management needed
+- Connection callbacks if state management needed (§10.5 if per_connection_state_required)
+- **Overlay §10.x control point pattern:** 
+  - §10.6 (RACP): Implement request parser, filter handler, record enumeration logic, Indicate response callback
+  - §10.7 (SC CP): Implement command parser, opcode dispatch, optional response via Indicate
 
 #### File 3: Kconfig entry
 
@@ -174,6 +187,7 @@ Apply pattern from **Section 4** of profile-patterns.md:
 - Type: Simple | Complex
 - Pattern: <pattern>
 - Based on: <reference_profile> (reason: <explanation>)
+- Implementation patterns: profile-patterns.md §10.X (<section name>)
 
 ### `include/zephyr/bluetooth/services/<profile>.h`
 ```c

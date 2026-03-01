@@ -1,3 +1,7 @@
+---
+applyTo: 'zephyr/subsys/bluetooth/services/**,zephyr/include/zephyr/bluetooth/services/**'
+---
+
 # Zephyr BLE GATT Profile Builder — System Instructions
 # =========================================================
 # This file defines all behavioral rules, source usage governance,
@@ -81,6 +85,24 @@ When selecting a reference profile for generation, choose the profile from
 5. Lowest `complexity` that still covers required features (prefer simpler reference)
 
 Always explain the reference choice to the user.
+
+### 2.5 Profile-Patterns Knowledge Base (§10.0–§10.7)
+
+All Phase 1 profiles are implemented using patterns from `.github/data/profile-patterns.md`.
+These patterns provide reusable templates for handling common BLE scenarios:
+
+| Section | Pattern Name | Use Case | Example Profiles |
+|---------|-------------|----------|-----------------|
+| §10.1 | Server-Requests-Client | Server initiates client action via notification | SCPS (Scan Parameters) |
+| §10.2 | Indicate-Based Measurement | Simple indication with confirmable data delivery | BCS, WSS, BPS |
+| §10.3 | Dynamic CCC & Bonding | Conditional notify/indicate based on bonding state | BCS, WSS (variants) |
+| §10.4 | Write-Only Control | Simple command dispatch without response | PASS (Ringer CP), HRS (optional) |
+| §10.5 | Per-Connection State Machine | Track operational mode across connections | OTS (object context), UDS (user index), HIDS (report mode) |
+| §10.6 | RACP (Record Access Control Point) | Filtered record retrieval with Indicate response | GLS, CGMS (RACP), PLXS (RACP), OTS (OLCP variant) |
+| §10.7 | SC CP (Sensor/Standard Control Point) | Write+Indicate bidirectional commands | HRS, RSCS, CSCS, ANS, UDS, CGMS (SC CP variant) |
+
+When building a profile (`has_control_point: true`), overlay the appropriate §10.x pattern
+on top of the base template to ensure correct control point request/response handling.
 
 ---
 
@@ -293,6 +315,13 @@ Before delivering any generated profile, verify:
 - [ ] `bt_gatt_notify()` return value handles `-ENOTCONN` as non-error
 - [ ] Connection state uses `bt_conn_ref()` and `bt_conn_unref()` correctly
 
+### Pattern-specific correctness (Phase 1 validation):
+- [ ] **RACP profiles (§10.6):** Control point Write+Indicate callback implemented with opcode dispatch, error codes in response
+- [ ] **SC CP profiles (§10.7):** Control point Write+Indicate with response handler, opcode echo in Indicate response
+- [ ] **Notify-based (§10.1–§10.3):** Measurement delivery via notify, optional CCC initial state per pattern
+- [ ] **Per-connection state (§10.5):** `bt_conn_user_data()` or explicit connection tracking if required
+- [ ] **Dynamic CCC (§10.3):** CCC value stored per connection if needed for bonding+dynamic scenarios
+
 ### Zephyr compliance:
 - [ ] No Nordic SDK APIs (`nrf_bt_*`, `peer_manager_*`, etc.)
 - [ ] No TI-specific APIs
@@ -307,6 +336,8 @@ Before delivering any generated profile, verify:
 - [ ] UUID macros have comments with service/characteristic name
 - [ ] Reference profile is named and reason explained
 - [ ] Usage example provided in Step 5 explanation
+- [ ] Control point opcodes documented if profile has `has_control_point: true`
+- [ ] Pattern section (profile-patterns.md §10.X) referenced in code comments where applicable
 
 ---
 
@@ -317,11 +348,11 @@ INPUT:  User request (any completeness level)
            ↓
 STEP 1: IDENTIFY — What, Why, How much data?
            ↓
-STEP 2: CLASSIFY — Query profiles-db.yaml, determine type+pattern+reference
+STEP 2: CLASSIFY — Query profiles-db.yaml, determine type+pattern+reference+§10.x
            ↓
 STEP 3: RESEARCH — Only if NOT in database, use sources-map.yaml
            ↓
-STEP 4: BUILD — Use profile-patterns.md, generate .h + .c + Kconfig
+STEP 4: BUILD — Use profile-patterns.md §1–§10.7, generate .h + .c + Kconfig
            ↓
 STEP 5: EXPLAIN — Flow diagram, UUID explanation, callback explanation, reference justification
            ↓

@@ -424,3 +424,142 @@ The current DB covers the profiles found in `subsys/bluetooth/services/`. A scan
 |-------|-------|--------|-------------|
 | #1 | Build Zephyr BLE GATT Profile Builder System | Closed | PR #2 |
 | #3 | Phase 1 Completion: Comprehensive GATT Profile Data Extraction | Closed | PR #8 |
+
+---
+
+## Session 2: System Hardening & Activation Infrastructure
+
+**Objective:** Address data quality gaps and build missing activation infrastructure to make the system discoverable and usable by Copilot.
+
+**Timeline:** Implemented after Phase 1 completion; identified gaps via comprehensive audit of all 5 system files.
+
+### A. Data Validation & Quality Fixes (Phase A)
+
+#### A1: DIS Profile Tags Cleanup
+**Issue:** DIS tags incorrectly included `simple` despite being classified as `type: Complex`.
+**Root cause:** Stale tag from earlier classification rule before `type: Complex` was finalized in PR #4.
+**Fix:** Removed `simple` tag from DIS tags list. Tags now: `[device, info, read-only, complex, no-callback, static]`
+**Impact:** Agent will now correctly select the Complex code template when referencing DIS.
+
+#### A2: HRS Reference Profile Correction
+**Issue:** HRS `similar_profiles` listed `[BAS, DIS]` — both suboptimal for a Notify-based, multi-char profile.
+**Root cause:** DIS is read-only with no notify/indicate; not a good reference for Notify pattern.
+**Fix:** Changed to `[BAS, HTS]` — both support Notify pattern; HTS especially matches multi-char health profile topology.
+**Impact:** Agent will now find correct structural references for HRS-like profiles (heart rate, temperature, etc.).
+
+#### A3: Control Point Pattern Documentation
+**Issue:** 10 profiles with `has_control_point: true` had varying documentation; 8 lacked explicit §10.x cross-references.
+**Root cause:** Profile-patterns.md §10 sections were added late in Phase 1; notes weren't retroactively updated.
+**Fix:** Added §10.6 (RACP) and §10.7 (SC CP) references to notes fields:
+- **GLS, CGMS, PLXS:** Added §10.6 RACP reference
+- **RSCS, CSCS, UDS:** Added §10.7 SC CP reference
+- **HRS, ANS:** Added control point pattern reference guidance
+- **OTS, HIDS:** Already had pattern references (OTS §10.5 overlay, HIDS custom CP pattern)
+
+**Impact:** Agent now has explicit guidance on which §10.x pattern each control point uses, enabling precise code generation.
+
+### B. Activation Infrastructure (Phase B)
+
+#### B1: Workspace-Level Instruction File
+**File created:** `.github/copilot-instructions.md`
+**Purpose:** Auto-injects Zephyr BLE GATT Profile Builder system knowledge at workspace level.
+**Content:** 
+- System purpose and core file references
+- Instructions for using the pre-loaded knowledge system
+- Pointer to detailed instructions and prompt
+
+**Impact:** When user opens this workspace, Copilot becomes aware of the Zephyr BLE GATT Profile Builder system without needing to manually load the prompt.
+
+#### B2: Instructions File YAML Frontmatter
+**File updated:** `.github/instructions/zephyr-bt-profile-builder.instructions.md`
+**Frontmatter added:**
+```yaml
+---
+applyTo: 'zephyr/subsys/bluetooth/services/**,zephyr/include/zephyr/bluetooth/services/**'
+---
+```
+**Purpose:** Enables VS Code to auto-apply instructions when editing Zephyr BLE service files.
+
+#### B3: Prompt File YAML Frontmatter & Metadata
+**File updated:** `.github/prompts/zephyr-bt-profile-builder.prompt.md`
+**Frontmatter added:**
+```yaml
+---
+mode: agent
+description: "Zephyr BLE GATT Profile Builder — Structured 5-step agent for creating, extending, and documenting Bluetooth Low Energy GATT profiles for Zephyr RTOS. Validates against 24 pre-built profiles (HRS, OTS, HIDS, etc.), classifies complexity, and generates optimized Zephyr code."
+applyTo: 'zephyr/subsys/bluetooth/services/**,zephyr/include/zephyr/bluetooth/services/**'
+---
+```
+**Purpose:** 
+- Registers prompt as a Copilot agent mode
+- Provides searchable description for agent discovery
+- Enables file-scoped auto-application
+
+**Impact:** Prompt is now discoverable as a custom agent in Copilot UI.
+
+### C. Content Alignment & Enrichment (Phase C)
+
+#### C1: Prompt Step 2 — CLASSIFY Enhancement
+**Update:** Added technical flag → pattern mapping guidance (point 6).
+**Maps:**
+- `has_control_point: true` + `uses_indicate: true` → §10.6 or §10.7
+- `per_connection_state_required: true` → §10.5
+- Notify-based without explicit CP → §10.1–§10.3
+
+**Impact:** Agent Step 2 output now includes explicit `Implementation pattern: profile-patterns.md §10.X` field.
+
+#### C2: Prompt Step 4 — BUILD Enhancement
+**Updates:**
+- Added §10.x overlay guidance for control point implementation
+- Specified RACP (§10.6) implementation details (request parser, filter handler, Indicate response)
+- Specified SC CP (§10.7) implementation details (command parser, opcode dispatch)
+
+**Impact:** Generated code will now correctly implement control point handlers using §10.x templates.
+
+#### C3: Instructions §8 — Quality Checklist Enhancement
+**Additions:**
+- New subsection: "Pattern-specific correctness (Phase 1 validation)"
+- RACP, SC CP, Notify, Per-connection state, Dynamic CCC specific checkboxes
+- Documentation requirement: control point opcodes and §10.x section references
+
+**Impact:** Generated profiles will be validated against Phase 1 pattern standards.
+
+#### C4: Instructions §2.5 — New Section
+**Added:** "Profile-Patterns Knowledge Base (§10.0–§10.7)"
+**Content:**
+- 7-row table mapping §10.1–§10.7 to pattern names, use cases, and example profiles
+- Guidance on overlaying §10.x patterns for control point handling
+
+**Impact:** Instructions now explicitly teach pattern architecture. System Overview section (§1) updated to reference §10.x by section number.
+
+### D. Re-Audit Results
+
+**Verification checklist passed:**
+- ✅ profiles-db.yaml: All 24 profiles present, 10 control-point profiles with §10.x refs
+- ✅ profile-patterns.md: §10.0–§10.7 sections verified as present
+- ✅ instructions.md: Frontmatter added, §2.5 pattern table added, §8 checklist enhanced
+- ✅ prompt.md: YAML frontmatter added, Step 2 classifier updated, Step 4 builder updated
+- ✅ copilot-instructions.md: Created with auto-injection content
+
+**No new gaps discovered.**
+
+### Summary of Changes
+
+**Files modified:** 5
+- `.github/data/profiles-db.yaml` — Data quality fixes (A1, A2, A3)
+- `.github/instructions/zephyr-bt-profile-builder.instructions.md` — Frontmatter + pattern documentation (B2, C3, C4)
+- `.github/prompts/zephyr-bt-profile-builder.prompt.md` — Frontmatter + enhanced classifier & builder (B3, C1, C2)
+
+**Files created:** 1
+- `.github/copilot-instructions.md` — Workspace-level system awareness (B1)
+
+**Bug fixes:** 3 (A1, A2, A3)
+**Activation points added:** 3 (B1, B2, B3)
+**Content enrichments:** 4 (C1, C2, C3, C4)
+
+### Phase 3 Recommendations
+
+1. **Automation audit:** Test that copilot-instructions.md and prompt.md frontmatter trigger auto-injection in VS Code.
+2. **Agent flow validation:** Run the 5-step agent end-to-end for a known profile (HRS) and verify §10.x references appear in generated code.
+3. **Documentation freshness:** Re-read system-journal.md annually to ensure sessions remain accurate as Zephyr GATT API evolves.
+4. **Extend to Phase 2 scope:** Once this session is committed, begin addressing Phase 2 items from §8 above.
