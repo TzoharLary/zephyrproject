@@ -56,6 +56,10 @@ A profile is classified as **Complex** if ANY of these is true:
 
 ### 2.2 Complexity Levels
 
+> **Note:** Complexity is a secondary dimension derived AFTER `type` is determined (§2.1). Do NOT use
+> complexity alone to infer type. Determine type first using §2.1 criteria, then assign complexity.
+> See §2.6 for the valid type+complexity combinations matrix.
+
 | Level | Characteristics | State | CCC Count |
 |-------|----------------|-------|-----------|
 | Low   | 1–2            | None  | 0–1       |
@@ -103,6 +107,82 @@ These patterns provide reusable templates for handling common BLE scenarios:
 
 When building a profile (`has_control_point: true`), overlay the appropriate §10.x pattern
 on top of the base template to ensure correct control point request/response handling.
+
+### 2.6 Type↔Complexity Invariant
+
+`type` and `complexity` are not independent. The table below defines all valid combinations.
+**Any combination marked ❌ MUST NOT be assigned to a profile.**
+
+| type | complexity | Valid? | Practical meaning |
+|------|-----------|:------:|-------------------|
+| Simple | Low | ✅ | 1–2 characteristics, no state tracking, 0–1 CCCs |
+| Simple | Medium | ✅ | 3–4 characteristics, optional state, 1–2 CCCs, may include a control point |
+| Simple | High | ❌ | FORBIDDEN — if 5+ characteristics or required state exist, `type` MUST be Complex |
+| Complex | Low | ❌ | FORBIDDEN — Low complexity (1–2 chars, no state) never justifies the Complex template |
+| Complex | Medium | ✅ | 3–4 characteristics WITH mandatory control point OR mandatory per-connection state |
+| Complex | High | ✅ | 5+ characteristics, required state machine, 3+ CCCs |
+
+**Classification enforcement:**
+1. Determine `type` FIRST using §2.1 criteria.
+2. Then assign `complexity` using §2.2 criteria.
+3. Cross-check the combination in the table above. If it is ❌: re-examine §2.1.
+4. Tag enforcement: the `tags:` list MUST include `"simple"` or `"complex"` matching the assigned type. See §2.8.
+
+### 2.7 Pattern↔Type Constraint
+
+Not all pattern values are compatible with all type values. Valid combinations verified against all 24
+profiles in `profiles-db.yaml`:
+
+| pattern | Valid with type | Example profiles |
+|---------|:--------------:|------------------|
+| Read | Simple | TPS, BAS |
+| Read | Complex | DIS, IPS |
+| Write | Simple | IAS, LLS, SPS |
+| Write | Complex | HIDS |
+| Notify | Simple | HRS, RSCS, CSCS, PLXS, PASS |
+| Notify | Complex | ESS, ANS, GLS, CGMS |
+| Indicate | Simple | BCS, WSS, HTS, BPS |
+| **Mixed** | **Complex ONLY** | OTS, HIDS, UDS |
+| State Machine | Complex ONLY | (no current profile uses this value; reserved for future) |
+
+**Constraint rule:** If `pattern: Mixed` → `type` MUST be `Complex`. If `type: Simple` is assigned and
+`pattern: Mixed` is also selected, there is a contradiction — re-classify using §2.1.
+
+### 2.8 New Profile Classification Protocol
+
+When adding a new profile to `profiles-db.yaml`, follow these four steps **in strict order**:
+
+**Step N1 — Determine `type` (§2.1):**
+- Check ALL Simple criteria (§2.1). If ALL are true → `type: Simple`.
+- If ANY Complex criterion is met → `type: Complex`.
+- Record decision before proceeding. Do not skip this step.
+
+**Step N2 — Assign `complexity` (§2.2 constrained by §2.6):**
+- Count expected characteristic count, estimate state requirement and CCC count.
+- Assign `complexity: Low | Medium | High` from §2.2.
+- Verify the type+complexity pair is ✅ in §2.6. If ❌: return to N1 and re-examine.
+
+**Step N3 — Select `pattern` (§2.3 constrained by §2.7):**
+- Count distinct BLE property types on key characteristics.
+- If 3+ distinct property types on key characteristics → `pattern: Mixed`.
+- If `pattern: Mixed` → confirm `type: Complex` (§2.7). If not, return to N1.
+- Select exactly one `pattern` value.
+
+**Step N4 — Build `tags` list (tag invariant):**
+Required tags — MUST be present:
+1. `"simple"` if `type: Simple` OR `"complex"` if `type: Complex` *(tag invariant — see schema header)*
+2. Pattern tag: same value as `pattern:` field lowercased (`notify`, `indicate`, `read`, `write`, `mixed`)
+3. Domain tag: from profile's BLE spec category (`health`, `sport`, `proximity`, etc.)
+4. Technical tags (add each if applicable):
+   - `has_control_point` — if a control point characteristic is present
+   - `uses_indicate` — if Indicate is used as the control point response
+   - `per_connection_state_required` — if per-connection state is required for functional correctness
+
+**Validation checklist before committing a new profile entry:**
+- [ ] `tags:` contains exactly one of: `"simple"` OR `"complex"`
+- [ ] The tag matches the `type:` field value
+- [ ] type+complexity combination is ✅ in §2.6
+- [ ] If `pattern: Mixed` → `type: Complex` confirmed
 
 ---
 
