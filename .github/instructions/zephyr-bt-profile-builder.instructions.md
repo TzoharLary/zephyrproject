@@ -383,41 +383,57 @@ Its use is permitted ONLY for understanding logic and architecture.
 
 ## 8. Quality Checklist
 
-Before delivering any generated profile, verify:
+Before delivering any generated profile, verify all items.
 
-### Code correctness:
-- [ ] `BT_GATT_SERVICE_DEFINE` used (not manual `struct bt_gatt_service`)
-- [ ] All notify characteristics have `BT_GATT_CCC` descriptor
-- [ ] All indicate characteristics have `BT_GATT_CCC` descriptor
-- [ ] Read handlers use `bt_gatt_attr_read()` helper
-- [ ] Write handlers validate `offset + len` before memcpy
-- [ ] Write handlers return `BT_GATT_ERR()` for errors, not raw errno
-- [ ] `bt_gatt_notify()` return value handles `-ENOTCONN` as non-error
-- [ ] Connection state uses `bt_conn_ref()` and `bt_conn_unref()` correctly
+> **Severity tiers:**
+> - **`[MUST]`** — Failure produces code that will not compile, contains ATT protocol violations, causes
+>   data corruption, or introduces security vulnerabilities. **Do not deliver output if any MUST item fails.**
+> - **`[SHOULD]`** — Failure produces lower-quality output but the code remains functionally correct.
+>   Deliver with a note if any SHOULD item was intentionally skipped.
 
-### Pattern-specific correctness (Phase 1 validation):
-- [ ] **RACP profiles (§10.6):** Control point Write+Indicate callback implemented with opcode dispatch, error codes in response
-- [ ] **SC CP profiles (§10.7):** Control point Write+Indicate with response handler, opcode echo in Indicate response
-- [ ] **Notify-based (§10.1–§10.3):** Measurement delivery via notify, optional CCC initial state per pattern
-- [ ] **Per-connection state (§10.5):** `bt_conn_user_data()` or explicit connection tracking if required
-- [ ] **Dynamic CCC (§10.3):** CCC value stored per connection if needed for bonding+dynamic scenarios
+---
 
-### Zephyr compliance:
-- [ ] No Nordic SDK APIs (`nrf_bt_*`, `peer_manager_*`, etc.)
-- [ ] No TI-specific APIs
-- [ ] Uses Zephyr logging (`LOG_MODULE_REGISTER`)
-- [ ] Uses Zephyr error codes (`-EINVAL`, `-ENOMEM`, etc.)
-- [ ] Kconfig symbol follows `BT_<PROFILE>` convention
-- [ ] Header file guard follows Zephyr convention
-- [ ] SPDX license identifier present
+### 8.1 MUST — Functional Correctness
 
-### Documentation:
-- [ ] All public API functions have Doxygen-style comments
-- [ ] UUID macros have comments with service/characteristic name
-- [ ] Reference profile is named and reason explained
-- [ ] Usage example provided in Step 5 explanation
-- [ ] Control point opcodes documented if profile has `has_control_point: true`
-- [ ] Pattern section (profile-patterns.md §10.X) referenced in code comments where applicable
+- [ ] **[MUST]** `BT_GATT_SERVICE_DEFINE` used (not manual `struct bt_gatt_service`)
+- [ ] **[MUST]** All notify characteristics have `BT_GATT_CCC` descriptor
+- [ ] **[MUST]** All indicate characteristics have `BT_GATT_CCC` descriptor
+- [ ] **[MUST]** Read handlers use `bt_gatt_attr_read()` helper
+- [ ] **[MUST]** Write handlers validate `offset + len` before memcpy
+- [ ] **[MUST]** Write handlers return `BT_GATT_ERR()` for errors, not raw errno
+- [ ] **[MUST]** `bt_gatt_notify()` return value handles `-ENOTCONN` as non-error
+- [ ] **[MUST]** Connection state uses `bt_conn_ref()` and `bt_conn_unref()` correctly
+
+### 8.2 MUST — Pattern-Specific Correctness
+
+Each item below applies only to profiles matching the stated condition. For those profiles, the item is MUST.
+
+- [ ] **[MUST — RACP profiles (§10.6)]** Control point Write+Indicate callback implemented with opcode dispatch, error codes in response
+- [ ] **[MUST — SC CP profiles (§10.7)]** Control point Write+Indicate with response handler, opcode echo in Indicate response
+- [ ] **[MUST — Notify-based profiles (§10.1–§10.3)]** Measurement delivery via notify, optional CCC initial state per pattern
+- [ ] **[MUST — Per-connection state profiles (§10.5)]** `bt_conn_user_data()` or explicit connection tracking if required
+- [ ] **[MUST — Dynamic CCC profiles (§10.3)]** CCC value stored per connection if needed for bonding+dynamic scenarios
+
+### 8.3 MUST — Zephyr Compliance
+
+- [ ] **[MUST]** No Nordic SDK APIs (`nrf_bt_*`, `peer_manager_*`, etc.)
+- [ ] **[MUST]** No TI-specific APIs
+- [ ] **[MUST]** Uses Zephyr logging (`LOG_MODULE_REGISTER`)
+- [ ] **[MUST]** Uses Zephyr error codes (`-EINVAL`, `-ENOMEM`, etc.)
+- [ ] **[MUST]** Kconfig symbol follows `BT_<PROFILE>` convention
+- [ ] **[MUST]** Header file guard follows Zephyr convention
+- [ ] **[MUST]** SPDX license identifier present
+
+---
+
+### 8.4 SHOULD — Documentation Quality
+
+- [ ] **[SHOULD]** All public API functions have Doxygen-style comments
+- [ ] **[SHOULD]** UUID macros have comments with service/characteristic name
+- [ ] **[SHOULD]** Reference profile is named and reason explained
+- [ ] **[SHOULD]** Usage example provided in Step 5 explanation
+- [ ] **[SHOULD]** Control point opcodes documented if profile has `has_control_point: true`
+- [ ] **[SHOULD]** Pattern section (profile-patterns.md §10.X) referenced in code comments where applicable
 
 ---
 
@@ -443,15 +459,22 @@ OUTPUT: Zephyr-native .h file + .c file + Kconfig + explanation
 
 ## 10. Anti-Patterns (Never Do These)
 
-| Anti-Pattern | Correct Alternative |
-|-------------|---------------------|
-| Using `BLE_XXX_DEF()` macro | Use `BT_GATT_SERVICE_DEFINE()` |
-| Using `nrf_bt_*` API calls | Use `bt_gatt_*` API calls |
-| Manual `struct bt_gatt_service` definition | Use `BT_GATT_SERVICE_DEFINE` macro |
-| Not handling `-ENOTCONN` in notify | Return 0 when `-ENOTCONN` |
-| Using `BT_GATT_CCC_INITIALIZER` without callback | Always provide CCC callback |
-| Returning raw errno from read/write handler | Use `BT_GATT_ERR(BT_ATT_ERR_*)` |
-| Skipping CCC for notify characteristics | Always add `BT_GATT_CCC` for notify |
-| Hard-coding attribute positions | Use attribute index enum |
-| General internet research at runtime | Use only sources in sources-map.yaml |
-| Asking multiple clarifying questions | Ask at most one question at a time |
+> **BLOCKING** — Code will not compile, violates ATT protocol, or contains a security vulnerability.
+> **WARNING** — Code is functional but violates Zephyr conventions or harms maintainability.
+
+| Anti-Pattern | Correct Alternative | Severity |
+|-------------|---------------------|:--------:|
+| Using `BLE_XXX_DEF()` macro (Nordic SDK) | Use `BT_GATT_SERVICE_DEFINE()` | **BLOCKING** |
+| Using `nrf_bt_*` or `peer_manager_*` API calls | Use `bt_gatt_*` API calls | **BLOCKING** |
+| Manual `struct bt_gatt_service` definition | Use `BT_GATT_SERVICE_DEFINE` macro | **BLOCKING** |
+| Not handling `-ENOTCONN` return in `bt_gatt_notify()` | Return 0 when `ret == -ENOTCONN` | **BLOCKING** |
+| Using `BT_GATT_CCC_INITIALIZER` without CCC changed callback | Always provide a CCC changed callback | **BLOCKING** |
+| Returning raw errno from read/write GATT handler | Use `BT_GATT_ERR(BT_ATT_ERR_*)` | **BLOCKING** |
+| Skipping `BT_GATT_CCC` descriptor on notify characteristic | Always add `BT_GATT_CCC` for each notify char | **BLOCKING** |
+| Missing `offset + len <= attr->max_len` check before memcpy | Add bounds check in every write handler | **BLOCKING** |
+| `bt_conn_ref()` without matching `bt_conn_unref()` in all exit paths | Balanced ref/unref in connected + disconnected callbacks | **BLOCKING** |
+| Hard-coding attribute positions as magic numbers | Define `enum <profile>_attr_idx` with named constants | **WARNING** |
+| General internet research at runtime | Use only sources in `.github/data/sources-map.yaml` | **WARNING** |
+| Asking multiple clarifying questions simultaneously | Ask exactly one focused question per clarification round | **WARNING** |
+| Assigning `type: Simple` + `complexity: High` | See §2.6 — invalid combination, re-classify type first | **WARNING** |
+| Assigning `pattern: Mixed` to a `type: Simple` profile | See §2.7 — Mixed requires Complex type | **WARNING** |

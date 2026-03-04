@@ -92,6 +92,68 @@ Classification Result:
 - Reference profile: <id> (from profiles-db.yaml similar_profiles)
 - Reason for reference choice: <explanation>
 - Implementation pattern: profile-patterns.md §10.X (<section name>)
+- Disambiguation needed: YES | NO
+```
+
+---
+
+### Step 2.5: DISAMBIGUATE (conditional — skip if "Disambiguation needed: NO")
+
+**When to skip:** Step 2 produced exactly one matched profile with no competing alternatives.
+
+**When to run:** If ANY of the following is true:
+1. Step 2 found 2+ profiles in `profiles-db.yaml` whose `tags` overlap significantly AND whose `complexity` or `has_control_point` differs between them.
+2. Step 2 found no exact match AND the nearest profile's `similar_profiles` list has 2+ entries with different `pattern` values.
+3. The user's request spans multiple `category` groups (e.g., "health sensor" could be HRS, HTS, BCS, or BPS).
+
+**Protocol:** Ask the FIRST applicable question from the decision tree below. Ask exactly ONE question per round. After the user answers, re-run CLASSIFY (Step 2) with the new constraint applied and update the output block.
+
+**Decision tree — apply questions in order; stop at the first YES that resolves to ONE candidate:**
+```
+Q1: "Does the device need to store and retrieve historical records that the phone fetches later?"
+    YES → Narrow to RACP-capable profiles: GLS, CGMS, PLXS, OTS
+          Then ask: "What type of data?" (glucose → GLS; continuous glucose → CGMS;
+           oxygen saturation → PLXS; arbitrary objects → OTS) → RESOLVED
+    NO  → Exclude GLS, CGMS, PLXS, OTS
+          If one candidate remains → RESOLVED
+          If multiple remain → proceed to Q2
+
+Q2: "Does the device share data across multiple users on the same hardware (e.g., a shared fitness scale)?"
+    YES → UDS is the only profile with multi-user support → RESOLVED (UDS)
+    NO  → Exclude UDS from candidates
+          If one candidate remains → RESOLVED
+          If multiple remain → proceed to Q3
+
+Q3: "Does the device need to trigger actions on the connected phone (e.g., silence ringer, dismiss alert)?"
+    YES → Narrow to alert-action profiles: ANS (all categories, Complex) or PASS (phone ringer only, Simple)
+          Sub-question: "Is controlling the phone ringer the ONLY requirement, with no alert category filtering?"
+          YES to sub-question → PASS (Simple) → RESOLVED
+          NO to sub-question  → ANS (Complex) → RESOLVED
+    NO  → Exclude ANS, PASS from candidates
+          If one candidate remains → RESOLVED
+          If multiple remain → proceed to Q4
+
+Q4 (numeric fallback): "How many distinct measurable sensor values does the device expose?"
+    1–2 values → type: Simple, complexity: Low → narrow to Simple+Low profiles (BAS, LLS, TPS, IAS, BCS, WSS)
+    3–4 values → complexity: Medium → narrow to Medium profiles; also ask: "Does it have a control point?" to
+                 distinguish Simple+Medium (HRS, HTS, BPS, etc.) from Complex+Medium (ANS, RSCS, CSCS)
+    5+ values  → type: Complex, complexity: High → narrow to Complex+High (ESS, GLS, CGMS, OTS, UDS, HIDS)
+    → If one candidate remains → RESOLVED
+    → If multiple remain after Q4 → STOP. Ask: "I cannot resolve automatically. Please specify the
+      Bluetooth SIG profile name or its service UUID (0xXXXX)."
+      Do not proceed to Step 3 until user provides a specific identifier.
+```
+
+**Output of Step 2.5:**
+```
+Disambiguation Result:
+- Trigger condition: <which of the 3 trigger conditions caused this step>
+- Question round: <Q1 | Q2 | Q3 | Q4 | Stopped — user input needed>
+- Question asked: <exact text presented to user>
+- User answer: <user's answer>
+- Resolved to: <single profile id> or "STOPPED — awaiting user input"
+- Reason: <why this is unambiguous given the answer>
+- Updated Classification: [paste the full Step 2 Classification Result block with updated values]
 ```
 
 ---
@@ -142,6 +204,15 @@ Priority 5: Nordic nRF Connect SDK (for logic only)
 - ❌ Never copy Nordic/TI implementation code
 - ❌ Never perform general internet research
 
+**Step 3 failure paths — apply when research is incomplete after consulting all 5 priority sources:**
+
+| Condition | Action |
+|-----------|--------|
+| Service UUID not found in any source | Insert `BT_UUID_DECLARE_16(0xXXXX)` with comment `/* TODO: Replace with actual SIG-assigned UUID */`; flag in Step 5 under "Known limitations" |
+| Characteristic set only partially found | Generate only confirmed characteristics; add `/* WARNING: characteristic set may be incomplete — verify against BT spec */` at top of generated `.h` file; list missing data in Step 5 |
+| Mandatory vs. optional characteristic distinction unclear | Default all ambiguous characteristics to mandatory; note this decision explicitly in Step 5 so user can verify against spec |
+| All 5 priority sources exhausted with NO data found | **STOP.** Ask: "I cannot find this profile in any authorized source. Can you provide the service UUID and at least one characteristic UUID? If not, I can generate a skeleton template for you to fill in manually." Do NOT proceed to Step 4 until user responds. |
+
 ---
 
 ### Step 4: BUILD
@@ -170,6 +241,10 @@ Apply pattern from **Section 1.2–1.4** (Simple) or **Section 2.1–2.4** (Comp
 - **Overlay §10.x control point pattern:** 
   - §10.6 (RACP): Implement request parser, filter handler, record enumeration logic, Indicate response callback
   - §10.7 (SC CP): Implement command parser, opcode dispatch, optional response via Indicate
+  - **If referenced `§10.x` section is not present in `profile-patterns.md`:** Use base template only
+    (§1 for Simple, §2 for Complex). Add comment `/* TODO: No §10.x overlay available — implement
+    control point handler manually per BT spec */` near the write handler. Document the gap in
+    Step 5 output under "Known limitations".
 
 #### File 3: Kconfig entry
 
