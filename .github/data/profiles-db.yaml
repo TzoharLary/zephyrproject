@@ -27,6 +27,10 @@ last_updated: "2026-02-26"
 #   - All profiles: pts_tracked, spec_version, spec_doc fields added where available
 # Coverage audit: BPS (0x1810) added — present in docs/profiles/BPS/ and tools/data/ but was missing
 # Technical tags added: has_control_point, uses_indicate, per_connection_state_required
+# Tag invariant: EVERY profile MUST include either "simple" or "complex" in tags, matching the type: field.
+#   Valid:   type: Simple  → tags must contain "simple"
+#   Valid:   type: Complex → tags must contain "complex"
+#   Invalid: missing both "simple" and "complex" in tags — indicates classification was not properly documented
 
 profiles:
 
@@ -189,7 +193,7 @@ profiles:
       header: "include/zephyr/bluetooth/services/hts.h"
       impl: "subsys/bluetooth/services/hts.c"
     similar_profiles: [HRS, ESS]
-    tags: [health, sensor, indicate, notify, temperature, mixed, uses_indicate]
+    tags: [health, sensor, indicate, notify, temperature, mixed, uses_indicate, simple]
     notes: "Uses Indicate (acknowledged notify). Good reference for indicate-based profiles. Measurement Interval supports Read+Write+Indicate — server can indicate when interval changes. Pattern for indicate-based medical measurement: see profile-patterns.md §10.2."
 
   - name: "Environmental Sensing Service"
@@ -275,7 +279,7 @@ profiles:
       header: "include/zephyr/bluetooth/services/cts.h"
       impl: "subsys/bluetooth/services/cts.c"
     similar_profiles: [DIS, BAS]
-    tags: [time, read, write, notify, mixed, time-sync, per_connection_state_required]
+    tags: [time, read, write, notify, mixed, time-sync, per_connection_state_required, simple]
     notes: "Mixed read/write/notify profile. Client Time Server role: client writes current time; server notifies of time adjustments >1s. per_connection_state_required: tracks pending time-adjustment notifications per connection. UUID verified: 0x1805 (CTS), 0x2A2B (Current Time), 0x2A0F (Local TZ), 0x2A14 (Ref Time)."
 
   - name: "Link Loss Service"
@@ -556,7 +560,7 @@ profiles:
       header: "include/zephyr/bluetooth/services/rscs.h"
       impl: "subsys/bluetooth/services/rscs.c"
     similar_profiles: [HRS, CSCS]
-    tags: [sport, fitness, notify, sensor, cadence, running, has_control_point, uses_indicate]
+    tags: [sport, fitness, notify, sensor, cadence, running, has_control_point, uses_indicate, simple]
     notes: "Fitness sensor profile with optional SC Control Point (0x2A55, Write+Indicate). has_control_point: true — SC CP present in spec (Set Cumulative Value, Start Calibration, Update Sensor Location opcodes). uses_indicate: true — SC CP responses delivered via Indicate. SC CP is optional; basic implementation omits it. SC CP response protocol: opcode 0x10 + echoed request opcode + response value (Success/Not Supported/Invalid Param) — see profile-patterns.md §10.7 for implementation guide."
 
   - name: "Cycling Speed and Cadence Service"
@@ -595,7 +599,7 @@ profiles:
       header: "include/zephyr/bluetooth/services/cscs.h"
       impl: "subsys/bluetooth/services/cscs.c"
     similar_profiles: [RSCS, HRS]
-    tags: [sport, fitness, notify, sensor, cadence, cycling, has_control_point, uses_indicate]
+    tags: [sport, fitness, notify, sensor, cadence, cycling, has_control_point, uses_indicate, simple]
     notes: "Cycling fitness sensor profile. Structurally identical to RSCS with different measurements (wheel revolutions + last event time, vs. running distance + instantaneous cadence). has_control_point: true — SC CP (0x2A55, Write+Indicate) shared with RSCS. uses_indicate: true — SC CP responses via Indicate. See profile-patterns.md §10.7 for SC CP and Indicate pattern implementation. All UUIDs verified: 0x1816 (CSC), 0x2A5B (CSC Measurement), 0x2A5C (CSC Feature), 0x2A5D (Sensor Location), 0x2A55 (SC CP)."
 
   - name: "Glucose Service"
@@ -677,7 +681,7 @@ profiles:
       header: "include/zephyr/bluetooth/services/ans.h"
       impl: "subsys/bluetooth/services/ans.c"
     similar_profiles: [IAS, LLS]
-    tags: [alert, notify, write, mixed, phone-alert, has_control_point]
+    tags: [alert, notify, write, mixed, phone-alert, has_control_point, complex]
     notes: "Phone Alert Status profile dependency. 5 mandatory characteristics (5+→Complex per classification rule). Alert Notification Control Point (0x2A44, Write) uses 2-byte command format: [opcode, category_id]. Opcodes: Enable New Alert (0x00), Enable Unread Alert (0x01), Disable New Alert (0x02), Disable Unread Alert (0x03), Notify New Immediately (0x04), Notify Unread Immediately (0x05). Write-only command pattern — see profile-patterns.md for control point patterns. UUIDs verified against BT SIG Assigned Numbers."
 
   - name: "Phone Alert Status Service"
@@ -712,7 +716,7 @@ profiles:
       header: "include/zephyr/bluetooth/services/pass.h"
       impl: "subsys/bluetooth/services/pass.c"
     similar_profiles: [ANS, IAS]
-    tags: [alert, phone, ringer, notify, write, mixed]
+    tags: [alert, phone, ringer, notify, write, mixed, simple]
     notes: "Works alongside ANS for phone alert management. Ringer Control Point (0x2A40, Write Without Response) accepts 3 opcodes: Silent Mode (0x01), Mute Once (0x02), Cancel Silent Mode (0x03). Alert Status (0x2A3F) and Ringer Setting (0x2A41) both support Notify — server initiates notifications on state change. All 3 characteristics mandatory. UUIDs verified against BT SIG Assigned Numbers."
 
   - name: "User Data Service"
@@ -802,7 +806,7 @@ profiles:
       header: "include/zephyr/bluetooth/services/bcs.h"
       impl: "subsys/bluetooth/services/bcs.c"
     similar_profiles: [HTS, HRS]
-    tags: [health, body, indicate, fitness, measurement, uses_indicate]
+    tags: [health, body, indicate, fitness, measurement, uses_indicate, simple]
     notes: "Simple indicate profile for body composition data. complexity: Low — 2 characteristics, no state, 1 CCC (Low = 1–2 chars, 0–1 CCC per classification rule). Body Composition Measurement (0x2A9C) is a mandatory Indicate. Body Composition Feature (0x2A9B) optional read-only bitfield. Pattern: see Indicate-Based Measurement pattern §10.2. All UUIDs verified against BT SIG Assigned Numbers."
 
   - name: "Weight Scale Service"
@@ -835,7 +839,7 @@ profiles:
       header: "include/zephyr/bluetooth/services/wss.h"
       impl: "subsys/bluetooth/services/wss.c"
     similar_profiles: [BCS, HTS]
-    tags: [health, weight, indicate, fitness, measurement, uses_indicate]
+    tags: [health, weight, indicate, fitness, measurement, uses_indicate, simple]
     notes: "Weight scale profile. complexity: Low — 2 characteristics, no state, 1 CCC (Low = 1–2 chars, 0–1 CCC). Same topology as BCS. Weight Measurement (0x2A9D) mandatory Indicate; Weight Scale Feature (0x2A9E) mandatory Read. Feature supports conditional Indicate for bonding+dynamic case — see §10.3. UUID and structure verified against docs/profiles/WSS/Weight_Scale_Service_1.0.1.pdf."
 
   - name: "Continuous Glucose Monitoring Service"
@@ -925,7 +929,7 @@ profiles:
       header: "include/zephyr/bluetooth/services/plxs.h"
       impl: "subsys/bluetooth/services/plxs.c"
     similar_profiles: [HRS, HTS]
-    tags: [health, medical, oxygen, pulse, notify, indicate, sensor, uses_indicate, has_control_point]
+    tags: [health, medical, oxygen, pulse, notify, indicate, sensor, uses_indicate, has_control_point, simple]
     notes: "Blood oxygen saturation sensor. Spot-Check (0x2A5E, Indicate) for episodic measurements; Continuous (0x2A5F, Notify) for streaming. has_control_point: true — RACP (0x2A52, Write+Indicate) is optional but present in spec for stored spot-check records (see profile-patterns.md §10.6). PLX Features (0x2A60) is mandatory Read. Type: Simple (4 chars, RACP is optional and doesn't mandate Complex per 5-char rule). All UUIDs verified against BT SIG Assigned Numbers."
 
   - name: "Indoor Positioning Service"
@@ -984,7 +988,7 @@ profiles:
       header: "include/zephyr/bluetooth/services/ips.h"
       impl: "subsys/bluetooth/services/ips.c"
     similar_profiles: [ESS, DIS]
-    tags: [location, indoor, position, read, write, advertising]
+    tags: [location, indoor, position, read, write, advertising, complex]
     notes: "Multi-characteristic indoor location profile. Primarily used in advertising data (non-connectable advertising with optional Encrypted Data AD type). 9 characteristics (all optional except Indoor Positioning Configuration 0x2AAD) — 5+ chars makes this Complex (fix applied in review-debt PR #4). Latitude/Longitude in WGS-84 coordinates; Local North/East for relative positioning. All UUIDs 0x2AAD–0x2AB5 verified against BT SIG Assigned Numbers."
 
   - name: "Blood Pressure Service"
@@ -1018,7 +1022,7 @@ profiles:
       header: "include/zephyr/bluetooth/services/bps.h"
       impl: "subsys/bluetooth/services/bps.c"
     similar_profiles: [HTS, BCS, WSS]
-    tags: [health, medical, blood-pressure, indicate, notify, measurement, uses_indicate]
+    tags: [health, medical, blood-pressure, indicate, notify, measurement, uses_indicate, simple]
     spec_version: "v1.1.1"
     spec_doc: "docs/profiles/BPS/Blood_Pressure_Service_1.1.1.pdf"
     pts_tracked: true
