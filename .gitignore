@@ -81,3 +81,7 @@ panel_editAgent_*.copilotmd
 *.log
 tmp/
 *.tmp
+
+# Local caches and runtime state (not source of truth)
+.cache/
+dashboards/pts_report_he/autopts/data/group-b-task-state.json

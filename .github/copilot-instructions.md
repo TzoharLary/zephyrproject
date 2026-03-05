@@ -6,6 +6,18 @@ applyTo: '**'
 
 This workspace contains a **pre-loaded knowledge system** for generating production-ready Bluetooth Low Energy GATT profiles for Zephyr RTOS.
 
+## Mandatory Workspace Rule: CHANGELOG Updates
+
+For any task that modifies tracked repository files, update `CHANGELOG/` immediately in the same task.
+
+- Use group folders defined in `CHANGELOG/README.md` (`dashboard`, `docs`, `tools`, `firmware`, `infra`).
+- Create or update an entry file named `YYYY-MM-DD-short-topic.md` under the relevant group folder.
+- Keep entry structure aligned with `CHANGELOG/ENTRY_TEMPLATE.md`.
+- Update `CHANGELOG/INDEX.md` together with the entry.
+- If no commit was created yet, set `Commit: pending (no commit in this task)` and replace it later when commit hash exists.
+
+`AGENTS.md` in repository root is the source of truth for the full changelog policy.
+
 ## Core System Files
 
 - **`.github/data/profiles-db.yaml`** — Single source of truth: 24 validated BLE profiles with complete metadata, UUIDs, control point patterns, and implementation guidelines
