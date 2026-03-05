@@ -95,6 +95,13 @@ OpenOCD (צריבה וניקוד)
 │            ├── test-automation/
 │            └── templates/         ← תבניות HTML לסקריפטים
 │
+├─── 📝 CHANGELOG GROUPS ────────────────────────────────────
+│    └── CHANGELOG/                 יומן שינויים לפי קבוצות
+│        ├── README.md              הסבר עבודה וחלוקה לקבוצות
+│        ├── INDEX.md               אינדקס כל רשומות השינוי
+│        ├── ENTRY_TEMPLATE.md      תבנית לרשומה חדשה
+│        └── dashboard/             שינויי dashboards
+│
 ├─── 🎛️ DASHBOARDS ────────────────────────────────────────
 │    └── dashboards/
 │        └── pts_report_he/         📊 דוחות PTS בעברית (HTML)
@@ -481,6 +488,7 @@ tests:
 | תיקייה | תוכן | דרוש ל- |
 |-------|------|---------|
 | **`docs/`** | תיעוד כתוב: markdown, PDFs, פרופילי Bluetooth | הבנת כל הsystem |
+| **`CHANGELOG/`** | יומן שינויים לפי קבוצות (כולל סיבה והשפעה) | מעקב שינויים |
 | **`dashboards/`** | דשבורדי HTML: `pts_report_he/` | מעקב ויזואלי |
 | **`zephyr/`** | Git Submodule — קוד RTOS (5M+ שורות) | בנייה וטעינה |
 | **`auto-pts/`** | Git Submodule — כלי בדיקות AutoPTS | בדיקות compliance |
