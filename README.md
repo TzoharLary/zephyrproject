@@ -97,7 +97,6 @@ OpenOCD (צריבה וניקוד)
 │
 ├─── 🎛️ DASHBOARDS ────────────────────────────────────────
 │    └── dashboards/
-│        ├── phases_tracking/       🎛️ דשבורד מעקב שלבים (HTML)
 │        └── pts_report_he/         📊 דוחות PTS בעברית (HTML)
 │
 ├─── 🔧 ZEPHYR CORE — Git Submodule ────────────────────────
@@ -482,7 +481,7 @@ tests:
 | תיקייה | תוכן | דרוש ל- |
 |-------|------|---------|
 | **`docs/`** | תיעוד כתוב: markdown, PDFs, פרופילי Bluetooth | הבנת כל הsystem |
-| **`dashboards/`** | דשבורדים HTML: `phases_tracking/`, `pts_report_he/` | מעקב ויזואלי |
+| **`dashboards/`** | דשבורדי HTML: `pts_report_he/` | מעקב ויזואלי |
 | **`zephyr/`** | Git Submodule — קוד RTOS (5M+ שורות) | בנייה וטעינה |
 | **`auto-pts/`** | Git Submodule — כלי בדיקות AutoPTS | בדיקות compliance |
 | **`modules/`** | West modules חיצוניים — **לא ב-Git** | (מנוהל ע"י West) |

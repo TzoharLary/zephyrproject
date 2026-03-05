@@ -24,7 +24,6 @@ docs/
 ```
 
 > **דשבורדים HTML** נמצאים כעת ב-[`../dashboards/`](../dashboards/):
-> - [`../dashboards/phases_tracking/index.html`](../dashboards/phases_tracking/index.html) — מעקב שלבים
 > - [`../dashboards/pts_report_he/index.html`](../dashboards/pts_report_he/index.html) — דוחות PTS בעברית
 >
 > **סקריפטי ייצור** נמצאים כעת ב-[`../tools/`](../tools/):
@@ -37,7 +36,6 @@ docs/
 | מה מחפשים | קובץ / תיקייה |
 |---|---|
 | תוכנית VPC | [`plans/ble_pts_plan.md`](plans/ble_pts_plan.md) |
-| דף המעקב הויזואלי | [`../dashboards/phases_tracking/index.html`](../dashboards/phases_tracking/index.html) |
 | דוח PTS בעברית | [`../dashboards/pts_report_he/index.html`](../dashboards/pts_report_he/index.html) |
 | דוחות Build/Flash | [`reports/build-and-flash/`](reports/build-and-flash/) |
 | דוחות Twister/Pytest | [`reports/test-automation/`](reports/test-automation/) |
@@ -78,7 +76,6 @@ docs/
 1. [`reports/test-automation/west_twister_report.md`](reports/test-automation/west_twister_report.md)
 2. [`reports/test-automation/zephyr_pytest_testing_guide.md`](reports/test-automation/zephyr_pytest_testing_guide.md)
 3. [`plans/ble_pts_plan.md`](plans/ble_pts_plan.md)
-4. [`../dashboards/phases_tracking/index.html`](../dashboards/phases_tracking/index.html)
 
 ### מפתח Bluetooth
 1. [`reports/bluetooth/physical_bluetooth_testing_report.md`](reports/bluetooth/physical_bluetooth_testing_report.md)
