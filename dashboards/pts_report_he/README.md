@@ -146,6 +146,56 @@ py dashboards/pts_report_he/serve_with_run_status.py --no-open
 - שרת עם שמירה לקובץ: `dashboards/pts_report_he/serve_with_run_status.py`
 - קובץ סטטוסים משותף: `dashboards/pts_report_he/data/run-status-state.json`
 - assets generated:
-  - `dashboards/pts_report_he/assets/report.js`
+  - `dashboards/pts_report_he/assets/state.js`
+  - `dashboards/pts_report_he/assets/persistence.js`
+  - `dashboards/pts_report_he/assets/render.js`
+  - `dashboards/pts_report_he/assets/events.js`
   - `dashboards/pts_report_he/assets/report.css`
+  - `dashboards/pts_report_he/shared-tokens.css`
   - `dashboards/pts_report_he/data/report-data.js`
+
+---
+
+## ⚠️ חשוב: מה לערוך ומה נוצר אוטומטית
+
+**אל תערוך ישירות** את הקבצים תחת `dashboards/pts_report_he/assets/` ו-`dashboards/pts_report_he/data/`.
+אלה **תוצרי בנייה** (build artifacts) שנוצרים על ידי:
+
+```
+tools/build_pts_report_bundle.py
+```
+
+**מקור העריכה האמיתי** נמצא ב:
+
+| קובץ לעריכה | מה הוא אחראי עליו |
+|---|---|
+| `tools/templates/pts_report_he/state.js` | קבועים ומשתני state |
+| `tools/templates/pts_report_he/persistence.js` | שמירת/טעינת run-status (localStorage + file API) |
+| `tools/templates/pts_report_he/render.js` | כל פונקציות הרינדור (HTML) |
+| `tools/templates/pts_report_he/events.js` | event binding ואתחול |
+| `tools/templates/pts_report_he/report.css` | סגנון הדשבורד הראשי |
+| `tools/templates/pts_report_he/shared-tokens.css` | design tokens משותפים לכל תת-עמודי הדשבורד |
+| `tools/templates/pts_report_he/index.html` | מבנה HTML הדשבורד הראשי |
+| `tools/templates/pts_report_he/autopts/` | כל תת-עמוד AutoPTS + Group B |
+
+אחרי כל עריכה ב-templates, יש להריץ את הבנייה כדי לעדכן את ה-artifacts:
+
+```bash
+cd tools
+python3 build_pts_report_bundle.py
+```
+
+ה-artifacts המעודכנים ייכתבו ל-`dashboards/pts_report_he/`.
+
+### ארכיטקטורת ה-JS (מודולרית)
+
+ה-JS נטען בסדר הבא (כל מודול תלוי במודולים לפניו):
+
+```
+state.js → persistence.js → render.js → events.js
+```
+
+- `state.js`: קבועים (BUCKETS, PROFILE_PANEL_CONFIG, RUN_STATUS_*) ומשתני state
+- `persistence.js`: שמירה/טעינה של run-status ב-localStorage ו-file API; CRUD על run entries
+- `render.js`: כל פונקציות `render*` ו-`fill*` שבונות את ה-DOM
+- `events.js`: event listeners, `activatePanel()`, `applySearch()`, ואתחול הדף
