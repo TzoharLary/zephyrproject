@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <title>Smoke Tests — pts_report_he</title>
+  <style>
+    body { font-family: monospace; padding: 16px; }
+    .pass { color: green; } .fail { color: red; } .skip { color: gray; }
+    pre { background: #f4f4f4; padding: 8px; }
+    #summary { font-size: 1.2em; margin-top: 16px; }
+  </style>
+</head>
+<body>
+<h1>Smoke Tests — pts_report_he</h1>
+<p>פותח דף זה ישירות בדפדפן (ללא שרת) כדי להריץ בדיקות עישון בסיסיות.</p>
+<div id="results"></div>
+<div id="summary"></div>
+
+<script>
+// ── Minimal test harness ────────────────────────────────────────────────────
+const results = [];
+
+function test(name, fn) {
+  try {
+    fn();
+    results.push({ name, status: "pass" });
+  } catch (e) {
+    results.push({ name, status: "fail", error: String(e) });
+  }
+}
+
+function assert(condition, msg) {
+  if (!condition) throw new Error(msg || "assertion failed");
+}
+
+function assertEqual(a, b, msg) {
+  if (a !== b) throw new Error((msg || "expected equal") + `: ${JSON.stringify(a)} !== ${JSON.stringify(b)}`);
+}
+
+// ── Mock globals required by the modules ───────────────────────────────────
+window.REPORT_DATA = { meta: {}, profiles_overview: [], glossary: {} };
+// Stub localStorage with a plain in-memory map so tests are isolated.
+const _lsStore = {};
+const mockLocalStorage = {
+  getItem: (k) => (_lsStore[k] !== undefined ? _lsStore[k] : null),
+  setItem: (k, v) => { _lsStore[k] = String(v); },
+  removeItem: (k) => { delete _lsStore[k]; },
+  clear: () => { Object.keys(_lsStore).forEach((k) => delete _lsStore[k]); },
+};
+Object.defineProperty(window, "localStorage", { value: mockLocalStorage, writable: true });
+
+// Stub DOM queries used at module load time.
+document.querySelectorAll = () => [];
+document.getElementById = () => null;
+
+// ── Load modules inline via dynamic import simulation ──────────────────────
+// Since this is a plain HTML file without a bundler we evaluate each module
+// source via fetch + eval.  Tests that depend on specific functions are
+// guarded with typeof checks.
+
+async function loadModule(url) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return false;
+    const src = await res.text();
+    // eslint-disable-next-line no-eval
+    (0, eval)(src);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function runAll() {
+  const stateLoaded = await loadModule("../state.js");
+  const persistenceLoaded = stateLoaded && await loadModule("../persistence.js");
+
+  // ── state.js tests ────────────────────────────────────────────────────────
+  test("state: RUN_STATUS_VALUES are defined", () => {
+    assert(stateLoaded, "state.js failed to load");
+    assert(Array.isArray(window.RUN_STATUS_VALUES), "RUN_STATUS_VALUES not array");
+    assert(window.RUN_STATUS_VALUES.length > 0, "RUN_STATUS_VALUES empty");
+  });
+
+  test("state: RUN_STATUS_OWNERS are defined", () => {
+    assert(stateLoaded, "state.js failed to load");
+    assert(Array.isArray(window.RUN_STATUS_OWNERS), "RUN_STATUS_OWNERS not array");
+    assert(window.RUN_STATUS_OWNERS.length > 0, "RUN_STATUS_OWNERS empty");
+  });
+
+  test("state: runStatusState initialised as empty object", () => {
+    assert(stateLoaded, "state.js failed to load");
+    assert(typeof window.runStatusState === "object", "runStatusState not object");
+  });
+
+  // ── persistence.js tests ──────────────────────────────────────────────────
+  test("persistence: emptyTrackState returns default shape", () => {
+    assert(persistenceLoaded, "persistence.js failed to load");
+    const s = window.emptyTrackState();
+    assertEqual(s.status, "not_tested", "default status");
+    assertEqual(s.owner, "", "default owner");
+    assertEqual(s.reviewer, "", "default reviewer");
+  });
+
+  test("persistence: normalizeTrackState clears invalid owner", () => {
+    assert(persistenceLoaded, "persistence.js failed to load");
+    const s = window.normalizeTrackState({ status: "pass", owner: "nobody", reviewer: "" });
+    assertEqual(s.owner, "", "invalid owner cleared");
+  });
+
+  test("persistence: normalizeTrackState clears reviewer when same as owner", () => {
+    assert(persistenceLoaded, "persistence.js failed to load");
+    const owner = window.RUN_STATUS_OWNERS[0];
+    const s = window.normalizeTrackState({ status: "pass", owner, reviewer: owner });
+    assertEqual(s.reviewer, "", "reviewer cleared when matches owner");
+  });
+
+  test("persistence: loadRunStatusState returns {} for null key", () => {
+    assert(persistenceLoaded, "persistence.js failed to load");
+    mockLocalStorage.clear();
+    const entries = window.loadRunStatusState();
+    assertEqual(typeof entries, "object", "should return object");
+    assertEqual(Object.keys(entries).length, 0, "should be empty");
+  });
+
+  test("persistence: loadRunStatusState returns {} for empty-string key", () => {
+    assert(persistenceLoaded, "persistence.js failed to load");
+    mockLocalStorage.setItem(window.RUN_STATUS_STORAGE_KEY, "");
+    const entries = window.loadRunStatusState();
+    assertEqual(typeof entries, "object", "should return object");
+  });
+
+  test("persistence: loadRunStatusState round-trips saved data", () => {
+    assert(persistenceLoaded, "persistence.js failed to load");
+    mockLocalStorage.clear();
+    window.runStatusState = {};
+    const key = window.runEntryKey("HRS", "HRS/SR/BV-01-C");
+    window.runStatusState[key] = window.normalizeRunEntry({ manual: { status: "pass", owner: window.RUN_STATUS_OWNERS[0], reviewer: "" } });
+    window.persistRunStatusStateLocal();
+    const loaded = window.loadRunStatusState();
+    assert(loaded[key], "key should be present after round-trip");
+    assertEqual(loaded[key].manual.status, "pass", "status round-trips");
+  });
+
+  test("persistence: updateRunEntry rejects reviewer same as owner", () => {
+    assert(persistenceLoaded, "persistence.js failed to load");
+    window.runStatusState = {};
+    const owner = window.RUN_STATUS_OWNERS[0];
+    window.updateRunEntry("HRS", "TC-01", "manual", "owner", owner);
+    window.updateRunEntry("HRS", "TC-01", "manual", "reviewer", owner);
+    const key = window.runEntryKey("HRS", "TC-01");
+    const entry = window.runStatusState[key];
+    assertEqual(entry.manual.reviewer, "", "reviewer must differ from owner");
+  });
+
+  test("persistence: runEntryKey builds expected format", () => {
+    assert(stateLoaded, "state.js failed to load");
+    assertEqual(window.runEntryKey("HRS", "TC-01"), "HRS::TC-01");
+    assertEqual(window.runEntryKey("", "TC-01"), "GLOBAL::TC-01");
+    assertEqual(window.runEntryKey(null, "TC-01"), "GLOBAL::TC-01");
+  });
+
+  // ── Render results ────────────────────────────────────────────────────────
+  const container = document.getElementById("results");
+  container.innerHTML = results.map((r) => `
+    <div class="${r.status}">
+      [${r.status.toUpperCase()}] ${r.name}${r.error ? `<pre>${r.error}</pre>` : ""}
+    </div>
+  `).join("");
+
+  const pass = results.filter((r) => r.status === "pass").length;
+  const fail = results.filter((r) => r.status === "fail").length;
+  document.getElementById("summary").textContent =
+    `${pass} passed, ${fail} failed (total: ${results.length})`;
+}
+
+runAll();
+</script>
+</body>
+</html>

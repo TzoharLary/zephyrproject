@@ -60,7 +60,13 @@ ICS_PDF = {
 OUT_DIR = Path("dashboards/pts_report_he")
 OUT_HTML = OUT_DIR / "index.html"
 OUT_CSS = OUT_DIR / "assets" / "report.css"
+OUT_SHARED_TOKENS_CSS = OUT_DIR / "shared-tokens.css"
+# report.js kept for backward compatibility; active modules are state/persistence/render/events.
 OUT_JS = OUT_DIR / "assets" / "report.js"
+OUT_STATE_JS = OUT_DIR / "assets" / "state.js"
+OUT_PERSISTENCE_JS = OUT_DIR / "assets" / "persistence.js"
+OUT_RENDER_JS = OUT_DIR / "assets" / "render.js"
+OUT_EVENTS_JS = OUT_DIR / "assets" / "events.js"
 OUT_DATA = OUT_DIR / "data" / "report-data.js"
 OUT_RUN_STATUS_STATE = OUT_DIR / "data" / "run-status-state.json"
 
@@ -73,7 +79,12 @@ HUB_OUT_DATA = HUB_OUT_DIR / "data" / "hub-data.js"
 TEMPLATE_DIR = Path(__file__).parent / "templates" / "pts_report_he"
 TEMPLATE_HTML = TEMPLATE_DIR / "index.html"
 TEMPLATE_CSS = TEMPLATE_DIR / "report.css"
+TEMPLATE_SHARED_TOKENS_CSS = TEMPLATE_DIR / "shared-tokens.css"
 TEMPLATE_JS = TEMPLATE_DIR / "report.js"
+TEMPLATE_STATE_JS = TEMPLATE_DIR / "state.js"
+TEMPLATE_PERSISTENCE_JS = TEMPLATE_DIR / "persistence.js"
+TEMPLATE_RENDER_JS = TEMPLATE_DIR / "render.js"
+TEMPLATE_EVENTS_JS = TEMPLATE_DIR / "events.js"
 HUB_TEMPLATE_DIR = TEMPLATE_DIR / "autopts"
 HUB_TEMPLATE_HTML = HUB_TEMPLATE_DIR / "index.html"
 HUB_TEMPLATE_CSS = HUB_TEMPLATE_DIR / "report.css"
@@ -3693,7 +3704,17 @@ def main() -> None:
     HUB_OUT_DATA.write_text(hub_data_js, encoding="utf-8")
 
     OUT_CSS.write_text(read_template_or_fallback(TEMPLATE_CSS, CSS_CONTENT), encoding="utf-8")
+    OUT_SHARED_TOKENS_CSS.write_text(
+        read_template_or_fallback(TEMPLATE_SHARED_TOKENS_CSS, "/* shared-tokens.css missing */\n"),
+        encoding="utf-8",
+    )
+    # Write modular JS files (state → persistence → render → events).
+    # OUT_JS / report.js is kept for backward compatibility but is no longer the active entry point.
     OUT_JS.write_text(read_template_or_fallback(TEMPLATE_JS, JS_CONTENT), encoding="utf-8")
+    OUT_STATE_JS.write_text(read_template_or_fallback(TEMPLATE_STATE_JS, "/* state.js missing */\n"), encoding="utf-8")
+    OUT_PERSISTENCE_JS.write_text(read_template_or_fallback(TEMPLATE_PERSISTENCE_JS, "/* persistence.js missing */\n"), encoding="utf-8")
+    OUT_RENDER_JS.write_text(read_template_or_fallback(TEMPLATE_RENDER_JS, "/* render.js missing */\n"), encoding="utf-8")
+    OUT_EVENTS_JS.write_text(read_template_or_fallback(TEMPLATE_EVENTS_JS, "/* events.js missing */\n"), encoding="utf-8")
     OUT_HTML.write_text(read_template_or_fallback(TEMPLATE_HTML, HTML_TEMPLATE), encoding="utf-8")
     HUB_OUT_CSS.write_text(
         read_template_or_fallback(HUB_TEMPLATE_CSS, "/* hub css template missing */\nbody{font-family:sans-serif;}"),
@@ -3710,7 +3731,12 @@ def main() -> None:
 
     print(f"WROTE {OUT_HTML}")
     print(f"WROTE {OUT_CSS}")
+    print(f"WROTE {OUT_SHARED_TOKENS_CSS}")
     print(f"WROTE {OUT_JS}")
+    print(f"WROTE {OUT_STATE_JS}")
+    print(f"WROTE {OUT_PERSISTENCE_JS}")
+    print(f"WROTE {OUT_RENDER_JS}")
+    print(f"WROTE {OUT_EVENTS_JS}")
     print(f"WROTE {OUT_DATA}")
     print(f"WROTE {HUB_OUT_HTML}")
     print(f"WROTE {HUB_OUT_CSS}")
