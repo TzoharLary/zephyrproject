@@ -20,7 +20,7 @@ PR #9 כבר סגר את רוב סעיפי `dashboards/ARCHITECTURE_REVIEW_HE.md
 - Devs: ה-PR מכיל evidence מסודר שאפשר לבדוק, ה-QA metadata עודכן, ותהליך הבנייה/האימות נשאר ממוקד ב-templates וב-artifacts הנכונים.
 
 ## References
-- Commit: pending (no commit in this task)
+- Commit: 679d9cb
 - Files:
   - tools/templates/pts_report_he/tests/smoke.html
   - tools/templates/pts_report_he/index.html
