@@ -165,13 +165,18 @@ function runEntryKey(profileKey, tcid) {
 }
 
 function emptyTrackState() {
-  return { status: "not_tested", owner: "" };
+  return { status: "not_tested", owner: "", reviewer: "" };
 }
 
 function normalizeTrackState(track) {
   const normalized = Object.assign({}, emptyTrackState(), track || {});
   if (!RUN_STATUS_VALUES.some((item) => item.value === normalized.status)) normalized.status = "not_tested";
   if (!RUN_STATUS_OWNERS.includes(normalized.owner)) normalized.owner = "";
+  if (!RUN_STATUS_OWNERS.includes(normalized.reviewer)) normalized.reviewer = "";
+  // Enforce: owner and reviewer must be different people.
+  if (normalized.owner && normalized.reviewer && normalized.owner === normalized.reviewer) {
+    normalized.reviewer = "";
+  }
   return normalized;
 }
 
@@ -186,7 +191,10 @@ function normalizeRunEntry(entry) {
 function loadRunStatusState() {
   try {
     const raw = localStorage.getItem(RUN_STATUS_STORAGE_KEY);
-    if (!raw) return {};
+    // Use explicit null/undefined check — falsy check would skip valid but
+    // unlikely-but-possible edge cases like "0" stored as a key value.
+    if (raw === null || raw === undefined) return {};
+    if (raw === "") return {};
     return normalizeRunStatusPayload(JSON.parse(raw)).entries;
   } catch (error) {
     return {};
@@ -375,7 +383,13 @@ function updateRunEntry(profileKey, tcid, track, field, value) {
   if (field === "status") {
     normalizedTrack.status = RUN_STATUS_VALUES.some((item) => item.value === value) ? value : "not_tested";
   } else if (field === "owner") {
-    normalizedTrack.owner = RUN_STATUS_OWNERS.includes(value) ? value : "";
+    const candidate = RUN_STATUS_OWNERS.includes(value) ? value : "";
+    // Enforce: owner and reviewer must be different people.
+    normalizedTrack.owner = candidate && candidate === normalizedTrack.reviewer ? "" : candidate;
+  } else if (field === "reviewer") {
+    const candidate = RUN_STATUS_OWNERS.includes(value) ? value : "";
+    // Enforce: reviewer and owner must be different people.
+    normalizedTrack.reviewer = candidate && candidate === normalizedTrack.owner ? "" : candidate;
   }
   next[targetTrack] = normalizedTrack;
   runStatusState[key] = next;
@@ -395,6 +409,7 @@ function syncRunControls(runKey) {
     const value = track === "autopts" ? entry.autopts : entry.manual;
     if (field === "status") element.value = value.status;
     if (field === "owner") element.value = value.owner;
+    if (field === "reviewer") element.value = value.reviewer;
   });
 }
 
@@ -1346,6 +1361,15 @@ function renderOwnerOptions(selectedValue) {
   ].join("");
 }
 
+function renderReviewerOptions(selectedValue, excludeOwner) {
+  return [
+    '<option value="">בחר מאשר</option>',
+    ...RUN_STATUS_OWNERS.filter((person) => !excludeOwner || person !== excludeOwner).map(
+      (person) => `<option value="${esc(person)}" ${selectedValue === person ? "selected" : ""}>${esc(person)}</option>`
+    ),
+  ].join("");
+}
+
 function renderRunStatusControls(row, options) {
   const settings = Object.assign({ profileKey: "GLOBAL", compact: false }, options || {});
   const tcid = row && row.tcid ? row.tcid : "";
@@ -1378,6 +1402,18 @@ function renderRunStatusControls(row, options) {
                 data-run-field="owner"
               >
                 ${renderOwnerOptions(trackState.owner)}
+              </select>
+            </label>
+            <label class="tcid-run-field">
+              <span>מאשר</span>
+              <select
+                class="run-status-select"
+                data-run-key="${esc(runKey)}"
+                data-run-track="${esc(track.key)}"
+                data-run-field="reviewer"
+                title="מאשר חייב להיות שונה מהמבצע"
+              >
+                ${renderReviewerOptions(trackState.reviewer, trackState.owner)}
               </select>
             </label>
           </div>
@@ -4437,8 +4473,16 @@ function applySearch() {
 }
 
 function activatePanel(id) {
-  panels.forEach((panel) => panel.classList.toggle("active", panel.id === `panel-${id}`));
-  navButtons.forEach((button) => button.classList.toggle("active", button.dataset.panelTarget === id));
+  panels.forEach((panel) => {
+    const isActive = panel.id === `panel-${id}`;
+    panel.classList.toggle("active", isActive);
+    panel.setAttribute("aria-hidden", isActive ? "false" : "true");
+  });
+  navButtons.forEach((button) => {
+    const isActive = button.dataset.panelTarget === id;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-pressed", isActive ? "true" : "false");
+  });
   applySearch();
 
   document.body.classList.remove("nav-open");
@@ -4665,6 +4709,18 @@ function bindGlobalEvents() {
     const tcid = tcidParts.join("::");
     updateRunEntry(profileKey, tcid, track, field, control.value || "");
     syncRunControls(runKey);
+    // When owner changes, rebuild the reviewer dropdown for this widget
+    // to exclude the newly selected owner from the available reviewer options.
+    if (field === "owner") {
+      const widget = control.closest(".tcid-run-widget");
+      if (widget) {
+        widget.querySelectorAll(`[data-run-track="${CSS.escape ? CSS.escape(track) : track}"][data-run-field="reviewer"]`).forEach((reviewerSelect) => {
+          const currentReviewer = reviewerSelect.value;
+          const currentOwner = control.value || "";
+          reviewerSelect.innerHTML = renderReviewerOptions(currentReviewer, currentOwner);
+        });
+      }
+    }
   });
 
   const openSourcesBtn = document.getElementById("openSourcesBtn");

@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <title>Smoke Tests — pts_report_he</title>
+  <style>
+    body { font-family: monospace; padding: 16px; }
+    .pass { color: green; } .fail { color: red; } .skip { color: gray; }
+    pre { background: #f4f4f4; padding: 8px; }
+    #summary { font-size: 1.2em; margin-top: 16px; }
+  </style>
+</head>
+<body>
+<h1>Smoke Tests — pts_report_he</h1>
+<p>הרץ דף זה דרך local static server, לדוגמה: <code>python3 -m http.server 8000</code> ואז פתח את ה-URL המתאים. <code>file://</code> אינו נתמך.</p>
+<div id="results"></div>
+<div id="summary"></div>
+
+<script>
+const results = [];
+const resultsContainer = document.getElementById("results");
+const summaryContainer = document.getElementById("summary");
+const originalFetch = window.fetch.bind(window);
+
+function test(name, fn) {
+  try {
+    fn();
+    results.push({ name, status: "pass" });
+  } catch (e) {
+    results.push({ name, status: "fail", error: String(e) });
+  }
+}
+
+function assert(condition, msg) {
+  if (!condition) throw new Error(msg || "assertion failed");
+}
+
+function assertEqual(a, b, msg) {
+  if (a !== b) throw new Error((msg || "expected equal") + `: ${JSON.stringify(a)} !== ${JSON.stringify(b)}`);
+}
+
+function renderResults() {
+  resultsContainer.innerHTML = results.map((r) => `
+    <div class="${r.status}">
+      [${r.status.toUpperCase()}] ${r.name}${r.error ? `<pre>${r.error}</pre>` : ""}
+    </div>
+  `).join("");
+
+  const pass = results.filter((r) => r.status === "pass").length;
+  const fail = results.filter((r) => r.status === "fail").length;
+  summaryContainer.textContent = `${pass} passed, ${fail} failed (total: ${results.length})`;
+}
+
+function recordBootstrapFailure(error) {
+  results.push({
+    name: "bootstrap: state.js + persistence.js",
+    status: "fail",
+    error: `${String(error)}\nHint: open this page via http://127.0.0.1:<port>/... and not via file://`,
+  });
+  renderResults();
+}
+
+window.REPORT_DATA = { meta: {}, profiles_overview: [], glossary: {} };
+const _lsStore = {};
+const mockLocalStorage = {
+  getItem: (k) => (_lsStore[k] !== undefined ? _lsStore[k] : null),
+  setItem: (k, v) => { _lsStore[k] = String(v); },
+  removeItem: (k) => { delete _lsStore[k]; },
+  clear: () => { Object.keys(_lsStore).forEach((k) => delete _lsStore[k]); },
+};
+Object.defineProperty(window, "localStorage", { value: mockLocalStorage, writable: true });
+
+async function loadSource(url) {
+  const response = await originalFetch(url, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`failed to load ${url} (${response.status})`);
+  }
+  return await response.text();
+}
+
+async function buildRuntime() {
+  const [stateSource, persistenceSource] = await Promise.all([
+    loadSource("../state.js"),
+    loadSource("../persistence.js"),
+  ]);
+
+  const factory = new Function(
+    "window",
+    "document",
+    `${stateSource}
+${persistenceSource}
+return {
+  RUN_STATUS_VALUES,
+  RUN_STATUS_OWNERS,
+  RUN_STATUS_STORAGE_KEY,
+  get runStatusState() { return runStatusState; },
+  set runStatusState(value) { runStatusState = value; },
+  emptyTrackState,
+  normalizeTrackState,
+  normalizeRunEntry,
+  loadRunStatusState,
+  persistRunStatusStateLocal,
+  updateRunEntry,
+  runEntryKey,
+  disableRemotePersistence() {
+    scheduleRunStatusFilePersist = () => {};
+    persistRunStatusState = persistRunStatusStateLocal;
+  },
+};`
+  );
+
+  return factory(window, document);
+}
+
+async function runAll() {
+  let runtime;
+  try {
+    runtime = await buildRuntime();
+    runtime.disableRemotePersistence();
+    results.push({ name: "bootstrap: state.js + persistence.js", status: "pass" });
+  } catch (error) {
+    recordBootstrapFailure(error);
+    return;
+  }
+
+  test("runtime: RUN_STATUS_VALUES are defined", () => {
+    assert(Array.isArray(runtime.RUN_STATUS_VALUES), "RUN_STATUS_VALUES not array");
+    assert(runtime.RUN_STATUS_VALUES.length > 0, "RUN_STATUS_VALUES empty");
+  });
+
+  test("runtime: RUN_STATUS_OWNERS are defined", () => {
+    assert(Array.isArray(runtime.RUN_STATUS_OWNERS), "RUN_STATUS_OWNERS not array");
+    assert(runtime.RUN_STATUS_OWNERS.length > 0, "RUN_STATUS_OWNERS empty");
+  });
+
+  test("runtime: runStatusState initialised as object", () => {
+    assert(typeof runtime.runStatusState === "object", "runStatusState not object");
+  });
+
+  test("persistence: emptyTrackState returns default shape", () => {
+    const s = runtime.emptyTrackState();
+    assertEqual(s.status, "not_tested", "default status");
+    assertEqual(s.owner, "", "default owner");
+    assertEqual(s.reviewer, "", "default reviewer");
+  });
+
+  test("persistence: normalizeTrackState clears invalid owner", () => {
+    const s = runtime.normalizeTrackState({ status: "pass", owner: "nobody", reviewer: "" });
+    assertEqual(s.owner, "", "invalid owner cleared");
+  });
+
+  test("persistence: normalizeTrackState clears reviewer when same as owner", () => {
+    const owner = runtime.RUN_STATUS_OWNERS[0];
+    const s = runtime.normalizeTrackState({ status: "pass", owner, reviewer: owner });
+    assertEqual(s.reviewer, "", "reviewer cleared when matches owner");
+  });
+
+  test("persistence: loadRunStatusState returns {} for null key", () => {
+    mockLocalStorage.clear();
+    runtime.runStatusState = {};
+    const entries = runtime.loadRunStatusState();
+    assertEqual(typeof entries, "object", "should return object");
+    assertEqual(Object.keys(entries).length, 0, "should be empty");
+  });
+
+  test("persistence: loadRunStatusState returns {} for empty-string key", () => {
+    mockLocalStorage.setItem(runtime.RUN_STATUS_STORAGE_KEY, "");
+    const entries = runtime.loadRunStatusState();
+    assertEqual(typeof entries, "object", "should return object");
+    assertEqual(Object.keys(entries).length, 0, "should be empty");
+  });
+
+  test("persistence: loadRunStatusState round-trips saved data", () => {
+    mockLocalStorage.clear();
+    runtime.runStatusState = {};
+    const key = runtime.runEntryKey("HRS", "HRS/SR/BV-01-C");
+    runtime.runStatusState[key] = runtime.normalizeRunEntry({
+      manual: { status: "pass", owner: runtime.RUN_STATUS_OWNERS[0], reviewer: "" },
+    });
+    runtime.persistRunStatusStateLocal();
+    const loaded = runtime.loadRunStatusState();
+    assert(loaded[key], "key should be present after round-trip");
+    assertEqual(loaded[key].manual.status, "pass", "status round-trips");
+  });
+
+  test("persistence: updateRunEntry rejects reviewer same as owner", () => {
+    runtime.runStatusState = {};
+    const owner = runtime.RUN_STATUS_OWNERS[0];
+    runtime.updateRunEntry("HRS", "TC-01", "manual", "owner", owner);
+    runtime.updateRunEntry("HRS", "TC-01", "manual", "reviewer", owner);
+    const key = runtime.runEntryKey("HRS", "TC-01");
+    const entry = runtime.runStatusState[key];
+    assertEqual(entry.manual.reviewer, "", "reviewer must differ from owner");
+  });
+
+  test("persistence: runEntryKey builds expected format", () => {
+    assertEqual(runtime.runEntryKey("HRS", "TC-01"), "HRS::TC-01");
+    assertEqual(runtime.runEntryKey("", "TC-01"), "GLOBAL::TC-01");
+    assertEqual(runtime.runEntryKey(null, "TC-01"), "GLOBAL::TC-01");
+  });
+
+  renderResults();
+}
+
+runAll();
+</script>
+</body>
+</html>
