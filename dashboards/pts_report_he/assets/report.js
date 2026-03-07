@@ -4473,8 +4473,16 @@ function applySearch() {
 }
 
 function activatePanel(id) {
-  panels.forEach((panel) => panel.classList.toggle("active", panel.id === `panel-${id}`));
-  navButtons.forEach((button) => button.classList.toggle("active", button.dataset.panelTarget === id));
+  panels.forEach((panel) => {
+    const isActive = panel.id === `panel-${id}`;
+    panel.classList.toggle("active", isActive);
+    panel.setAttribute("aria-hidden", isActive ? "false" : "true");
+  });
+  navButtons.forEach((button) => {
+    const isActive = button.dataset.panelTarget === id;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-pressed", isActive ? "true" : "false");
+  });
   applySearch();
 
   document.body.classList.remove("nav-open");

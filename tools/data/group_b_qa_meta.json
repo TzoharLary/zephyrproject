@@ -1,17 +1,17 @@
 {
-  "generated_at": "2026-02-25",
-  "last_smoke_test_at": "2026-02-25T21:14:46Z",
-  "smoke_test_mode": "playwright_mcp",
+  "generated_at": "2026-03-07",
+  "last_smoke_test_at": "2026-03-07T20:45:18Z",
+  "smoke_test_mode": "playwright_mcp + python -m http.server + serve_with_run_status",
   "known_expected_console_errors": [
     "GET /dashboards/pts_report_he/api/run-status -> 404 (static server)",
     "GET /api/group-b-tasks -> 404 (static server)",
     "GET /favicon.ico -> 404 (static server)"
   ],
   "last_manual_review_notes_he": [
-    "בוצע smoke בדסקטופ על שרת סטטי מקומי (פורט 8011): Hub נטען עם לוח המשימות החדש לפי שלבים (Stage Cards + Task Cards). אומתו כרטיסיות שלבים, counters, progress ופתיחת שלב מורחב.",
-    "אומת fallback read-only תחת static server: /api/group-b-tasks מחזיר 404 צפוי, מוצגת הודעת API ברורה, ואין שגיאות JS runtime.",
-    "בוצע smoke מול serve_with_run_status (פורט 8051): quick edit (status+assignee) בכרטיסיית משימה קומפקטית נשמר דרך /api/group-b-tasks ונשאר לאחר reload.",
-    "אומת פתיחת משימה לעריכה מלאה בתוך שלב פתוח (single task expansion) וכן חיפוש טקסט בלוח המשימות עם עדכון תצוגת שלבים/משימות.",
-    "אומת API ישיר: GET /api/group-b-tasks תקין; PUT עם payload לא תקין (depends_on string) נדחה ב-HTTP 400."
+    "בוצע smoke על שרת סטטי מקומי (פורט 8000): tools/templates/pts_report_he/tests/smoke.html סיים עם 12/12 pass וללא שגיאות JS runtime; נשמר רק favicon.ico 404 צפוי.",
+    "אומתו dashboards/pts_report_he/index.html ו-dashboards/pts_report_he/autopts/index.html על static server: ה-CTA בין העמודים עובד, לא נצפו page errors, וב-static התקבלו רק api/run-status 404 ו-api/group-b-tasks 404 הצפויים.",
+    "אומתה נגישות הניווט בדשבורד הראשי: לכל panel יש aria-labelledby עם id קיים, aria-pressed מתעדכן במעבר בין tabs, וה-panel הפעיל הראשוני מסומן עם aria-hidden=\"false\".",
+    "בוצע אימות API-backed על עותק זמני של dashboards/pts_report_he דרך serve_with_run_status (פורט 8051): GET/PUT ל-/api/run-status תקינים, שינוי status/owner/reviewer נשמר, ו-reload מחזיר את הערכים מה-API.",
+    "אומת הכלל owner != reviewer: ניסיון לבחור reviewer זהה ל-owner נדחה או מתאפס, בחירת reviewer שונה נשמרת, ולא נצפו שגיאות קונסול לא צפויות במצב API-backed."
   ]
 }
