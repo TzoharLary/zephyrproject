@@ -181,8 +181,7 @@ tools/build_pts_report_bundle.py
 אחרי כל עריכה ב-templates, יש להריץ את הבנייה כדי לעדכן את ה-artifacts:
 
 ```bash
-cd tools
-python3 build_pts_report_bundle.py
+python3 tools/build_pts_report_bundle.py
 ```
 
 ה-artifacts המעודכנים ייכתבו ל-`dashboards/pts_report_he/`.
@@ -199,3 +198,17 @@ state.js → persistence.js → render.js → events.js
 - `persistence.js`: שמירה/טעינה של run-status ב-localStorage ו-file API; CRUD על run entries
 - `render.js`: כל פונקציות `render*` ו-`fill*` שבונות את ה-DOM
 - `events.js`: event listeners, `activatePanel()`, `applySearch()`, ואתחול הדף
+
+### Smoke tests
+
+בדיקות העישון נמצאות ב-`tools/templates/pts_report_he/tests/smoke.html`.
+
+- יש לפתוח אותן דרך local static server, לדוגמה: `python3 -m http.server 8000`
+- לאחר מכן לפתוח: `http://127.0.0.1:8000/tools/templates/pts_report_he/tests/smoke.html`
+- `file://` אינו נתמך, כי ה-harness טוען את `state.js` ו-`persistence.js` דרך HTTP
+
+`dashboards/pts_report_he/assets/report.js` נשמר כ-artifact לצורכי תאימות לאחור, אבל ה-entrypoint הפעיל של הדשבורד הוא:
+
+```text
+assets/state.js → assets/persistence.js → assets/render.js → assets/events.js
+```

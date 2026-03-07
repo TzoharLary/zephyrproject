@@ -48,15 +48,15 @@
       </div>
 
       <nav class="nav" aria-label="ניווט פאנלים">
-        <button class="nav-btn active" data-panel-target="overview" aria-controls="panel-overview" aria-pressed="true">סקירה מהירה</button>
-        <button class="nav-btn" data-panel-target="dis" aria-controls="panel-dis" aria-pressed="false">DIS</button>
-        <button class="nav-btn" data-panel-target="bas" aria-controls="panel-bas" aria-pressed="false">BAS</button>
-        <button class="nav-btn" data-panel-target="hrs" aria-controls="panel-hrs" aria-pressed="false">HRS</button>
-        <button class="nav-btn" data-panel-target="hid" aria-controls="panel-hid" aria-pressed="false">HID (HOGP)</button>
-        <button class="nav-btn" data-panel-target="iopt" aria-controls="panel-iopt" aria-pressed="false">בדיקות שילוב בין פרופילים (IOPT)</button>
-        <button class="nav-btn" data-panel-target="runtime" aria-controls="panel-runtime" aria-pressed="false">תוצאות הרצת PTS</button>
-        <button class="nav-btn" data-panel-target="comparison" aria-controls="panel-comparison" aria-pressed="false">אימות מול מקורות רשמיים</button>
-        <button class="nav-btn" data-panel-target="sources" aria-controls="panel-sources" aria-pressed="false">מקורות</button>
+        <button id="nav-overview" class="nav-btn active" data-panel-target="overview" aria-controls="panel-overview" aria-pressed="true">סקירה מהירה</button>
+        <button id="nav-dis" class="nav-btn" data-panel-target="dis" aria-controls="panel-dis" aria-pressed="false">DIS</button>
+        <button id="nav-bas" class="nav-btn" data-panel-target="bas" aria-controls="panel-bas" aria-pressed="false">BAS</button>
+        <button id="nav-hrs" class="nav-btn" data-panel-target="hrs" aria-controls="panel-hrs" aria-pressed="false">HRS</button>
+        <button id="nav-hid" class="nav-btn" data-panel-target="hid" aria-controls="panel-hid" aria-pressed="false">HID (HOGP)</button>
+        <button id="nav-iopt" class="nav-btn" data-panel-target="iopt" aria-controls="panel-iopt" aria-pressed="false">בדיקות שילוב בין פרופילים (IOPT)</button>
+        <button id="nav-runtime" class="nav-btn" data-panel-target="runtime" aria-controls="panel-runtime" aria-pressed="false">תוצאות הרצת PTS</button>
+        <button id="nav-comparison" class="nav-btn" data-panel-target="comparison" aria-controls="panel-comparison" aria-pressed="false">אימות מול מקורות רשמיים</button>
+        <button id="nav-sources" class="nav-btn" data-panel-target="sources" aria-controls="panel-sources" aria-pressed="false">מקורות</button>
       </nav>
 
       <div class="sidebar-cta">
@@ -92,7 +92,7 @@
         <button id="closeSourcesBtn" type="button" aria-label="סגור את כל קטעי המקורות">סגור כל המקורות</button>
       </section>
 
-      <section class="panel active" id="panel-overview" aria-labelledby="nav-overview" tabindex="-1"><div id="overviewContent"></div></section>
+      <section class="panel active" id="panel-overview" aria-labelledby="nav-overview" tabindex="-1" aria-hidden="false"><div id="overviewContent"></div></section>
       <section class="panel" id="panel-dis" aria-labelledby="nav-dis" tabindex="-1" aria-hidden="true"><div id="disContent"></div></section>
       <section class="panel" id="panel-bas" aria-labelledby="nav-bas" tabindex="-1" aria-hidden="true"><div id="basContent"></div></section>
       <section class="panel" id="panel-hrs" aria-labelledby="nav-hrs" tabindex="-1" aria-hidden="true"><div id="hrsContent"></div></section>

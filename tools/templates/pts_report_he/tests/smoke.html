@@ -12,13 +12,15 @@
 </head>
 <body>
 <h1>Smoke Tests — pts_report_he</h1>
-<p>פותח דף זה ישירות בדפדפן (ללא שרת) כדי להריץ בדיקות עישון בסיסיות.</p>
+<p>הרץ דף זה דרך local static server, לדוגמה: <code>python3 -m http.server 8000</code> ואז פתח את ה-URL המתאים. <code>file://</code> אינו נתמך.</p>
 <div id="results"></div>
 <div id="summary"></div>
 
 <script>
-// ── Minimal test harness ────────────────────────────────────────────────────
 const results = [];
+const resultsContainer = document.getElementById("results");
+const summaryContainer = document.getElementById("summary");
+const originalFetch = window.fetch.bind(window);
 
 function test(name, fn) {
   try {
@@ -37,9 +39,28 @@ function assertEqual(a, b, msg) {
   if (a !== b) throw new Error((msg || "expected equal") + `: ${JSON.stringify(a)} !== ${JSON.stringify(b)}`);
 }
 
-// ── Mock globals required by the modules ───────────────────────────────────
+function renderResults() {
+  resultsContainer.innerHTML = results.map((r) => `
+    <div class="${r.status}">
+      [${r.status.toUpperCase()}] ${r.name}${r.error ? `<pre>${r.error}</pre>` : ""}
+    </div>
+  `).join("");
+
+  const pass = results.filter((r) => r.status === "pass").length;
+  const fail = results.filter((r) => r.status === "fail").length;
+  summaryContainer.textContent = `${pass} passed, ${fail} failed (total: ${results.length})`;
+}
+
+function recordBootstrapFailure(error) {
+  results.push({
+    name: "bootstrap: state.js + persistence.js",
+    status: "fail",
+    error: `${String(error)}\nHint: open this page via http://127.0.0.1:<port>/... and not via file://`,
+  });
+  renderResults();
+}
+
 window.REPORT_DATA = { meta: {}, profiles_overview: [], glossary: {} };
-// Stub localStorage with a plain in-memory map so tests are isolated.
 const _lsStore = {};
 const mockLocalStorage = {
   getItem: (k) => (_lsStore[k] !== undefined ? _lsStore[k] : null),
@@ -49,129 +70,136 @@ const mockLocalStorage = {
 };
 Object.defineProperty(window, "localStorage", { value: mockLocalStorage, writable: true });
 
-// Stub DOM queries used at module load time.
-document.querySelectorAll = () => [];
-document.getElementById = () => null;
-
-// ── Load modules inline via dynamic import simulation ──────────────────────
-// Since this is a plain HTML file without a bundler we evaluate each module
-// source via fetch + eval.  Tests that depend on specific functions are
-// guarded with typeof checks.
-
-async function loadModule(url) {
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return false;
-    const src = await res.text();
-    // eslint-disable-next-line no-eval
-    (0, eval)(src);
-    return true;
-  } catch (e) {
-    return false;
+async function loadSource(url) {
+  const response = await originalFetch(url, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`failed to load ${url} (${response.status})`);
   }
+  return await response.text();
+}
+
+async function buildRuntime() {
+  const [stateSource, persistenceSource] = await Promise.all([
+    loadSource("../state.js"),
+    loadSource("../persistence.js"),
+  ]);
+
+  const factory = new Function(
+    "window",
+    "document",
+    `${stateSource}
+${persistenceSource}
+return {
+  RUN_STATUS_VALUES,
+  RUN_STATUS_OWNERS,
+  RUN_STATUS_STORAGE_KEY,
+  get runStatusState() { return runStatusState; },
+  set runStatusState(value) { runStatusState = value; },
+  emptyTrackState,
+  normalizeTrackState,
+  normalizeRunEntry,
+  loadRunStatusState,
+  persistRunStatusStateLocal,
+  updateRunEntry,
+  runEntryKey,
+  disableRemotePersistence() {
+    scheduleRunStatusFilePersist = () => {};
+    persistRunStatusState = persistRunStatusStateLocal;
+  },
+};`
+  );
+
+  return factory(window, document);
 }
 
 async function runAll() {
-  const stateLoaded = await loadModule("../state.js");
-  const persistenceLoaded = stateLoaded && await loadModule("../persistence.js");
+  let runtime;
+  try {
+    runtime = await buildRuntime();
+    runtime.disableRemotePersistence();
+    results.push({ name: "bootstrap: state.js + persistence.js", status: "pass" });
+  } catch (error) {
+    recordBootstrapFailure(error);
+    return;
+  }
 
-  // ── state.js tests ────────────────────────────────────────────────────────
-  test("state: RUN_STATUS_VALUES are defined", () => {
-    assert(stateLoaded, "state.js failed to load");
-    assert(Array.isArray(window.RUN_STATUS_VALUES), "RUN_STATUS_VALUES not array");
-    assert(window.RUN_STATUS_VALUES.length > 0, "RUN_STATUS_VALUES empty");
+  test("runtime: RUN_STATUS_VALUES are defined", () => {
+    assert(Array.isArray(runtime.RUN_STATUS_VALUES), "RUN_STATUS_VALUES not array");
+    assert(runtime.RUN_STATUS_VALUES.length > 0, "RUN_STATUS_VALUES empty");
   });
 
-  test("state: RUN_STATUS_OWNERS are defined", () => {
-    assert(stateLoaded, "state.js failed to load");
-    assert(Array.isArray(window.RUN_STATUS_OWNERS), "RUN_STATUS_OWNERS not array");
-    assert(window.RUN_STATUS_OWNERS.length > 0, "RUN_STATUS_OWNERS empty");
+  test("runtime: RUN_STATUS_OWNERS are defined", () => {
+    assert(Array.isArray(runtime.RUN_STATUS_OWNERS), "RUN_STATUS_OWNERS not array");
+    assert(runtime.RUN_STATUS_OWNERS.length > 0, "RUN_STATUS_OWNERS empty");
   });
 
-  test("state: runStatusState initialised as empty object", () => {
-    assert(stateLoaded, "state.js failed to load");
-    assert(typeof window.runStatusState === "object", "runStatusState not object");
+  test("runtime: runStatusState initialised as object", () => {
+    assert(typeof runtime.runStatusState === "object", "runStatusState not object");
   });
 
-  // ── persistence.js tests ──────────────────────────────────────────────────
   test("persistence: emptyTrackState returns default shape", () => {
-    assert(persistenceLoaded, "persistence.js failed to load");
-    const s = window.emptyTrackState();
+    const s = runtime.emptyTrackState();
     assertEqual(s.status, "not_tested", "default status");
     assertEqual(s.owner, "", "default owner");
     assertEqual(s.reviewer, "", "default reviewer");
   });
 
   test("persistence: normalizeTrackState clears invalid owner", () => {
-    assert(persistenceLoaded, "persistence.js failed to load");
-    const s = window.normalizeTrackState({ status: "pass", owner: "nobody", reviewer: "" });
+    const s = runtime.normalizeTrackState({ status: "pass", owner: "nobody", reviewer: "" });
     assertEqual(s.owner, "", "invalid owner cleared");
   });
 
   test("persistence: normalizeTrackState clears reviewer when same as owner", () => {
-    assert(persistenceLoaded, "persistence.js failed to load");
-    const owner = window.RUN_STATUS_OWNERS[0];
-    const s = window.normalizeTrackState({ status: "pass", owner, reviewer: owner });
+    const owner = runtime.RUN_STATUS_OWNERS[0];
+    const s = runtime.normalizeTrackState({ status: "pass", owner, reviewer: owner });
     assertEqual(s.reviewer, "", "reviewer cleared when matches owner");
   });
 
   test("persistence: loadRunStatusState returns {} for null key", () => {
-    assert(persistenceLoaded, "persistence.js failed to load");
     mockLocalStorage.clear();
-    const entries = window.loadRunStatusState();
+    runtime.runStatusState = {};
+    const entries = runtime.loadRunStatusState();
     assertEqual(typeof entries, "object", "should return object");
     assertEqual(Object.keys(entries).length, 0, "should be empty");
   });
 
   test("persistence: loadRunStatusState returns {} for empty-string key", () => {
-    assert(persistenceLoaded, "persistence.js failed to load");
-    mockLocalStorage.setItem(window.RUN_STATUS_STORAGE_KEY, "");
-    const entries = window.loadRunStatusState();
+    mockLocalStorage.setItem(runtime.RUN_STATUS_STORAGE_KEY, "");
+    const entries = runtime.loadRunStatusState();
     assertEqual(typeof entries, "object", "should return object");
+    assertEqual(Object.keys(entries).length, 0, "should be empty");
   });
 
   test("persistence: loadRunStatusState round-trips saved data", () => {
-    assert(persistenceLoaded, "persistence.js failed to load");
     mockLocalStorage.clear();
-    window.runStatusState = {};
-    const key = window.runEntryKey("HRS", "HRS/SR/BV-01-C");
-    window.runStatusState[key] = window.normalizeRunEntry({ manual: { status: "pass", owner: window.RUN_STATUS_OWNERS[0], reviewer: "" } });
-    window.persistRunStatusStateLocal();
-    const loaded = window.loadRunStatusState();
+    runtime.runStatusState = {};
+    const key = runtime.runEntryKey("HRS", "HRS/SR/BV-01-C");
+    runtime.runStatusState[key] = runtime.normalizeRunEntry({
+      manual: { status: "pass", owner: runtime.RUN_STATUS_OWNERS[0], reviewer: "" },
+    });
+    runtime.persistRunStatusStateLocal();
+    const loaded = runtime.loadRunStatusState();
     assert(loaded[key], "key should be present after round-trip");
     assertEqual(loaded[key].manual.status, "pass", "status round-trips");
   });
 
   test("persistence: updateRunEntry rejects reviewer same as owner", () => {
-    assert(persistenceLoaded, "persistence.js failed to load");
-    window.runStatusState = {};
-    const owner = window.RUN_STATUS_OWNERS[0];
-    window.updateRunEntry("HRS", "TC-01", "manual", "owner", owner);
-    window.updateRunEntry("HRS", "TC-01", "manual", "reviewer", owner);
-    const key = window.runEntryKey("HRS", "TC-01");
-    const entry = window.runStatusState[key];
+    runtime.runStatusState = {};
+    const owner = runtime.RUN_STATUS_OWNERS[0];
+    runtime.updateRunEntry("HRS", "TC-01", "manual", "owner", owner);
+    runtime.updateRunEntry("HRS", "TC-01", "manual", "reviewer", owner);
+    const key = runtime.runEntryKey("HRS", "TC-01");
+    const entry = runtime.runStatusState[key];
     assertEqual(entry.manual.reviewer, "", "reviewer must differ from owner");
   });
 
   test("persistence: runEntryKey builds expected format", () => {
-    assert(stateLoaded, "state.js failed to load");
-    assertEqual(window.runEntryKey("HRS", "TC-01"), "HRS::TC-01");
-    assertEqual(window.runEntryKey("", "TC-01"), "GLOBAL::TC-01");
-    assertEqual(window.runEntryKey(null, "TC-01"), "GLOBAL::TC-01");
+    assertEqual(runtime.runEntryKey("HRS", "TC-01"), "HRS::TC-01");
+    assertEqual(runtime.runEntryKey("", "TC-01"), "GLOBAL::TC-01");
+    assertEqual(runtime.runEntryKey(null, "TC-01"), "GLOBAL::TC-01");
   });
 
-  // ── Render results ────────────────────────────────────────────────────────
-  const container = document.getElementById("results");
-  container.innerHTML = results.map((r) => `
-    <div class="${r.status}">
-      [${r.status.toUpperCase()}] ${r.name}${r.error ? `<pre>${r.error}</pre>` : ""}
-    </div>
-  `).join("");
-
-  const pass = results.filter((r) => r.status === "pass").length;
-  const fail = results.filter((r) => r.status === "fail").length;
-  document.getElementById("summary").textContent =
-    `${pass} passed, ${fail} failed (total: ${results.length})`;
+  renderResults();
 }
 
 runAll();
