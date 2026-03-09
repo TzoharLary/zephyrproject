@@ -1,0 +1,48 @@
+/*
+ * shared-tokens.css — Shared design tokens for pts_report_he dashboards
+ *
+ * Defines the canonical token names used across all pts_report_he sub-pages.
+ * Each sub-page's report.css may override specific values for its own palette.
+ *
+ * Load this file BEFORE report.css in every sub-page's <head>.
+ * Load order: shared-tokens.css → report.css (sub-page overrides)
+ */
+
+:root {
+  /* ── Surfaces ──────────────────────────────────────────────── */
+  --bg: #f2f7fb;
+  --panel: #ffffff;
+  --panel-soft: #f8fcff;
+  --panel-alt: #f8fcff;
+
+  /* ── Typography ────────────────────────────────────────────── */
+  --ink: #182434;
+  --muted: #536273;
+
+  /* ── Borders & lines ───────────────────────────────────────── */
+  --line: #d4e2ee;
+  --line-strong: #c0d4e6;
+
+  /* ── Brand palette ──────────────────────────────────────────── */
+  --brand: #0a587f;
+  --brand-2: #0d7aa8;
+  --accent: #0f7c66;
+
+  /* ── Semantic status colours ────────────────────────────────── */
+  --warn-bg: #fdf7df;
+  --warn-line: #ebdc9f;
+  --info-bg: #eef7ff;
+  --info-line: #bed9ef;
+
+  /* ── Chips / badges ─────────────────────────────────────────── */
+  --chip: #eef7ff;
+
+  /* ── Elevation ──────────────────────────────────────────────── */
+  --shadow: 0 14px 30px rgba(13, 41, 66, 0.1);
+
+  /* ── Focus ring ─────────────────────────────────────────────── */
+  --focus: #1457b5;
+
+  /* ── Component-specific ─────────────────────────────────────── */
+  --glossary-drawer-width: 430px;
+}

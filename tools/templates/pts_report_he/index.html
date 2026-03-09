@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>דו"ח PTS - DIS/BAS/HRS/HID</title>
+  <link rel="stylesheet" href="shared-tokens.css" />
   <link rel="stylesheet" href="assets/report.css" />
 </head>
 <body>
@@ -46,17 +47,17 @@
         <p>קודם החלטה מהירה: מה ירוץ, למה, ומה דורש תשומת לב.</p>
       </div>
 
-      <div class="nav">
-        <button class="nav-btn active" data-panel-target="overview">סקירה מהירה</button>
-        <button class="nav-btn" data-panel-target="dis">DIS</button>
-        <button class="nav-btn" data-panel-target="bas">BAS</button>
-        <button class="nav-btn" data-panel-target="hrs">HRS</button>
-        <button class="nav-btn" data-panel-target="hid">HID (HOGP)</button>
-        <button class="nav-btn" data-panel-target="iopt">בדיקות שילוב בין פרופילים (IOPT)</button>
-        <button class="nav-btn" data-panel-target="runtime">תוצאות הרצת PTS</button>
-        <button class="nav-btn" data-panel-target="comparison">אימות מול מקורות רשמיים</button>
-        <button class="nav-btn" data-panel-target="sources">מקורות</button>
-      </div>
+      <nav class="nav" aria-label="ניווט פאנלים">
+        <button id="nav-overview" class="nav-btn active" data-panel-target="overview" aria-controls="panel-overview" aria-pressed="true">סקירה מהירה</button>
+        <button id="nav-dis" class="nav-btn" data-panel-target="dis" aria-controls="panel-dis" aria-pressed="false">DIS</button>
+        <button id="nav-bas" class="nav-btn" data-panel-target="bas" aria-controls="panel-bas" aria-pressed="false">BAS</button>
+        <button id="nav-hrs" class="nav-btn" data-panel-target="hrs" aria-controls="panel-hrs" aria-pressed="false">HRS</button>
+        <button id="nav-hid" class="nav-btn" data-panel-target="hid" aria-controls="panel-hid" aria-pressed="false">HID (HOGP)</button>
+        <button id="nav-iopt" class="nav-btn" data-panel-target="iopt" aria-controls="panel-iopt" aria-pressed="false">בדיקות שילוב בין פרופילים (IOPT)</button>
+        <button id="nav-runtime" class="nav-btn" data-panel-target="runtime" aria-controls="panel-runtime" aria-pressed="false">תוצאות הרצת PTS</button>
+        <button id="nav-comparison" class="nav-btn" data-panel-target="comparison" aria-controls="panel-comparison" aria-pressed="false">אימות מול מקורות רשמיים</button>
+        <button id="nav-sources" class="nav-btn" data-panel-target="sources" aria-controls="panel-sources" aria-pressed="false">מקורות</button>
+      </nav>
 
       <div class="sidebar-cta">
         <div class="sidebar-cta-title">מרכז AutoPTS + Group B</div>
@@ -83,22 +84,23 @@
         <a class="hero-hub-cta-link" href="autopts/index.html">פתח עמוד ייעודי</a>
       </section>
 
-      <section class="toolbar">
-        <input id="searchInput" type="search" placeholder="חיפוש חופשי בתוך הפאנל הפעיל..." />
-        <button id="clearSearchBtn" type="button">נקה חיפוש</button>
-        <button id="openSourcesBtn" type="button">פתח כל המקורות</button>
-        <button id="closeSourcesBtn" type="button">סגור כל המקורות</button>
+      <section class="toolbar" role="search" aria-label="חיפוש בפאנל הפעיל">
+        <label for="searchInput" class="visually-hidden">חיפוש חופשי בתוך הפאנל הפעיל</label>
+        <input id="searchInput" type="search" placeholder="חיפוש חופשי בתוך הפאנל הפעיל..." aria-label="חיפוש" />
+        <button id="clearSearchBtn" type="button" aria-label="נקה את שדה החיפוש">נקה חיפוש</button>
+        <button id="openSourcesBtn" type="button" aria-label="פתח את כל קטעי המקורות">פתח כל המקורות</button>
+        <button id="closeSourcesBtn" type="button" aria-label="סגור את כל קטעי המקורות">סגור כל המקורות</button>
       </section>
 
-      <section class="panel active" id="panel-overview"><div id="overviewContent"></div></section>
-      <section class="panel" id="panel-dis"><div id="disContent"></div></section>
-      <section class="panel" id="panel-bas"><div id="basContent"></div></section>
-      <section class="panel" id="panel-hrs"><div id="hrsContent"></div></section>
-      <section class="panel" id="panel-hid"><div id="hidContent"></div></section>
-      <section class="panel" id="panel-iopt"><div id="ioptContent"></div></section>
-      <section class="panel" id="panel-runtime"><div id="runtimeContent"></div></section>
-      <section class="panel" id="panel-comparison"><div id="comparisonContent"></div></section>
-      <section class="panel" id="panel-sources"><div id="sourcesContent"></div></section>
+      <section class="panel active" id="panel-overview" aria-labelledby="nav-overview" tabindex="-1" aria-hidden="false"><div id="overviewContent"></div></section>
+      <section class="panel" id="panel-dis" aria-labelledby="nav-dis" tabindex="-1" aria-hidden="true"><div id="disContent"></div></section>
+      <section class="panel" id="panel-bas" aria-labelledby="nav-bas" tabindex="-1" aria-hidden="true"><div id="basContent"></div></section>
+      <section class="panel" id="panel-hrs" aria-labelledby="nav-hrs" tabindex="-1" aria-hidden="true"><div id="hrsContent"></div></section>
+      <section class="panel" id="panel-hid" aria-labelledby="nav-hid" tabindex="-1" aria-hidden="true"><div id="hidContent"></div></section>
+      <section class="panel" id="panel-iopt" aria-labelledby="nav-iopt" tabindex="-1" aria-hidden="true"><div id="ioptContent"></div></section>
+      <section class="panel" id="panel-runtime" aria-labelledby="nav-runtime" tabindex="-1" aria-hidden="true"><div id="runtimeContent"></div></section>
+      <section class="panel" id="panel-comparison" aria-labelledby="nav-comparison" tabindex="-1" aria-hidden="true"><div id="comparisonContent"></div></section>
+      <section class="panel" id="panel-sources" aria-labelledby="nav-sources" tabindex="-1" aria-hidden="true"><div id="sourcesContent"></div></section>
 
       <div class="footer-note">
         הדוח נטען מקובץ נתונים חיצוני: <code>data/report-data.js</code>.
@@ -107,6 +109,9 @@
   </div>
 
   <script src="data/report-data.js"></script>
-  <script src="assets/report.js"></script>
+  <script src="assets/state.js"></script>
+  <script src="assets/persistence.js"></script>
+  <script src="assets/render.js"></script>
+  <script src="assets/events.js"></script>
 </body>
 </html>
