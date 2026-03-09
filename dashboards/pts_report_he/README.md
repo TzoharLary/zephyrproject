@@ -150,6 +150,7 @@ py dashboards/pts_report_he/serve_with_run_status.py --no-open
   - `dashboards/pts_report_he/assets/persistence.js`
   - `dashboards/pts_report_he/assets/render.js`
   - `dashboards/pts_report_he/assets/events.js`
+  - `dashboards/pts_report_he/assets/report.js` <!-- legacy entrypoint, kept for backward compatibility -->
   - `dashboards/pts_report_he/assets/report.css`
   - `dashboards/pts_report_he/shared-tokens.css`
   - `dashboards/pts_report_he/data/report-data.js`
