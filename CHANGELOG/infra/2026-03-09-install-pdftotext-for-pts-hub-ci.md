@@ -20,7 +20,7 @@
 - Devs: בדיקת `PTS Hub Checks` יכולה להריץ את build ה-dashboard בצורה עקבית ב-GitHub Actions במקום להיכשל על חסר סביבתי.
 
 ## References
-- Commit: `pending (no commit in this task)`
+- Commit: `a3d955f`
 - Files:
   - `.github/workflows/pts-hub-check.yml`
   - `CHANGELOG/infra/2026-03-09-install-pdftotext-for-pts-hub-ci.md`
