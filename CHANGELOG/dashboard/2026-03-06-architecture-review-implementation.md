@@ -39,7 +39,7 @@
 - Devs: מבנה JS מודולרי ברור; קל לתחזק ולהרחיב. README מסביר בדיוק מה לערוך ואיפה. Smoke tests לתפיסת רגרסיות.
 
 ## References
-- Commit: a2bcee4
+- Commit: 00004a6
 - Files:
   - `tools/templates/pts_report_he/state.js` (new)
   - `tools/templates/pts_report_he/persistence.js` (new)

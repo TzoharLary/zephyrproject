@@ -25,7 +25,7 @@ Copilot's automated review of PR #9 identified three issues:
 - **Devs**: Reduced risk of ReferenceError crashes in run-status update handlers; clearer build artifact documentation for troubleshooting.
 
 ## References
-- Commit: 2bcf70b
+- Commit: 61db778
 - PR: #9 (Implement all ARCHITECTURE_REVIEW_HE.md gaps)
 - Copilot Review: https://github.com/TzoharLary/zephyrproject/pull/9
 - Files:
