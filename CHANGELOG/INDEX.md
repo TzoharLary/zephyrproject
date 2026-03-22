@@ -4,6 +4,7 @@
 
 | Date | Group | Title | Reason (Short) | Commit |
 |---|---|---|---|---|
+| 2026-03-22 | infra | Update profile builder metadata | תיקון metadata קטן ב-profiles DB וב-frontmatter של prompt ה-Profile Builder | pending |
 | 2026-03-09 | infra | Reconcile changelog after PR #9 rebase | עדכון hashes של רשומות PR #9 אחרי rebase כך שישקפו את ה-hashes הממוזגים בפועל | pending |
 | 2026-03-09 | infra | Install `pdftotext` for PTS Hub CI | הוספת `poppler-utils` ל-runner כדי שה-build של דשבורד PTS לא ייכשל על חסר סביבתי | a3d955f |
 | 2026-03-09 | dashboard | Fix Copilot PR Review Comments | הסר owner/reviewer enforcement, guard CSS.escape, update README assets | 61db778 |

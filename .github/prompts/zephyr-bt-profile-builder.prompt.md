@@ -1,7 +1,6 @@
 ---
-mode: agent
+agent: agent
 description: "Zephyr BLE GATT Profile Builder — Structured 5-step agent for creating, extending, and documenting Bluetooth Low Energy GATT profiles for Zephyr RTOS. Validates against 24 pre-built profiles (HRS, OTS, HIDS, etc.), classifies complexity, and generates optimized Zephyr code."
-applyTo: 'zephyr/subsys/bluetooth/services/**,zephyr/include/zephyr/bluetooth/services/**'
 ---
 
 # Zephyr BLE GATT Profile Builder — Agent Prompt

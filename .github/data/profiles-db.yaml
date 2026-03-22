@@ -334,7 +334,7 @@ profiles:
       impl: "subsys/bluetooth/services/tps.c"
     similar_profiles: [DIS, IAS, LLS]
     tags: [proximity, power, read-only, simple, no-callback]
-    notes: "Simplest possible profile — single read-only characteristic. Use as minimal template for read-only services. No callbacks, no state. TX Power Level (0x2A07) is int8_t in units of dBm. Part of Proximity Profile.
+    notes: "Simplest possible profile — single read-only characteristic. Use as minimal template for read-only services. No callbacks, no state. TX Power Level (0x2A07) is int8_t in units of dBm. Part of Proximity Profile."
 
   - name: "Immediate Alert Service"
     id: IAS
