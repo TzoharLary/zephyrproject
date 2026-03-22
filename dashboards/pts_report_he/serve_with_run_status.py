@@ -17,6 +17,8 @@ RUN_STATUS_FILE = ROOT_DIR / "data" / "run-status-state.json"
 API_PATH = "/api/run-status"
 GROUP_B_TASKS_FILE = ROOT_DIR / "autopts" / "data" / "group-b-task-state.json"
 GROUP_B_TASKS_API_PATH = "/api/group-b-tasks"
+PRIMARY_PAGE_PATH = "/autopts/index.html"
+MAIN_DASHBOARD_PATH = "/index.html"
 SCHEMA_VERSION = 1
 GROUP_B_TASKS_SCHEMA_VERSION = 1
 GROUP_B_TASKS_PROFILE_IDS = ("BPS", "WSS", "SCPS")
@@ -202,6 +204,13 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self) -> None:  # noqa: N802
+        if self.path in {"/", "/autopts", "/autopts/"}:
+            target = PRIMARY_PAGE_PATH if self.path == "/" else "/autopts/index.html"
+            self.send_response(HTTPStatus.FOUND)
+            self.send_header("Location", target)
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            return
         if self.path == API_PATH:
             try:
                 payload = read_run_status_payload()
@@ -292,15 +301,19 @@ def main() -> None:
     ensure_run_status_file()
     ensure_group_b_tasks_file()
     server = ThreadingHTTPServer((args.host, args.port), DashboardHandler)
-    url = f"http://{args.host}:{args.port}/"
-    print(f"Serving {ROOT_DIR} at {url}")
-    print(f"Run-status API: {url}api/run-status")
-    print(f"Group B tasks API: {url}api/group-b-tasks")
+    root_url = f"http://{args.host}:{args.port}/"
+    primary_url = f"http://{args.host}:{args.port}{PRIMARY_PAGE_PATH}"
+    main_dashboard_url = f"http://{args.host}:{args.port}{MAIN_DASHBOARD_PATH}"
+    print(f"Serving {ROOT_DIR} at {root_url}")
+    print(f"Primary page (AutoPTS + Group B): {primary_url}")
+    print(f"Main dashboard page: {main_dashboard_url}")
+    print(f"Run-status API: {root_url}api/run-status")
+    print(f"Group B tasks API: {root_url}api/group-b-tasks")
     print(f"File-backed storage: {RUN_STATUS_FILE}")
     print(f"Group B tasks file: {GROUP_B_TASKS_FILE}")
     if not args.no_open:
         try:
-            webbrowser.open(url)
+            webbrowser.open(primary_url)
         except Exception:
             pass
     try:

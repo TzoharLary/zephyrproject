@@ -56,9 +56,14 @@ python dashboards/pts_report_he/serve_with_run_status.py
 ### 3. מה אמור לקרות
 
 - השרת יעלה על `http://127.0.0.1:8000/`
-- הדפדפן ברירת המחדל ייפתח אוטומטית
+- הדפדפן ברירת המחדל ייפתח אוטומטית לעמוד `AutoPTS + Group B`
+- מהשרת אפשר לעבור בין שני עמודים נפרדים:
+  - `http://127.0.0.1:8000/autopts/index.html` — עמוד `AutoPTS + Group B` (עמוד ברירת המחדל)
+  - `http://127.0.0.1:8000/index.html` — הדשבורד הראשי של PTS
 - תראה/י בטרמינל הודעות כמו:
   - `Serving ... at http://127.0.0.1:8000/`
+  - `Primary page (AutoPTS + Group B): http://127.0.0.1:8000/autopts/index.html`
+  - `Main dashboard page: http://127.0.0.1:8000/index.html`
   - `Run-status API: http://127.0.0.1:8000/api/run-status`
   - `File-backed storage: .../dashboards/pts_report_he/data/run-status-state.json`
 
@@ -142,7 +147,8 @@ py dashboards/pts_report_he/serve_with_run_status.py --no-open
 
 ## קבצים רלוונטיים
 
-- דף ראשי: `dashboards/pts_report_he/index.html`
+- עמוד ברירת מחדל: `dashboards/pts_report_he/autopts/index.html`
+- הדשבורד הראשי: `dashboards/pts_report_he/index.html`
 - שרת עם שמירה לקובץ: `dashboards/pts_report_he/serve_with_run_status.py`
 - קובץ סטטוסים משותף: `dashboards/pts_report_he/data/run-status-state.json`
 - assets generated:

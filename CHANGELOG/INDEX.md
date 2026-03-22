@@ -5,6 +5,7 @@
 | Date | Group | Title | Reason (Short) | Commit |
 |---|---|---|---|---|
 | 2026-03-22 | dashboard | Right-Size PTS Build Documentation | קיצור README של הדשבורד והעברת פירוט מצבי ה-build למסמך ייעודי עקבי עם המימוש בפועל | pending |
+| 2026-03-22 | dashboard | Make AutoPTS hub the default entry page | שינוי ברירת המחדל של השרת כך שייפתח קודם עמוד AutoPTS + Group B, עם מעבר ברור בין שני העמודים | pending |
 | 2026-03-22 | tools | Align PTS build selection with runtime behavior | יישור build/plan/clean כך שבחירה ממוקדת תריץ רק את מה שנבחר ותסביר אמת על קבצים שייכתבו או ידולגו | pending |
 | 2026-03-09 | tools | Modularize `build_pts_report_bundle.py` orchestration | הוספת CLI granular, cache ברמת unit, ו-write-if-changed ל-build של report/hub | pending |
 | 2026-03-22 | infra | Update profile builder metadata | תיקון metadata קטן ב-profiles DB וב-frontmatter של prompt ה-Profile Builder | pending |
