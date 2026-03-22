@@ -4,6 +4,7 @@
 
 | Date | Group | Title | Reason (Short) | Commit |
 |---|---|---|---|---|
+| 2026-03-22 | dashboard | Improve task-board control visibility | חיזוק חזותי לשדות סינון/חיפוש בלוח העבודה + cache-busting לטעינת CSS עדכני לאחר build | pending (no commit in this task) |
 | 2026-03-22 | dashboard | Right-Size PTS Build Documentation | קיצור README של הדשבורד והעברת פירוט מצבי ה-build למסמך ייעודי עקבי עם המימוש בפועל | pending |
 | 2026-03-22 | dashboard | Make AutoPTS hub the default entry page | שינוי ברירת המחדל של השרת כך שייפתח קודם עמוד AutoPTS + Group B, עם מעבר ברור בין שני העמודים | pending |
 | 2026-03-22 | tools | Align PTS build selection with runtime behavior | יישור build/plan/clean כך שבחירה ממוקדת תריץ רק את מה שנבחר ותסביר אמת על קבצים שייכתבו או ידולגו | pending |

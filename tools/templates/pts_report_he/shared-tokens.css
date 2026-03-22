@@ -45,4 +45,12 @@
 
   /* ── Component-specific ─────────────────────────────────────── */
   --glossary-drawer-width: 430px;
+
+  /* ── Compatibility aliases (legacy token names) ─────────────── */
+  --text: var(--ink);
+  --text-muted: var(--muted);
+  --border: var(--line);
+  --border-strong: var(--line-strong);
+  --surface-soft: var(--panel-soft);
+  --bg-soft: #f3f8fc;
 }
