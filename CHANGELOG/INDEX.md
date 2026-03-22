@@ -4,6 +4,9 @@
 
 | Date | Group | Title | Reason (Short) | Commit |
 |---|---|---|---|---|
+| 2026-03-22 | dashboard | Right-Size PTS Build Documentation | קיצור README של הדשבורד והעברת פירוט מצבי ה-build למסמך ייעודי עקבי עם המימוש בפועל | pending |
+| 2026-03-22 | tools | Align PTS build selection with runtime behavior | יישור build/plan/clean כך שבחירה ממוקדת תריץ רק את מה שנבחר ותסביר אמת על קבצים שייכתבו או ידולגו | pending |
+| 2026-03-09 | tools | Modularize `build_pts_report_bundle.py` orchestration | הוספת CLI granular, cache ברמת unit, ו-write-if-changed ל-build של report/hub | pending |
 | 2026-03-22 | infra | Update profile builder metadata | תיקון metadata קטן ב-profiles DB וב-frontmatter של prompt ה-Profile Builder | pending |
 | 2026-03-09 | infra | Reconcile changelog after PR #9 rebase | עדכון hashes של רשומות PR #9 אחרי rebase כך שישקפו את ה-hashes הממוזגים בפועל | pending |
 | 2026-03-09 | infra | Install `pdftotext` for PTS Hub CI | הוספת `poppler-utils` ל-runner כדי שה-build של דשבורד PTS לא ייכשל על חסר סביבתי | a3d955f |

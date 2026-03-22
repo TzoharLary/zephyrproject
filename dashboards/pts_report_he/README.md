@@ -187,6 +187,51 @@ python3 tools/build_pts_report_bundle.py
 
 ה-artifacts המעודכנים ייכתבו ל-`dashboards/pts_report_he/`.
 
+### build של הדשבורד: מה חשוב לדעת
+
+`tools/build_pts_report_bundle.py` הוא הסקריפט שבונה ומעדכן את קבצי הדשבורד שנוצרים אוטומטית.
+
+בפועל:
+- אם שינית משהו רחב או שאת/ה רוצה לרענן הכל, תעשה/י full build.
+- אם שינית רק חלק מסוים, אפשר לעשות build ממוקד ומהיר יותר.
+- אם לא בטוח מה ירוץ, מריצים קודם `plan`.
+
+#### הפקודות שבאמת צריך להכיר
+
+```bash
+# full build רגיל
+python3 tools/build_pts_report_bundle.py
+
+# לראות מראש מה יקרה בלי לכתוב קבצים
+python3 tools/build_pts_report_bundle.py plan --scope report --report-component data --report-data-unit profiles --report-profile BAS
+
+# לעדכן רק מודול JS אחד
+python3 tools/build_pts_report_bundle.py build --scope report --report-component js --report-js-module events
+
+# לעדכן רק את BAS בדוח, בלי לכתוב את קובץ הנתונים הסופי של כל הדוח
+python3 tools/build_pts_report_bundle.py build --scope report --report-component data --report-data-unit profiles --report-profile BAS
+
+# לעדכן רק את נתוני ה-hub
+python3 tools/build_pts_report_bundle.py build --scope hub --hub-component data --hub-data-unit group-b
+
+# לנקות cache של יחידה מסוימת
+python3 tools/build_pts_report_bundle.py clean --scope report --unit report.profile.BAS
+```
+
+#### איך לבחור נכון
+
+- שינית templates, CSS, HTML, או כמה אזורים ביחד: בדרך כלל full build.
+- שינית רק JS module אחד: build ממוקד ל-JS.
+- שינית רק נתונים של profile מסוים כמו `BAS`: build ממוקד לאותו profile.
+- שינית רק את עולם `AutoPTS + Group B`: build ממוקד ל-`hub`.
+- לא ברור מה בדיוק ייבנה: `plan`.
+
+#### איפה נמצא ההסבר המלא
+
+הסבר מפורט יותר, כולל כל המצבים הנתמכים בפועל, נמצא כאן:
+
+`tools/pts_report_bundle_build_modes.md`
+
 ### ארכיטקטורת ה-JS (מודולרית)
 
 ה-JS נטען בסדר הבא (כל מודול תלוי במודולים לפניו):

@@ -1,18 +1,23 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import argparse
 import html
+import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import copy
+import sys
 import zipfile
 import xml.etree.ElementTree as ET
 from collections import Counter
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from autopts_guide_data import build_autopts_guide_data, enforce_autopts_guide_source_policy
 from group_b_hub_data import build_group_b_hub_data, enforce_group_b_hub_source_policy
@@ -92,6 +97,36 @@ HUB_TEMPLATE_JS = HUB_TEMPLATE_DIR / "report.js"
 BUILD_PLAN_MANIFEST = Path("tools/data/pts_profile_build_plans.json")
 RUNTIME_ACTIVE_EXPORT_DEFAULT = Path("tools/runtime_active_tcids.json")
 RUNTIME_ACTIVE_HISTORY_DIR_DEFAULT = Path("tools/runtime_history")
+CACHE_ROOT = Path(".cache/pts_report_bundle")
+CACHE_UNITS_DIR = CACHE_ROOT / "units"
+CACHE_MANIFEST_PATH = CACHE_ROOT / "manifest.json"
+
+REPORT_PROFILES = ("DIS", "BAS", "HRS", "HID")
+REPORT_COMPONENT_CHOICES = (
+    "all",
+    "data",
+    "assets",
+    "html",
+    "css",
+    "shared-tokens",
+    "js",
+    "run-status-seed",
+)
+REPORT_DATA_UNIT_CHOICES = (
+    "all",
+    "core",
+    "profiles",
+    "runtime",
+    "official-sources",
+    "ics-refs",
+    "line-refs",
+    "profile-build-plans",
+    "comparison",
+    "autopts-guide",
+)
+REPORT_JS_MODULE_CHOICES = ("all", "legacy", "state", "persistence", "render", "events")
+HUB_COMPONENT_CHOICES = ("all", "data", "assets", "html", "css", "js")
+HUB_DATA_UNIT_CHOICES = ("all", "group-b", "autopts-guide")
 
 EXPECTED_WORKSPACE_SUFFIX = "/zephyr-master/zephyr-master.pqw6"
 
@@ -3183,7 +3218,1782 @@ def ensure_run_status_state_file(path: Path = OUT_RUN_STATUS_STATE) -> None:
     path.write_text(json.dumps(seed, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def main() -> None:
+@dataclass
+class BuildOptions:
+    command: str
+    scope: str
+    report_components: Set[str]
+    report_data_units: Set[str]
+    report_profiles: Set[str]
+    report_js_modules: Set[str]
+    hub_components: Set[str]
+    hub_data_units: Set[str]
+    report_data_selection_explicit: bool = False
+    hub_data_selection_explicit: bool = False
+    force: bool = False
+    use_cache: bool = True
+    quiet: bool = False
+    json_summary: Optional[Path] = None
+    clean_units: List[str] = field(default_factory=list)
+
+
+@dataclass
+class BuildRunContext:
+    options: BuildOptions
+    shared: Dict[str, Any] = field(default_factory=dict)
+    unit_payloads: Dict[str, Any] = field(default_factory=dict)
+    unit_fingerprints: Dict[str, str] = field(default_factory=dict)
+    unit_statuses: Dict[str, str] = field(default_factory=dict)
+    unit_records: List[Dict[str, Any]] = field(default_factory=list)
+    file_records: List[Dict[str, Any]] = field(default_factory=list)
+    plan_unit_records: List[Dict[str, Any]] = field(default_factory=list)
+    plan_file_records: List[Dict[str, Any]] = field(default_factory=list)
+    plan_notes: List[str] = field(default_factory=list)
+    manifest: Dict[str, Any] = field(default_factory=dict)
+    report_data_plan: Optional["ReportDataPlan"] = None
+    hub_data_plan: Optional["HubDataPlan"] = None
+
+
+@dataclass
+class ReportDataPlan:
+    requested: bool = False
+    selected_units: Set[str] = field(default_factory=set)
+    profiles_to_build: List[str] = field(default_factory=list)
+    needs_runtime: bool = False
+    needs_official_sources: bool = False
+    needs_ics_refs: bool = False
+    needs_line_refs: bool = False
+    needs_profile_build_plans: bool = False
+    needs_autopts_guide: bool = False
+    needs_bundle: bool = False
+    write_output: bool = False
+    output_reason: str = ""
+    notes: List[str] = field(default_factory=list)
+
+
+@dataclass
+class HubDataPlan:
+    requested: bool = False
+    selected_units: Set[str] = field(default_factory=set)
+    needs_autopts_guide: bool = False
+    needs_group_b: bool = False
+    write_output: bool = False
+    output_reason: str = ""
+    notes: List[str] = field(default_factory=list)
+
+
+def stable_json_dumps(payload: Any) -> str:
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def merge_reason(existing: str, new_reason: str) -> str:
+    if not existing:
+        return new_reason
+    if not new_reason or new_reason == existing:
+        return existing
+    existing_parts = [part.strip() for part in existing.split("; ") if part.strip()]
+    if new_reason in existing_parts:
+        return existing
+    return f"{existing}; {new_reason}"
+
+
+def add_plan_unit_entry(entries: Dict[str, Dict[str, Any]], unit: str, status: str, reason: str) -> None:
+    current = entries.get(unit)
+    if current is None:
+        entries[unit] = {"unit": unit, "status": status, "reason": reason}
+        return
+    if status == "selected" and current.get("status") != "selected":
+        current["status"] = "selected"
+    current["reason"] = merge_reason(str(current.get("reason") or ""), reason)
+
+
+def add_plan_file_entry(
+    entries: Dict[str, Dict[str, Any]],
+    path: Path,
+    status: str,
+    unit: str,
+    reason: str,
+) -> None:
+    key = str(path)
+    current = entries.get(key)
+    if current is None:
+        entries[key] = {"path": key, "status": status, "unit": unit, "reason": reason}
+        return
+    if status == "scheduled" and current.get("status") != "scheduled":
+        current["status"] = "scheduled"
+    current["reason"] = merge_reason(str(current.get("reason") or ""), reason)
+
+
+def ordered_profiles(values: Iterable[str]) -> List[str]:
+    selected = set(values)
+    return [profile for profile in REPORT_PROFILES if profile in selected]
+
+
+def sha256_text(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def path_cache_slug(name: str) -> str:
+    return name.replace("/", "__").replace(":", "__").replace(".", "__")
+
+
+def file_digest(path: Path) -> Dict[str, Any]:
+    path = path.resolve()
+    if not path.exists():
+        return {"path": str(path), "exists": False}
+    if path.is_dir():
+        children = []
+        for child in sorted(p for p in path.rglob("*") if p.is_file()):
+            stat = child.stat()
+            children.append(
+                {
+                    "path": str(child.resolve()),
+                    "size": stat.st_size,
+                    "mtime_ns": stat.st_mtime_ns,
+                }
+            )
+        payload = {"path": str(path), "type": "dir", "children": children}
+        payload["sha256"] = sha256_text(stable_json_dumps(payload))
+        return payload
+    data = path.read_bytes()
+    return {
+        "path": str(path),
+        "type": "file",
+        "size": len(data),
+        "sha256": sha256_bytes(data),
+    }
+
+
+def fingerprint_paths(paths: Sequence[Path], extra: Optional[Dict[str, Any]] = None) -> str:
+    payload = {
+        "paths": [file_digest(path) for path in paths],
+        "extra": extra or {},
+    }
+    return sha256_text(stable_json_dumps(payload))
+
+
+def load_cache_manifest() -> Dict[str, Any]:
+    if not CACHE_MANIFEST_PATH.exists():
+        return {"units": {}}
+    try:
+        raw = json.loads(CACHE_MANIFEST_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {"units": {}}
+    if not isinstance(raw, dict):
+        return {"units": {}}
+    raw.setdefault("units", {})
+    return raw
+
+
+def save_cache_manifest(ctx: BuildRunContext) -> None:
+    if not ctx.options.use_cache:
+        return
+    CACHE_ROOT.mkdir(parents=True, exist_ok=True)
+    CACHE_MANIFEST_PATH.write_text(
+        json.dumps(ctx.manifest, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def record_unit(ctx: BuildRunContext, name: str, status: str, note: str = "") -> None:
+    ctx.unit_statuses[name] = status
+    ctx.unit_records.append({"unit": name, "status": status, "note": note})
+
+
+def record_file(ctx: BuildRunContext, path: Path, status: str, unit: str, note: str = "") -> None:
+    ctx.file_records.append(
+        {
+            "path": str(path),
+            "status": status,
+            "unit": unit,
+            "note": note,
+        }
+    )
+
+
+def load_cached_unit(ctx: BuildRunContext, unit_name: str, fingerprint: str) -> Optional[Any]:
+    if not ctx.options.use_cache:
+        return None
+    entry = ((ctx.manifest.get("units") or {}).get(unit_name)) if isinstance(ctx.manifest, dict) else None
+    cache_file = CACHE_UNITS_DIR / f"{path_cache_slug(unit_name)}.json"
+    if not isinstance(entry, dict):
+        return None
+    if entry.get("fingerprint") != fingerprint:
+        return None
+    if not cache_file.exists():
+        return None
+    payload = json.loads(cache_file.read_text(encoding="utf-8"))
+    ctx.unit_payloads[unit_name] = payload
+    ctx.unit_fingerprints[unit_name] = fingerprint
+    record_unit(ctx, unit_name, "cached")
+    return payload
+
+
+def save_cached_unit(ctx: BuildRunContext, unit_name: str, fingerprint: str, payload: Any) -> None:
+    if not ctx.options.use_cache:
+        return
+    CACHE_UNITS_DIR.mkdir(parents=True, exist_ok=True)
+    cache_file = CACHE_UNITS_DIR / f"{path_cache_slug(unit_name)}.json"
+    cache_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    ctx.manifest.setdefault("units", {})[unit_name] = {
+        "fingerprint": fingerprint,
+        "cache_file": str(cache_file),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def load_or_build_unit(
+    ctx: BuildRunContext,
+    unit_name: str,
+    fingerprint: str,
+    build_fn: Callable[[], Any],
+    force: bool = False,
+) -> Any:
+    if unit_name in ctx.unit_payloads and not force:
+        return ctx.unit_payloads[unit_name]
+    if not force:
+        cached = load_cached_unit(ctx, unit_name, fingerprint)
+        if cached is not None:
+            return cached
+    payload = build_fn()
+    ctx.unit_payloads[unit_name] = payload
+    ctx.unit_fingerprints[unit_name] = fingerprint
+    save_cached_unit(ctx, unit_name, fingerprint, payload)
+    record_unit(ctx, unit_name, "built", "forced" if force else "")
+    return payload
+
+
+def write_text_if_changed(ctx: BuildRunContext, unit_name: str, path: Path, content: str) -> str:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        current = path.read_text(encoding="utf-8", errors="replace")
+        if current == content:
+            record_file(ctx, path, "unchanged", unit_name)
+            return "unchanged"
+    status = "created" if not path.exists() else "updated"
+    path.write_text(content, encoding="utf-8")
+    record_file(ctx, path, status, unit_name)
+    return status
+
+
+def record_skipped_output(ctx: BuildRunContext, unit_name: str, path: Path, reason: str) -> None:
+    record_file(ctx, path, "skipped", unit_name, reason)
+
+
+def window_assignment_pattern(var_name: str) -> re.Pattern[str]:
+    return re.compile(rf"window\.{re.escape(var_name)}\s*=\s*(\{{.*\}})\s*;?\s*$", re.DOTALL)
+
+
+def load_existing_window_payload(path: Path, var_name: str) -> Optional[Dict[str, Any]]:
+    if not path.exists():
+        return None
+    text = path.read_text(encoding="utf-8", errors="replace")
+    match = window_assignment_pattern(var_name).search(text)
+    if not match:
+        return None
+    try:
+        payload = json.loads(match.group(1))
+    except Exception:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def deep_copy_json(data: Dict[str, Any]) -> Dict[str, Any]:
+    return copy.deepcopy(data)
+
+
+def set_nested_value(obj: Dict[str, Any], path: Sequence[str], value: Any) -> None:
+    cursor: Any = obj
+    for key in path[:-1]:
+        if not isinstance(cursor, dict) or key not in cursor:
+            return
+        cursor = cursor[key]
+    if isinstance(cursor, dict) and path[-1] in cursor:
+        cursor[path[-1]] = value
+
+
+def get_nested_value(obj: Dict[str, Any], path: Sequence[str]) -> Any:
+    cursor: Any = obj
+    for key in path:
+        if not isinstance(cursor, dict) or key not in cursor:
+            return None
+        cursor = cursor[key]
+    return cursor
+
+
+def normalize_volatile_paths(obj: Dict[str, Any], paths: Sequence[Sequence[str]]) -> Dict[str, Any]:
+    clone = deep_copy_json(obj)
+    for path in paths:
+        set_nested_value(clone, path, "<volatile>")
+    return clone
+
+
+def stabilize_window_payload(
+    candidate: Dict[str, Any],
+    existing_path: Path,
+    var_name: str,
+    volatile_paths: Sequence[Sequence[str]],
+) -> Dict[str, Any]:
+    existing = load_existing_window_payload(existing_path, var_name)
+    if existing is None:
+        return candidate
+    if normalize_volatile_paths(existing, volatile_paths) != normalize_volatile_paths(candidate, volatile_paths):
+        return candidate
+    stabilized = deep_copy_json(candidate)
+    for path in volatile_paths:
+        set_nested_value(stabilized, path, get_nested_value(existing, path))
+    return stabilized
+
+
+def to_window_assignment(var_name: str, payload: Dict[str, Any]) -> str:
+    return f"window.{var_name} = " + json.dumps(payload, ensure_ascii=False) + ";\n"
+
+
+def get_shared_profile_sources(ctx: BuildRunContext) -> Dict[str, Dict[str, Path]]:
+    cached = ctx.shared.get("profile_sources")
+    if isinstance(cached, dict):
+        return cached
+    profile_sources = resolve_profile_sources()
+    validate_profile_sources(profile_sources)
+    ctx.shared["profile_sources"] = profile_sources
+    return profile_sources
+
+
+def get_shared_workspace(ctx: BuildRunContext) -> Dict[str, Any]:
+    cached = ctx.shared.get("workspace")
+    if isinstance(cached, dict):
+        return cached
+    workspace = parse_pqw6(WORKSPACE_PQW6)
+    ctx.shared["workspace"] = workspace
+    return workspace
+
+
+def current_runtime_bundle() -> Dict[str, Any]:
+    runtime_active_path = resolve_runtime_active_export_path()
+    runtime_active = load_runtime_active_export(runtime_active_path)
+    runtime_active_history = collect_runtime_active_history(runtime_active_path)
+    if runtime_active.get("available"):
+        has_current = any(
+            str(entry.get("file") or "") == str(runtime_active.get("file") or "")
+            and str(entry.get("generated_at") or "") == str(runtime_active.get("generated_at") or "")
+            for entry in runtime_active_history
+        )
+        if not has_current:
+            runtime_active["id"] = make_runtime_snapshot_id(runtime_active, len(runtime_active_history))
+            runtime_active_history.insert(0, runtime_active)
+    return {"runtime_active": runtime_active, "runtime_active_history": runtime_active_history}
+
+
+def current_line_refs() -> Dict[str, Any]:
+    line_get_tc = find_line(PTSCONTROL_PY, r"def get_test_case_list\(self, project_name\):")
+    line_is_active = find_line(PTSCONTROL_PY, r"IsActiveTestCase\(project_name, test_case_name\)")
+    line_tspc_grid = find_first_line_containing(
+        ICS_RST_SCRIPT, "grid = [['Parameter Name', 'Selected', 'Description']]"
+    )
+    line_tspc_formula = find_first_line_containing(
+        ICS_RST_SCRIPT, "parameter_name = 'TSPC_{}_{}'.format(profile, table.Item[i].replace('/', '_'))"
+    )
+    line_tspc_desc = find_first_line_containing(
+        ICS_RST_SCRIPT, "description = f'{table.Capability[i]} ({table.Status[i]})'"
+    )
+    return {
+        "active_runtime": {
+            "file": str(PTSCONTROL_PY),
+            "line_get_tc": line_get_tc,
+            "line_is_active": line_is_active,
+        },
+        "tspc_formula": {
+            "file": str(ICS_RST_SCRIPT),
+            "line_grid": line_tspc_grid,
+            "line_formula": line_tspc_formula,
+            "line_desc": line_tspc_desc,
+        },
+    }
+
+
+def collect_profile_workspace_rows(profile: str, pqw6: Dict[str, Any]) -> List[Dict[str, Any]]:
+    if profile == "HID":
+        hid_rows: List[Dict[str, Any]] = []
+        for row in pqw6["IOPT"]:
+            if not row["name"].startswith("TSPC_"):
+                continue
+            name_norm = row["name"].lower()
+            desc_norm = row["desc"].lower()
+            if "hid" not in desc_norm and "hogp" not in desc_norm:
+                continue
+            if (
+                "hid11" in name_norm
+                or "hid11" in desc_norm
+                or "human interface device v1.0" in desc_norm
+                or "v1.1 or later" in desc_norm
+            ):
+                continue
+            hid_rows.append(row)
+        return hid_rows
+    return [row for row in pqw6[profile] if row["name"].startswith("TSPC_")]
+
+
+def build_profile_dataset(
+    ctx: BuildRunContext,
+    profile: str,
+    official_sources: Dict[str, Dict[str, Any]],
+    runtime_bundle: Dict[str, Any],
+) -> Dict[str, Any]:
+    profile_sources = get_shared_profile_sources(ctx)
+    pqw6 = get_shared_workspace(ctx)
+    tc_sheet = profile_tcid_prefix(profile)
+    rows_gatt = read_sheet_rows(profile_sources[profile]["tcrl_gatt"], tc_sheet)
+    tc_rows = extract_tc(rows_gatt, f"{tc_sheet}/", profile_sources[profile]["tcrl_gatt"], tc_sheet)
+
+    rows_iopt = read_sheet_rows(profile_sources[profile]["tcrl_iopt"], "IOPT")
+    iopt_rows = extract_tc(rows_iopt, f"IOPT/{profile}/", profile_sources[profile]["tcrl_iopt"], "IOPT")
+
+    workspace_rows = collect_profile_workspace_rows(profile, pqw6)
+    tspc_rows = build_tspc_entries(workspace_rows, profile)
+    ts_data = extract_ts_profile_data(profile, profile_sources[profile]["ts"], tspc_rows)
+    apply_ts_titles_to_tc_rows(tc_rows, ts_data.get("tcid_titles", {}), profile_sources[profile]["ts"])
+
+    mandatory_rows, optional_rows, conditional_rows = split_mand_opt_cond(tspc_rows)
+    mapping_rows, mapping_summary = build_tspc_tcid_mapping(
+        profile,
+        tspc_rows,
+        tc_rows,
+        official_sources,
+        ts_data,
+    )
+    active_tcids = set(
+        ((runtime_bundle.get("runtime_active") or {}).get("profiles", {}).get(profile, {}) or {}).get(
+            "active_tcids", []
+        )
+    )
+    tcid_rows, tcid_summary = build_tcid_first_mapping(profile, mapping_rows, tc_rows, active_tcids)
+    validate_tcid_compact_fields(profile, tcid_rows)
+    attach_verified_fields_to_tc_rows(tc_rows, tcid_rows, profile)
+    attach_verified_fields_to_tc_rows(iopt_rows, [], f"IOPT/{profile}")
+    validate_verified_fields_in_tc_group(f"tcs.{profile.lower()}", tc_rows)
+    validate_verified_fields_in_tc_group(f"tcs.iopt_{profile.lower()}", iopt_rows)
+    return {
+        "profile": profile,
+        "workspace_project": "IOPT" if profile == "HID" else profile,
+        "workspace_rows": workspace_rows,
+        "tspc_rows": tspc_rows,
+        "summary_rows": {
+            "mandatory": mandatory_rows,
+            "optional": optional_rows,
+            "conditional": conditional_rows,
+        },
+        "tc_rows": tc_rows,
+        "iopt_rows": iopt_rows,
+        "ts_data": ts_data,
+        "ts_public": ts_public_summary(ts_data),
+        "mapping_rows": mapping_rows,
+        "mapping_summary": mapping_summary,
+        "tcid_rows": tcid_rows,
+        "tcid_summary": tcid_summary,
+    }
+
+
+def build_profile_build_plan_data(profile_payloads: Dict[str, Dict[str, Any]]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    return validate_profile_build_plans(
+        load_profile_build_plans_manifest(),
+        {profile: payload["tc_rows"] for profile, payload in profile_payloads.items()},
+    )
+
+
+def build_report_bundle_payload(
+    ctx: BuildRunContext,
+    official_sources: Dict[str, Dict[str, Any]],
+    runtime_bundle: Dict[str, Any],
+    ics_refs: Dict[str, Any],
+    line_refs: Dict[str, Any],
+    profile_payloads: Dict[str, Dict[str, Any]],
+    profile_build_plans: Dict[str, Any],
+    profile_build_plan_validation: Dict[str, Any],
+    autopts_guide: Dict[str, Any],
+) -> Dict[str, Any]:
+    profile_sources = get_shared_profile_sources(ctx)
+    pqw6 = get_shared_workspace(ctx)
+    dis = profile_payloads["DIS"]
+    bas = profile_payloads["BAS"]
+    hrs = profile_payloads["HRS"]
+    hid = profile_payloads["HID"]
+
+    data = {
+        "meta": {
+            "workspace": {
+                "file": str(WORKSPACE_PQW6),
+                "project_lines": pqw6["_project_lines"],
+            },
+            "baseline": {
+                "source": "docs/profiles",
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "comparison_engine_version": "v1.0",
+            },
+            "ics_files": {key: str(value) for key, value in ICS_PDF.items()},
+            "counts": {
+                "dis": {"total": len(dis["tc_rows"]), "categories": category_counts(dis["tc_rows"])},
+                "bas": {"total": len(bas["tc_rows"]), "categories": category_counts(bas["tc_rows"])},
+                "hrs": {"total": len(hrs["tc_rows"]), "categories": category_counts(hrs["tc_rows"])},
+                "hid": {"total": len(hid["tc_rows"]), "categories": category_counts(hid["tc_rows"])},
+            },
+            "active_runtime": line_refs["active_runtime"],
+            "tspc_formula": line_refs["tspc_formula"],
+        },
+        "glossary": {
+            "TSPC": "TSPC הוא פריט יכולת של הפרופיל (שירות/מאפיין/התנהגות) שמוגדר ב-PTS. הוא מתאר מה המוצר מצהיר שהוא תומך בו, ובאיזה מצב.",
+            "TCID": "TCID הוא מזהה של בדיקת תקן ספציפית מתוך TCRL. זה השם הרשמי של הטסט שבודק בפועל את ההתנהגות מול התקן.",
+            "Conditional": "פריט שתלוי בתנאי. בקונפיגורציה הנתונה הוא לא תמיד רלוונטי, ורק אם מתקיים תנאי מסוים הוא משפיע על בחירת בדיקות.",
+            "IOPT": "קבוצת בדיקות שילוב בין פרופילים שונים. המטרה היא לבדוק אינטגרציה בין שירותים פעילים, לא רק תקינות של כל פרופיל בנפרד.",
+            "Mandatory": "האם פריט מוגדר כחובה בקונפיגורציה הנוכחית.",
+            "Value": "הערך בפועל שנבחר בקונפיגורציה (לרוב TRUE/FALSE).",
+            "Category": "סוג/משפחת בדיקה לפי TCRL.",
+        },
+        "glossary_extended": {
+            "TSPC": {
+                "title": "TSPC - יכולות הפרופיל ב-PTS",
+                "short": "מזהה יכולת/דרישה שהמוצר מצהיר עליה בפרופיל מסוים.",
+                "long": "אפשר לחשוב על TSPC כמו 'מתג יכולת' של הפרופיל: האם שירות/מאפיין נתמך, האם חובה, ומה הערך הפעיל כרגע. זה הבסיס להבנת אילו בדיקות צפויות להיות רלוונטיות.",
+                "how_to_read": [
+                    "קודם קוראים את שם ה-TSPC והמשמעות שלו (למשל Battery Level או Manufacturer Name).",
+                    "בודקים Mandatory/Value כדי להבין אם היכולת פעילה וחובה בקונפיגורציה הנוכחית.",
+                    "משווים ל-TCID המשויכים כדי לראות אילו בדיקות מאמתות בפועל את אותה יכולת.",
+                ],
+                "example": {
+                    "profile": "DIS",
+                    "tspc_name": dis["tspc_rows"][0]["name"] if dis["tspc_rows"] else None,
+                    "capability": dis["tspc_rows"][0]["capability"] if dis["tspc_rows"] else None,
+                },
+                "sources": [
+                    {
+                        "file": str(WORKSPACE_PQW6),
+                        "line": pqw6["_project_lines"]["DIS"],
+                        "note": "הגדרות TSPC ב-Workspace",
+                    },
+                    {
+                        "file": str(ICS_RST_SCRIPT),
+                        "line": line_refs["tspc_formula"]["line_formula"],
+                        "note": "יצירת מזהי TSPC",
+                    },
+                ],
+            },
+            "TCID": {
+                "title": "TCID - בדיקת תקן רשמית",
+                "short": "מזהה בדיקה ספציפית מתוך TCRL שה-PTS יודע להריץ.",
+                "long": "TCID הוא שם הטסט הרשמי (למשל BAS/... או DIS/...). זה מה שנבדק בפועל מול התקן, עם תיאור מדויק, קטגוריה ותאריך רלוונטיות.",
+                "how_to_read": [
+                    "קוראים את ה-TCID ואת התיאור המלא של הבדיקה.",
+                    "בודקים קטגוריה (Category) ותאריך רלוונטיות (Active Date).",
+                    "פותחים מקור sheet/row כדי לראות את הרשומה המדויקת ב-TCRL.",
+                ],
+                "example": {
+                    "profile": "BAS",
+                    "tcid": bas["tc_rows"][0]["tcid"] if bas["tc_rows"] else None,
+                    "desc": bas["tc_rows"][0]["desc"] if bas["tc_rows"] else None,
+                },
+                "sources": [
+                    {
+                        "file": str(profile_sources["BAS"]["tcrl_gatt"]),
+                        "sheet": "BAS",
+                        "row": bas["tc_rows"][0]["source"]["row"] if bas["tc_rows"] else None,
+                        "note": "רשומת TCID ב-TCRL",
+                    }
+                ],
+            },
+            "TSPC_TCID_RELATION": {
+                "title": "איך TSPC ו-TCID עובדים יחד",
+                "short": "TSPC מתאר יכולת, TCID בודק אותה בפועל.",
+                "long": "בפועל אין תמיד מיפוי 1:1 קשיח. יכולת אחת יכולה להיבדק בכמה TCID, וחלק מה-TCID תלויים בתנאים. לכן הדוח מציג מיפוי עם רמת ודאות ומקור לכל קשר.",
+                "how_to_read": [
+                    "מתחילים מה-TSPC כדי להבין מה היכולת בפרופיל.",
+                    "פותחים את TCID המשויכים כדי לראות אילו בדיקות מאמתות אותה.",
+                    "בודקים Confidence ומקורות כדי להבין עד כמה המיפוי ודאי.",
+                    "אם אין מיפוי ודאי, קוראים את סיבת ה-unmapped ולא מסיקים מסקנה אוטומטית.",
+                ],
+                "sources": [
+                    {
+                        "file": str(PTSCONTROL_PY),
+                        "line": line_refs["active_runtime"]["line_is_active"],
+                        "note": "בחירת בדיקות פעילות בריצה",
+                    },
+                    {
+                        "file": str(profile_sources["DIS"]["tcrl_gatt"]),
+                        "sheet": "DIS",
+                        "row": 6,
+                        "note": "שורת TCMT ב-TCRL",
+                    },
+                ],
+            },
+        },
+        "profiles_overview": [
+            {
+                "id": "DIS",
+                "name": "DIS",
+                "what_it_is": "פרופיל שמציג מידע מזהה של ההתקן.",
+                "services": "שם יצרן, דגם, גרסה, PnP ID ומזהים נוספים.",
+                "why_it_matters": "עוזר לאינטרופרטיביליות ולזיהוי מדויק של ההתקן בצד השני.",
+            },
+            {
+                "id": "BAS",
+                "name": "BAS",
+                "what_it_is": "פרופיל למידע מצב סוללה.",
+                "services": "Battery Level ונתוני סוללה נוספים (אם נתמכים).",
+                "why_it_matters": "מוודא שצרכני השירות מקבלים דיווחי סוללה תקינים ואחידים.",
+            },
+            {
+                "id": "HRS",
+                "name": "HRS",
+                "what_it_is": "פרופיל למדידת דופק.",
+                "services": "Heart Rate Measurement ותכונות נלוות כמו RR-Interval ו-Energy Expended.",
+                "why_it_matters": "קריטי לאמינות נתוני בריאות ולאינטרופרטיביליות עם אפליקציות/חיישנים.",
+            },
+            {
+                "id": "HID",
+                "name": "HID",
+                "what_it_is": "HID over GATT Profile (HOGP) לקלט משתמש ב-BLE.",
+                "services": "HID Service (HIDS), HID Information, דוחות קלט/פלט ושירותים תלויים לפי HOGP.",
+                "why_it_matters": "מוודא שהתקני קלט BLE עובדים באמינות ובאינטרופרטיביליות מול Hosts תואמים.",
+            },
+        ],
+        "ui_labels": {
+            "overview_title": "סקירה מהירה: חובה / אופציונלי / תלוי-תנאי",
+            "iopt_tab_title": "בדיקות שילוב בין פרופילים (IOPT)",
+            "iopt_intro": "IOPT הן בדיקות שמוודאות שהפרופילים עובדים נכון גם יחד, ולא רק כל אחד בנפרד.",
+            "iopt_deep_intro": "למשל: מוצר יכול לעבור בדיקות DIS ובדיקות BAS בנפרד, אבל להיכשל כשההתנהגות שלהם משולבת בזמן אמת. כאן IOPT נכנס לתמונה.",
+            "iopt_quality_context": "הקבוצה הזו קיימת כחלק מתהליך תקינה רגיל ולא מעידה לבדה על תקלה קיימת; היא נועדה להקטין סיכוני אינטגרציה בין רכיבים.",
+            "iopt_relation_to_issues": "כאשר נכשלים ב-IOPT, לרוב זו אינדיקציה לאי-התאמה בין פרופילים או תלויות קונפיגורציה, ולא בהכרח לבעיה בפרופיל יחיד.",
+        },
+        "ui_presentations": {
+            "tcid_compact_legend": {
+                "title": "מקרא תצוגה קומפקטית",
+                "what_tested": "מה הטסט בודק בפועל (מתוך TCRL/TS).",
+                "why_relevant": "למה הטסט רלוונטי כרגע לפי תנאי TCMT/ICS בקונפיגורציה הנוכחית.",
+                "status": "סטטוס כללי: צפוי לפעול / עשוי לפעול / צפוי לא לפעול / לא ידוע.",
+                "or_logic": "כאשר יש כמה תנאים עבור TCID, הם מוצגים כאפשרויות חלופיות (OR).",
+            }
+        },
+        "column_help": {
+            "profile": "שם הפרופיל שנבדק.",
+            "mandatory_group": "פריטים שמסומנים כחובה בקונפיגורציה.",
+            "optional_group": "פריטים אופציונליים או תלויי-תנאי בקונפיגורציה.",
+            "source": "קבצי מקור ושורות שעליהם נשענת הטענה.",
+            "tspc_id": "מזהה פריט קונפיגורציה ב-PTS.",
+            "ics_item": "מספר הסעיף המקביל במסמך ICS.",
+            "meaning": "המשמעות התפקודית של הפריט במוצר.",
+            "status": "סטטוס במסמך התקן (M/O/C.x).",
+            "mandatory_flag": "האם הוגדר כחובה בקובץ הקונפיגורציה.",
+            "value_flag": "הערך בפועל שהוגדר בקובץ הקונפיגורציה.",
+            "tcid": "מזהה בדיקת תקן רשמית מתוך TCRL.",
+            "tc_category": "קטגוריית הבדיקה לפי TCRL.",
+            "active_date": "תאריך ההפעלה/רלוונטיות של הבדיקה לפי TCRL.",
+            "test_desc": "מה הבדיקה מבצעת בפועל לפי TCRL, ובנוסף כותרות/פירושי TS כשזמינים.",
+            "execution_status": "מצב בדיקה ידני/AutoPTS כולל מבצע לכל מסלול. נשמר מקומית בדפדפן (localStorage).",
+            "membership_preconditions": "שיוך הטסט לפרופיל + תנאי הרצה מעשיים (אם קיימים), עם הסבר ומקורות.",
+            "mapped_tcids": "בדיקות TCID שמופו ליכולת TSPC הזו, עם פירוט נפתח.",
+            "mapping_confidence": "רמת ודאות המיפוי: High כשקיים קשר רשמי ב-TS TCMT, אחרת Unmapped.",
+            "mapping_bucket": "שיוך הפריט בסקירה: חובה / אופציונלי / תלוי-תנאי.",
+            "tcid_conditions": "רשימת תנאי TSPC/TCMT שמשפיעים על ה-TCID הזה, כולל הערכת התנאי בקונפיגורציה הנוכחית.",
+            "tcid_runtime_signal": "הערכת מצב ריצה: likely_active_mandatory / likely_active_optional / likely_inactive / unknown.",
+            "tspc_links_count": "כמה תנאי TSPC משויכים ל-TCID הזה.",
+            "best_confidence": "רמת הוודאות הגבוהה ביותר מתוך כל תנאי המיפוי המשויכים ל-TCID.",
+            "summary_what_tested": "תקציר קצר: מה הטסט בודק בפועל (בשפה פשוטה).",
+            "summary_why_relevant": "תקציר קצר: למה הטסט רלוונטי כרגע לפי תנאי המיפוי.",
+            "summary_status": "סטטוס קומפקטי: expected_active / maybe_active / expected_inactive / unknown.",
+            "runtime_active_fact": "עובדת Runtime מתוך Snapshot אמיתי של PTS: האם ה-TCID הופיע בפועל כפעיל.",
+            "tcid_variant": "וריאנט תנאי עבור אותו TCID כאשר קיימות כמה אפשרויות הפעלה.",
+            "applicable_tspc": "מזהה ה-TSPC הספציפי שרלוונטי לשורת ה-variant הזו.",
+            "ics_ixit_prereq": "תנאי קדם ברמת ICS/IXIT כפי שנגזרים מהסטטוס והפריט.",
+            "pics_pxit_conditions": "תנאי PICS/PXIT בקונפיגורציה (Mandatory/Value) עבור ה-variant.",
+            "execution_notes": "הערות הפעלה פרקטיות: condition_hint, confidence, runtime signal ועובדת Runtime.",
+        },
+        "summary": [
+            {
+                "profile": "DIS",
+                "mandatory": dis["summary_rows"]["mandatory"],
+                "optional": dis["summary_rows"]["optional"],
+                "conditional": dis["summary_rows"]["conditional"],
+                "source": [
+                    source_ref(str(WORKSPACE_PQW6), pqw6["_project_lines"]["DIS"]),
+                    source_ref(str(ICS_PDF["DIS"]), None),
+                ],
+            },
+            {
+                "profile": "BAS",
+                "mandatory": bas["summary_rows"]["mandatory"],
+                "optional": bas["summary_rows"]["optional"],
+                "conditional": bas["summary_rows"]["conditional"],
+                "source": [
+                    source_ref(str(WORKSPACE_PQW6), pqw6["_project_lines"]["BAS"]),
+                    source_ref(str(ICS_PDF["BAS"]), None),
+                ],
+            },
+            {
+                "profile": "HRS",
+                "mandatory": hrs["summary_rows"]["mandatory"],
+                "optional": hrs["summary_rows"]["optional"],
+                "conditional": hrs["summary_rows"]["conditional"],
+                "source": [
+                    source_ref(str(WORKSPACE_PQW6), pqw6["_project_lines"]["HRS"]),
+                    source_ref(str(ICS_PDF["HRS"]), None),
+                ],
+            },
+            {
+                "profile": "HID",
+                "mandatory": hid["summary_rows"]["mandatory"],
+                "optional": hid["summary_rows"]["optional"],
+                "conditional": hid["summary_rows"]["conditional"],
+                "source": [
+                    source_ref(str(WORKSPACE_PQW6), pqw6["_project_lines"]["IOPT"]),
+                    source_ref(str(ICS_PDF["HOGP"]), None),
+                ],
+            },
+        ],
+        "tspc_tables": {
+            "dis": dis["tspc_rows"],
+            "bas": bas["tspc_rows"],
+            "hrs": hrs["tspc_rows"],
+            "hid": hid["tspc_rows"],
+        },
+        "ts_extracted": {
+            "DIS": dis["ts_public"],
+            "BAS": bas["ts_public"],
+            "HRS": hrs["ts_public"],
+            "HID": hid["ts_public"],
+        },
+        "mapping_authoritative": {
+            "source": "TS_TCMT",
+            "profiles": {
+                "DIS": {"rows": dis["mapping_rows"], "summary": dis["mapping_summary"]},
+                "BAS": {"rows": bas["mapping_rows"], "summary": bas["mapping_summary"]},
+                "HRS": {"rows": hrs["mapping_rows"], "summary": hrs["mapping_summary"]},
+                "HID": {"rows": hid["mapping_rows"], "summary": hid["mapping_summary"]},
+            },
+        },
+        "validation_report": {
+            "method": "TS_TCMT authoritative only (no heuristic fallback)",
+            "profiles": {
+                "DIS": {
+                    "tcrl_tcid_count": len(dis["tc_rows"]),
+                    "tcid_with_conditions_count": (dis["tcid_summary"].get("totals") or {}).get("with_conditions_count", 0),
+                    "tcmt_row_count": (dis["ts_data"].get("tcmt") or {}).get("row_count", 0),
+                    "tcmt_mapped_tcid_count": (dis["ts_data"].get("tcmt") or {}).get("mapped_tcid_count", 0),
+                },
+                "BAS": {
+                    "tcrl_tcid_count": len(bas["tc_rows"]),
+                    "tcid_with_conditions_count": (bas["tcid_summary"].get("totals") or {}).get("with_conditions_count", 0),
+                    "tcmt_row_count": (bas["ts_data"].get("tcmt") or {}).get("row_count", 0),
+                    "tcmt_mapped_tcid_count": (bas["ts_data"].get("tcmt") or {}).get("mapped_tcid_count", 0),
+                },
+                "HRS": {
+                    "tcrl_tcid_count": len(hrs["tc_rows"]),
+                    "tcid_with_conditions_count": (hrs["tcid_summary"].get("totals") or {}).get("with_conditions_count", 0),
+                    "tcmt_row_count": (hrs["ts_data"].get("tcmt") or {}).get("row_count", 0),
+                    "tcmt_mapped_tcid_count": (hrs["ts_data"].get("tcmt") or {}).get("mapped_tcid_count", 0),
+                },
+                "HID": {
+                    "tcrl_tcid_count": len(hid["tc_rows"]),
+                    "tcid_with_conditions_count": (hid["tcid_summary"].get("totals") or {}).get("with_conditions_count", 0),
+                    "tcmt_row_count": (hid["ts_data"].get("tcmt") or {}).get("row_count", 0),
+                    "tcmt_mapped_tcid_count": (hid["ts_data"].get("tcmt") or {}).get("mapped_tcid_count", 0),
+                },
+            },
+        },
+        "mapping": {
+            "DIS": {"rows": dis["mapping_rows"]},
+            "BAS": {"rows": bas["mapping_rows"]},
+            "HRS": {"rows": hrs["mapping_rows"]},
+            "HID": {"rows": hid["mapping_rows"]},
+        },
+        "mapping_summary": {
+            "DIS": dis["mapping_summary"],
+            "BAS": bas["mapping_summary"],
+            "HRS": hrs["mapping_summary"],
+            "HID": hid["mapping_summary"],
+        },
+        "mapping_tcid": {
+            "DIS": {"rows": dis["tcid_rows"]},
+            "BAS": {"rows": bas["tcid_rows"]},
+            "HRS": {"rows": hrs["tcid_rows"]},
+            "HID": {"rows": hid["tcid_rows"]},
+        },
+        "mapping_tcid_summary": {
+            "DIS": dis["tcid_summary"],
+            "BAS": bas["tcid_summary"],
+            "HRS": hrs["tcid_summary"],
+            "HID": hid["tcid_summary"],
+        },
+        "runtime_active": runtime_bundle["runtime_active"],
+        "runtime_active_history": runtime_bundle["runtime_active_history"],
+        "ics_refs": ics_refs,
+        "tcs": {
+            "dis": dis["tc_rows"],
+            "bas": bas["tc_rows"],
+            "hrs": hrs["tc_rows"],
+            "hid": hid["tc_rows"],
+            "hogp": hid["tc_rows"],
+            "iopt_bas": bas["iopt_rows"],
+            "iopt_dis": dis["iopt_rows"],
+            "iopt_hrs": hrs["iopt_rows"],
+            "iopt_hid": hid["iopt_rows"],
+        },
+        "profile_build_plans": profile_build_plans,
+        "profile_build_plan_validation": profile_build_plan_validation,
+        "notes": {
+            "hid_ics_missing": [
+                "TSPC_IOPT_1_14",
+                "TSPC_IOPT_2_31a",
+                "TSPC_IOPT_2_31b",
+                "TSPC_IOPT_2_64a",
+                "TSPC_IOPT_2_64b",
+            ]
+        },
+        "links": [
+            {"title": "Battery Service (BAS)", "url": "https://www.bluetooth.com/specifications/specs/battery-service/"},
+            {"title": "Device Information Service (DIS)", "url": "https://www.bluetooth.com/specifications/specs/device-information-service/"},
+            {"title": "Heart Rate Service (HRS)", "url": "https://www.bluetooth.com/specifications/specs/heart-rate-service-1-0/"},
+            {"title": "HID over GATT Profile (HOGP)", "url": "https://www.bluetooth.com/specifications/specs/hid-over-gatt-profile/"},
+        ],
+    }
+
+    data["official_sources"] = official_sources
+    data["comparison"] = build_comparison(data, data["official_sources"])
+    data["auto_pts_guide"] = autopts_guide
+    return data
+
+
+def build_hub_bundle_payload(autopts_guide: Dict[str, Any]) -> Dict[str, Any]:
+    return build_group_b_hub_data(Path("."), autopts_guide=autopts_guide)
+
+
+def report_runtime_input_paths() -> List[Path]:
+    paths = [RUNTIME_ACTIVE_EXPORT_DEFAULT]
+    history_dir = RUNTIME_ACTIVE_HISTORY_DIR_DEFAULT
+    if history_dir.exists():
+        paths.append(history_dir)
+    return paths
+
+
+def report_official_source_paths() -> List[Path]:
+    profile_sources = resolve_profile_sources()
+    validate_profile_sources(profile_sources)
+    paths = [Path(__file__)]
+    for profile in REPORT_PROFILES:
+        src = profile_sources[profile]
+        paths.extend([src["spec"], src["ics"], src["ts"], src["tcrl_gatt"], src["tcrl_trad"], src["tcrl_iopt"]])
+    return paths
+
+
+def profile_source_paths(profile: str) -> List[Path]:
+    profile_sources = resolve_profile_sources()
+    validate_profile_sources(profile_sources)
+    src = profile_sources[profile]
+    return [
+        Path(__file__),
+        WORKSPACE_PQW6,
+        PTSCONTROL_PY,
+        ICS_RST_SCRIPT,
+        src["spec"],
+        src["ics"],
+        src["ts"],
+        src["tcrl_gatt"],
+        src["tcrl_trad"],
+        src["tcrl_iopt"],
+        *report_runtime_input_paths(),
+    ]
+
+
+def ensure_report_runtime_unit(ctx: BuildRunContext, force: bool = False) -> Dict[str, Any]:
+    fingerprint = fingerprint_paths(report_runtime_input_paths(), {"unit": "report.runtime", "script": str(Path(__file__))})
+    return load_or_build_unit(ctx, "report.runtime", fingerprint, current_runtime_bundle, force=force)
+
+
+def ensure_report_official_sources_unit(ctx: BuildRunContext, force: bool = False) -> Dict[str, Any]:
+    fingerprint = fingerprint_paths(report_official_source_paths(), {"unit": "report.official_sources"})
+    return load_or_build_unit(
+        ctx,
+        "report.official_sources",
+        fingerprint,
+        lambda: build_official_sources(get_shared_profile_sources(ctx)),
+        force=force,
+    )
+
+
+def ensure_report_ics_refs_unit(ctx: BuildRunContext, force: bool = False) -> Dict[str, Any]:
+    profile_sources = get_shared_profile_sources(ctx)
+    fingerprint = fingerprint_paths(
+        [Path(__file__)] + [profile_sources[profile]["ics"] for profile in REPORT_PROFILES],
+        {"unit": "report.ics_refs"},
+    )
+    return load_or_build_unit(ctx, "report.ics_refs", fingerprint, find_ics_refs, force=force)
+
+
+def ensure_report_line_refs_unit(ctx: BuildRunContext, force: bool = False) -> Dict[str, Any]:
+    fingerprint = fingerprint_paths([Path(__file__), PTSCONTROL_PY, ICS_RST_SCRIPT], {"unit": "report.line_refs"})
+    return load_or_build_unit(ctx, "report.line_refs", fingerprint, current_line_refs, force=force)
+
+
+def ensure_report_profile_unit(
+    ctx: BuildRunContext,
+    profile: str,
+    official_sources: Dict[str, Dict[str, Any]],
+    runtime_bundle: Dict[str, Any],
+    force: bool = False,
+) -> Dict[str, Any]:
+    fingerprint = fingerprint_paths(profile_source_paths(profile), {"unit": f"report.profile.{profile}"})
+    return load_or_build_unit(
+        ctx,
+        f"report.profile.{profile}",
+        fingerprint,
+        lambda: build_profile_dataset(ctx, profile, official_sources, runtime_bundle),
+        force=force,
+    )
+
+
+def ensure_profile_build_plans_unit(
+    ctx: BuildRunContext,
+    profile_payloads: Dict[str, Dict[str, Any]],
+    force: bool = False,
+) -> Dict[str, Any]:
+    extra = {
+        "unit": "report.profile_build_plans",
+        "profiles": {
+            profile: ctx.unit_fingerprints.get(f"report.profile.{profile}", "")
+            for profile in REPORT_PROFILES
+        },
+    }
+    fingerprint = fingerprint_paths([Path(__file__), BUILD_PLAN_MANIFEST], extra)
+    build_plans, validations = build_profile_build_plan_data(profile_payloads)
+    return load_or_build_unit(
+        ctx,
+        "report.profile_build_plans",
+        fingerprint,
+        lambda: {
+            "profile_build_plans": build_plans,
+            "profile_build_plan_validation": validations,
+        },
+        force=force,
+    )
+
+
+def ensure_autopts_guide_unit(ctx: BuildRunContext, force: bool = False) -> Dict[str, Any]:
+    paths = [
+        Path(__file__),
+        Path("tools/autopts_guide_data.py"),
+        Path("tools/data/autopts_official_sources.json"),
+        Path("auto-pts"),
+    ]
+    fingerprint = fingerprint_paths(paths, {"unit": "shared.autopts_guide"})
+    return load_or_build_unit(
+        ctx,
+        "shared.autopts_guide",
+        fingerprint,
+        lambda: build_autopts_guide_data(Path(".")),
+        force=force,
+    )
+
+
+def ensure_report_bundle_unit(
+    ctx: BuildRunContext,
+    official_sources: Dict[str, Dict[str, Any]],
+    runtime_bundle: Dict[str, Any],
+    ics_refs: Dict[str, Any],
+    line_refs: Dict[str, Any],
+    profile_payloads: Dict[str, Dict[str, Any]],
+    profile_build_plan_data: Dict[str, Any],
+    autopts_guide: Dict[str, Any],
+    force: bool = False,
+) -> Dict[str, Any]:
+    dependency_fingerprints = {
+        unit: ctx.unit_fingerprints.get(unit, "")
+        for unit in [
+            "report.runtime",
+            "report.official_sources",
+            "report.ics_refs",
+            "report.line_refs",
+            "report.profile.DIS",
+            "report.profile.BAS",
+            "report.profile.HRS",
+            "report.profile.HID",
+            "report.profile_build_plans",
+            "shared.autopts_guide",
+        ]
+    }
+    fingerprint = fingerprint_paths([Path(__file__)], {"unit": "report.bundle", "deps": dependency_fingerprints})
+    return load_or_build_unit(
+        ctx,
+        "report.bundle",
+        fingerprint,
+        lambda: build_report_bundle_payload(
+            ctx,
+            official_sources,
+            runtime_bundle,
+            ics_refs,
+            line_refs,
+            profile_payloads,
+            profile_build_plan_data["profile_build_plans"],
+            profile_build_plan_data["profile_build_plan_validation"],
+            autopts_guide,
+        ),
+        force=force,
+    )
+
+
+def ensure_hub_group_b_unit(ctx: BuildRunContext, autopts_guide: Dict[str, Any], force: bool = False) -> Dict[str, Any]:
+    paths = [
+        Path(__file__),
+        Path("tools/group_b_hub_data.py"),
+        Path("tools/autopts_guide_data.py"),
+        Path("tools/templates/pts_report_he/Group_B_data"),
+        Path("tools/data"),
+        Path("docs/profiles/BPS"),
+        Path("docs/profiles/WSS"),
+        Path("docs/profiles/SCPS"),
+    ]
+    fingerprint = fingerprint_paths(
+        paths,
+        {
+            "unit": "hub.group_b",
+            "autopts_guide": ctx.unit_fingerprints.get("shared.autopts_guide", ""),
+        },
+    )
+    return load_or_build_unit(
+        ctx,
+        "hub.group_b",
+        fingerprint,
+        lambda: build_hub_bundle_payload(autopts_guide),
+        force=force,
+    )
+
+
+def write_report_data_output(ctx: BuildRunContext, payload: Dict[str, Any]) -> None:
+    stabilized = stabilize_window_payload(
+        payload,
+        OUT_DATA,
+        "REPORT_DATA",
+        [
+            ("meta", "baseline", "generated_at"),
+            ("auto_pts_guide", "meta", "generated_date"),
+        ],
+    )
+    enforce_workspace_source_consistency(stabilized)
+    enforce_autopts_guide_source_policy(stabilized)
+    write_text_if_changed(ctx, "report.bundle", OUT_DATA, to_window_assignment("REPORT_DATA", stabilized))
+
+
+def write_hub_data_output(ctx: BuildRunContext, payload: Dict[str, Any]) -> None:
+    stabilized = stabilize_window_payload(
+        payload,
+        HUB_OUT_DATA,
+        "AUTOPTS_HUB_DATA",
+        [
+            ("meta", "generated_date"),
+            ("auto_pts_summary", "meta", "generated_date"),
+        ],
+    )
+    enforce_group_b_hub_source_policy(stabilized)
+    write_text_if_changed(ctx, "hub.group_b", HUB_OUT_DATA, to_window_assignment("AUTOPTS_HUB_DATA", stabilized))
+
+
+def template_text(path: Path, fallback: str) -> str:
+    return read_template_or_fallback(path, fallback)
+
+
+def write_report_asset_units(ctx: BuildRunContext, components: Set[str]) -> None:
+    js_modules = ctx.options.report_js_modules
+
+    if "css" in components:
+        write_text_if_changed(ctx, "report.asset.css", OUT_CSS, template_text(TEMPLATE_CSS, CSS_CONTENT))
+    if "shared-tokens" in components:
+        write_text_if_changed(
+            ctx,
+            "report.asset.shared_tokens",
+            OUT_SHARED_TOKENS_CSS,
+            template_text(TEMPLATE_SHARED_TOKENS_CSS, "/* shared-tokens.css missing */\n"),
+        )
+    if "html" in components:
+        write_text_if_changed(ctx, "report.asset.html", OUT_HTML, template_text(TEMPLATE_HTML, HTML_TEMPLATE))
+    if "js" in components:
+        js_map = {
+            "legacy": (OUT_JS, TEMPLATE_JS, JS_CONTENT, "report.asset.js.legacy"),
+            "state": (OUT_STATE_JS, TEMPLATE_STATE_JS, "/* state.js missing */\n", "report.asset.js.state"),
+            "persistence": (
+                OUT_PERSISTENCE_JS,
+                TEMPLATE_PERSISTENCE_JS,
+                "/* persistence.js missing */\n",
+                "report.asset.js.persistence",
+            ),
+            "render": (OUT_RENDER_JS, TEMPLATE_RENDER_JS, "/* render.js missing */\n", "report.asset.js.render"),
+            "events": (OUT_EVENTS_JS, TEMPLATE_EVENTS_JS, "/* events.js missing */\n", "report.asset.js.events"),
+        }
+        for module_name, (out_path, template_path, fallback, unit_name) in js_map.items():
+            if module_name not in js_modules:
+                continue
+            write_text_if_changed(ctx, unit_name, out_path, template_text(template_path, fallback))
+    if "run-status-seed" in components:
+        ensure_run_status_state_file()
+        record_file(ctx, OUT_RUN_STATUS_STATE, "ensured", "report.asset.run_status_seed")
+
+
+def write_hub_asset_units(ctx: BuildRunContext, components: Set[str]) -> None:
+    if "css" in components:
+        write_text_if_changed(
+            ctx,
+            "hub.asset.css",
+            HUB_OUT_CSS,
+            template_text(HUB_TEMPLATE_CSS, "/* hub css template missing */\nbody{font-family:sans-serif;}"),
+        )
+    if "js" in components:
+        write_text_if_changed(
+            ctx,
+            "hub.asset.js",
+            HUB_OUT_JS,
+            template_text(HUB_TEMPLATE_JS, "console.error('hub js template missing');\n"),
+        )
+    if "html" in components:
+        write_text_if_changed(
+            ctx,
+            "hub.asset.html",
+            HUB_OUT_HTML,
+            template_text(HUB_TEMPLATE_HTML, "<!doctype html><html><body>hub template missing</body></html>\n"),
+        )
+
+
+def expand_report_components(values: Set[str]) -> Set[str]:
+    selected = set(values or {"all"})
+    if "all" in selected:
+        return {"data", "html", "css", "shared-tokens", "js", "run-status-seed"}
+    if "assets" in selected:
+        selected.remove("assets")
+        selected.update({"html", "css", "shared-tokens", "js", "run-status-seed"})
+    return selected
+
+
+def expand_hub_components(values: Set[str]) -> Set[str]:
+    selected = set(values or {"all"})
+    if "all" in selected:
+        return {"data", "html", "css", "js"}
+    if "assets" in selected:
+        selected.remove("assets")
+        selected.update({"html", "css", "js"})
+    return selected
+
+
+def expand_report_js_modules(values: Set[str]) -> Set[str]:
+    selected = set(values or {"all"})
+    if "all" in selected:
+        return {"legacy", "state", "persistence", "render", "events"}
+    return selected
+
+
+def expand_report_profiles(values: Set[str]) -> Set[str]:
+    selected = set(values or {"all"})
+    if "all" in selected:
+        return set(REPORT_PROFILES)
+    return selected
+
+
+def expand_report_data_units(values: Set[str], profiles_selected: bool) -> Set[str]:
+    selected = set(values)
+    if not selected and profiles_selected:
+        selected.add("profiles")
+    if not selected:
+        selected.add("all")
+    if "all" in selected:
+        return {
+            "core",
+            "profiles",
+            "runtime",
+            "official-sources",
+            "ics-refs",
+            "line-refs",
+            "profile-build-plans",
+            "comparison",
+            "autopts-guide",
+        }
+    expanded = set(selected)
+    if "core" in expanded:
+        expanded.update({"ics-refs", "line-refs", "profile-build-plans"})
+    return expanded
+
+
+def expand_hub_data_units(values: Set[str]) -> Set[str]:
+    selected = set(values or {"all"})
+    if "all" in selected:
+        return {"group-b", "autopts-guide"}
+    return selected
+
+
+def resolve_report_data_plan(options: BuildOptions) -> ReportDataPlan:
+    plan = ReportDataPlan()
+    if options.scope not in ("all", "report") or "data" not in options.report_components:
+        return plan
+
+    plan.requested = True
+    data_units = set(options.report_data_units)
+    full_data_selection = data_units == expand_report_data_units({"all"}, False)
+    comparison_selected = options.report_data_selection_explicit and "comparison" in data_units
+
+    if not options.report_data_selection_explicit or full_data_selection or comparison_selected:
+        plan.profiles_to_build = list(REPORT_PROFILES)
+        plan.needs_runtime = True
+        plan.needs_official_sources = True
+        plan.needs_ics_refs = True
+        plan.needs_line_refs = True
+        plan.needs_profile_build_plans = True
+        plan.needs_autopts_guide = True
+        plan.needs_bundle = True
+        plan.write_output = True
+        plan.selected_units.add("report.bundle")
+        if options.report_data_selection_explicit and full_data_selection:
+            plan.selected_units.update(
+                {
+                    "report.runtime",
+                    "report.official_sources",
+                    "report.ics_refs",
+                    "report.line_refs",
+                    "report.profile_build_plans",
+                    "shared.autopts_guide",
+                    *[f"report.profile.{profile}" for profile in REPORT_PROFILES],
+                }
+            )
+        if comparison_selected:
+            plan.output_reason = "הבחירה ב-`comparison` עדיין מורחבת ל-build מלא של report-data.js."
+            plan.notes.append("`comparison` עדיין מחושב בתוך `report.bundle`, לכן הבחירה בו מפעילה build מלא של report-data.js.")
+        elif options.report_data_selection_explicit and full_data_selection:
+            plan.output_reason = "הבחירה הנתונה מכסה את כל שכבת הנתונים של ה-report ולכן נכתב report-data.js."
+        else:
+            plan.output_reason = "full report data build כותב את report-data.js."
+        return plan
+
+    if "runtime" in data_units:
+        plan.needs_runtime = True
+        plan.selected_units.add("report.runtime")
+    if "official-sources" in data_units:
+        plan.needs_official_sources = True
+        plan.selected_units.add("report.official_sources")
+    if "ics-refs" in data_units:
+        plan.needs_ics_refs = True
+        plan.selected_units.add("report.ics_refs")
+    if "line-refs" in data_units:
+        plan.needs_line_refs = True
+        plan.selected_units.add("report.line_refs")
+    if "profiles" in data_units:
+        plan.needs_runtime = True
+        plan.needs_official_sources = True
+        plan.profiles_to_build = ordered_profiles(options.report_profiles)
+        for profile in plan.profiles_to_build:
+            plan.selected_units.add(f"report.profile.{profile}")
+    if "profile-build-plans" in data_units or "core" in data_units:
+        plan.needs_profile_build_plans = True
+        plan.needs_runtime = True
+        plan.needs_official_sources = True
+        plan.profiles_to_build = list(REPORT_PROFILES)
+        plan.selected_units.add("report.profile_build_plans")
+    if "ics-refs" in data_units or "core" in data_units:
+        plan.needs_ics_refs = True
+        if "core" in data_units:
+            plan.selected_units.add("report.ics_refs")
+    if "line-refs" in data_units or "core" in data_units:
+        plan.needs_line_refs = True
+        if "core" in data_units:
+            plan.selected_units.add("report.line_refs")
+    if "autopts-guide" in data_units:
+        plan.needs_autopts_guide = True
+        plan.selected_units.add("shared.autopts_guide")
+
+    plan.output_reason = "נבחרו יחידות נתונים פנימיות בלבד, בלי בקשה ל-report-data.js הסופי."
+    return plan
+
+
+def resolve_hub_data_plan(options: BuildOptions) -> HubDataPlan:
+    plan = HubDataPlan()
+    if options.scope not in ("all", "hub") or "data" not in options.hub_components:
+        return plan
+
+    plan.requested = True
+    full_data_selection = not options.hub_data_selection_explicit or options.hub_data_units == expand_hub_data_units({"all"})
+    group_b_selected = "group-b" in options.hub_data_units
+
+    if full_data_selection or group_b_selected:
+        plan.needs_autopts_guide = True
+        plan.needs_group_b = True
+        plan.write_output = True
+        plan.selected_units.add("hub.group_b")
+        if options.hub_data_selection_explicit and "autopts-guide" in options.hub_data_units:
+            plan.selected_units.add("shared.autopts_guide")
+        plan.output_reason = "בחירה זו כותבת את hub-data.js הסופי."
+        return plan
+
+    if "autopts-guide" in options.hub_data_units:
+        plan.needs_autopts_guide = True
+        plan.selected_units.add("shared.autopts_guide")
+        plan.output_reason = "נבחר רענון של הנתון המשותף בלבד, בלי כתיבה של hub-data.js."
+
+    return plan
+
+
+def ensure_execution_plan(ctx: BuildRunContext) -> None:
+    if (
+        ctx.report_data_plan is not None
+        and ctx.hub_data_plan is not None
+        and (ctx.plan_unit_records or ctx.plan_file_records or ctx.plan_notes)
+    ):
+        return
+
+    ctx.report_data_plan = resolve_report_data_plan(ctx.options)
+    ctx.hub_data_plan = resolve_hub_data_plan(ctx.options)
+    unit_entries: Dict[str, Dict[str, Any]] = {}
+    file_entries: Dict[str, Dict[str, Any]] = {}
+    notes: List[str] = []
+
+    report_plan = ctx.report_data_plan
+    hub_plan = ctx.hub_data_plan
+
+    if report_plan.requested:
+        if report_plan.needs_runtime:
+            status = "selected" if "report.runtime" in report_plan.selected_units else "dependency"
+            reason = "נבחר במפורש." if status == "selected" else "תלות ישירה של יחידות report שנבחרו."
+            add_plan_unit_entry(unit_entries, "report.runtime", status, reason)
+        if report_plan.needs_official_sources:
+            status = "selected" if "report.official_sources" in report_plan.selected_units else "dependency"
+            reason = "נבחר במפורש." if status == "selected" else "נדרש כדי לבנות נתוני profiles או build plans."
+            add_plan_unit_entry(unit_entries, "report.official_sources", status, reason)
+        if report_plan.needs_ics_refs:
+            status = "selected" if "report.ics_refs" in report_plan.selected_units else "dependency"
+            reason = "נבחר במפורש." if status == "selected" else "נדרש על ידי ה-build המלא של report."
+            add_plan_unit_entry(unit_entries, "report.ics_refs", status, reason)
+        if report_plan.needs_line_refs:
+            status = "selected" if "report.line_refs" in report_plan.selected_units else "dependency"
+            reason = "נבחר במפורש." if status == "selected" else "נדרש על ידי ה-build המלא של report או alias `core`."
+            add_plan_unit_entry(unit_entries, "report.line_refs", status, reason)
+        for profile in REPORT_PROFILES:
+            unit_name = f"report.profile.{profile}"
+            if profile not in report_plan.profiles_to_build:
+                continue
+            status = "selected" if unit_name in report_plan.selected_units else "dependency"
+            if status == "selected":
+                reason = f"נבחר profile {profile} במפורש."
+            elif report_plan.needs_profile_build_plans and not report_plan.needs_bundle:
+                reason = "נדרש כדי לחשב את profile build plans."
+            else:
+                reason = "נדרש על ידי ה-build המלא של report."
+            add_plan_unit_entry(unit_entries, unit_name, status, reason)
+        if report_plan.needs_profile_build_plans:
+            status = "selected" if "report.profile_build_plans" in report_plan.selected_units else "dependency"
+            reason = "נבחר במפורש." if status == "selected" else "נדרש על ידי ה-build המלא של report."
+            add_plan_unit_entry(unit_entries, "report.profile_build_plans", status, reason)
+        if report_plan.needs_autopts_guide:
+            status = "selected" if "shared.autopts_guide" in report_plan.selected_units else "dependency"
+            reason = "נבחר במפורש." if status == "selected" else "נדרש על ידי ה-build המלא של report."
+            add_plan_unit_entry(unit_entries, "shared.autopts_guide", status, reason)
+        if report_plan.needs_bundle:
+            add_plan_unit_entry(
+                unit_entries,
+                "report.bundle",
+                "selected",
+                "זו היחידה הסופית שמרכיבה את report-data.js."
+                if "report.bundle" in report_plan.selected_units
+                else "נדרשת כדי להרכיב את report-data.js.",
+            )
+
+        if report_plan.write_output:
+            add_plan_file_entry(file_entries, OUT_DATA, "scheduled", "report.bundle", report_plan.output_reason)
+        else:
+            add_plan_file_entry(file_entries, OUT_DATA, "not-scheduled", "report.bundle", report_plan.output_reason)
+
+    if ctx.options.scope in ("all", "report"):
+        if "html" in ctx.options.report_components:
+            add_plan_file_entry(file_entries, OUT_HTML, "scheduled", "report.asset.html", "נבחר עדכון HTML של report.")
+        if "css" in ctx.options.report_components:
+            add_plan_file_entry(file_entries, OUT_CSS, "scheduled", "report.asset.css", "נבחר עדכון CSS של report.")
+        if "shared-tokens" in ctx.options.report_components:
+            add_plan_file_entry(
+                file_entries,
+                OUT_SHARED_TOKENS_CSS,
+                "scheduled",
+                "report.asset.shared_tokens",
+                "נבחר עדכון shared tokens של report.",
+            )
+        if "js" in ctx.options.report_components:
+            js_plan = {
+                "legacy": (OUT_JS, "report.asset.js.legacy"),
+                "state": (OUT_STATE_JS, "report.asset.js.state"),
+                "persistence": (OUT_PERSISTENCE_JS, "report.asset.js.persistence"),
+                "render": (OUT_RENDER_JS, "report.asset.js.render"),
+                "events": (OUT_EVENTS_JS, "report.asset.js.events"),
+            }
+            for module_name in ctx.options.report_js_modules:
+                out_path, unit_name = js_plan[module_name]
+                add_plan_file_entry(file_entries, out_path, "scheduled", unit_name, f"נבחר עדכון JS module `{module_name}`.")
+        if "run-status-seed" in ctx.options.report_components:
+            add_plan_file_entry(
+                file_entries,
+                OUT_RUN_STATUS_STATE,
+                "scheduled",
+                "report.asset.run_status_seed",
+                "הקובץ יוודא שקיים; הוא ייווצר רק אם חסר.",
+            )
+
+    if hub_plan.requested:
+        if hub_plan.needs_autopts_guide:
+            status = "selected" if "shared.autopts_guide" in hub_plan.selected_units else "dependency"
+            reason = "נבחר במפורש." if status == "selected" else "נדרש כדי לבנות את hub data."
+            add_plan_unit_entry(unit_entries, "shared.autopts_guide", status, reason)
+        if hub_plan.needs_group_b:
+            add_plan_unit_entry(unit_entries, "hub.group_b", "selected", "זו היחידה הסופית שמרכיבה את hub-data.js.")
+        if hub_plan.write_output:
+            add_plan_file_entry(file_entries, HUB_OUT_DATA, "scheduled", "hub.group_b", hub_plan.output_reason)
+        else:
+            add_plan_file_entry(file_entries, HUB_OUT_DATA, "not-scheduled", "hub.group_b", hub_plan.output_reason)
+
+    if ctx.options.scope in ("all", "hub"):
+        if "html" in ctx.options.hub_components:
+            add_plan_file_entry(file_entries, HUB_OUT_HTML, "scheduled", "hub.asset.html", "נבחר עדכון HTML של hub.")
+        if "css" in ctx.options.hub_components:
+            add_plan_file_entry(file_entries, HUB_OUT_CSS, "scheduled", "hub.asset.css", "נבחר עדכון CSS של hub.")
+        if "js" in ctx.options.hub_components:
+            add_plan_file_entry(file_entries, HUB_OUT_JS, "scheduled", "hub.asset.js", "נבחר עדכון JS של hub.")
+
+    notes.extend(report_plan.notes)
+    notes.extend(hub_plan.notes)
+    ctx.plan_unit_records = list(unit_entries.values())
+    ctx.plan_file_records = list(file_entries.values())
+    ctx.plan_notes = notes
+
+
+def materialize_report_data(ctx: BuildRunContext) -> None:
+    ensure_execution_plan(ctx)
+    plan = ctx.report_data_plan or ReportDataPlan()
+    if not plan.requested:
+        return
+    explicit_selection = ctx.options.report_data_selection_explicit
+
+    runtime_bundle: Optional[Dict[str, Any]] = None
+    official_sources: Optional[Dict[str, Dict[str, Any]]] = None
+    ics_refs: Optional[Dict[str, Any]] = None
+    line_refs: Optional[Dict[str, Any]] = None
+    autopts_guide: Optional[Dict[str, Any]] = None
+
+    if plan.needs_runtime:
+        runtime_bundle = ensure_report_runtime_unit(
+            ctx,
+            force=ctx.options.force or (explicit_selection and "report.runtime" in plan.selected_units),
+        )
+    if plan.needs_official_sources:
+        official_sources = ensure_report_official_sources_unit(
+            ctx,
+            force=ctx.options.force or (explicit_selection and "report.official_sources" in plan.selected_units),
+        )
+    if plan.needs_ics_refs:
+        ics_refs = ensure_report_ics_refs_unit(
+            ctx,
+            force=ctx.options.force or (explicit_selection and "report.ics_refs" in plan.selected_units),
+        )
+    if plan.needs_line_refs:
+        line_refs = ensure_report_line_refs_unit(
+            ctx,
+            force=ctx.options.force or (explicit_selection and "report.line_refs" in plan.selected_units),
+        )
+
+    profile_payloads: Dict[str, Dict[str, Any]] = {}
+    for profile in plan.profiles_to_build:
+        if runtime_bundle is None or official_sources is None:
+            raise RuntimeError(f"Missing dependencies for report.profile.{profile}")
+        unit_name = f"report.profile.{profile}"
+        profile_payloads[profile] = ensure_report_profile_unit(
+            ctx,
+            profile,
+            official_sources,
+            runtime_bundle,
+            force=ctx.options.force or (explicit_selection and unit_name in plan.selected_units),
+        )
+
+    profile_build_plan_data: Optional[Dict[str, Any]] = None
+    if plan.needs_profile_build_plans:
+        profile_build_plan_data = ensure_profile_build_plans_unit(
+            ctx,
+            profile_payloads,
+            force=ctx.options.force or (explicit_selection and "report.profile_build_plans" in plan.selected_units),
+        )
+
+    if plan.needs_autopts_guide:
+        autopts_guide = ensure_autopts_guide_unit(
+            ctx,
+            force=ctx.options.force or (explicit_selection and "shared.autopts_guide" in plan.selected_units),
+        )
+
+    if plan.needs_bundle:
+        if not all(
+            [
+                runtime_bundle is not None,
+                official_sources is not None,
+                ics_refs is not None,
+                line_refs is not None,
+                profile_build_plan_data is not None,
+                autopts_guide is not None,
+            ]
+        ):
+            raise RuntimeError("Missing dependencies for report.bundle")
+        report_bundle = ensure_report_bundle_unit(
+            ctx,
+            official_sources,
+            runtime_bundle,
+            ics_refs,
+            line_refs,
+            profile_payloads,
+            profile_build_plan_data,
+            autopts_guide,
+            force=ctx.options.force or (explicit_selection and "report.bundle" in plan.selected_units),
+        )
+        if plan.write_output:
+            write_report_data_output(ctx, report_bundle)
+    else:
+        record_skipped_output(ctx, "report.bundle", OUT_DATA, plan.output_reason)
+
+
+def materialize_hub_data(ctx: BuildRunContext) -> None:
+    ensure_execution_plan(ctx)
+    plan = ctx.hub_data_plan or HubDataPlan()
+    if not plan.requested:
+        return
+    explicit_selection = ctx.options.hub_data_selection_explicit
+
+    autopts_guide: Optional[Dict[str, Any]] = None
+    if plan.needs_autopts_guide:
+        autopts_guide = ensure_autopts_guide_unit(
+            ctx,
+            force=ctx.options.force or (explicit_selection and "shared.autopts_guide" in plan.selected_units),
+        )
+
+    if plan.needs_group_b:
+        if autopts_guide is None:
+            raise RuntimeError("Missing dependencies for hub.group_b")
+        hub_bundle = ensure_hub_group_b_unit(
+            ctx,
+            autopts_guide,
+            force=ctx.options.force or (explicit_selection and "hub.group_b" in plan.selected_units),
+        )
+        if plan.write_output:
+            write_hub_data_output(ctx, hub_bundle)
+    else:
+        record_skipped_output(ctx, "hub.group_b", HUB_OUT_DATA, plan.output_reason)
+
+
+def render_plan(ctx: BuildRunContext) -> str:
+    ensure_execution_plan(ctx)
+    lines = [
+        "Build plan:",
+        f"- command: {ctx.options.command}",
+        f"- scope: {ctx.options.scope}",
+    ]
+    if ctx.options.scope in ("all", "report"):
+        lines.append(f"- report components: {', '.join(sorted(ctx.options.report_components)) or '-'}")
+        if "data" in ctx.options.report_components:
+            lines.append(f"- report data units: {', '.join(sorted(ctx.options.report_data_units)) or '-'}")
+            lines.append(f"- report profiles: {', '.join(sorted(ctx.options.report_profiles)) or '-'}")
+        if "js" in ctx.options.report_components:
+            lines.append(f"- report js modules: {', '.join(sorted(ctx.options.report_js_modules)) or '-'}")
+    if ctx.options.scope in ("all", "hub"):
+        lines.append(f"- hub components: {', '.join(sorted(ctx.options.hub_components)) or '-'}")
+        if "data" in ctx.options.hub_components:
+            lines.append(f"- hub data units: {', '.join(sorted(ctx.options.hub_data_units)) or '-'}")
+    if ctx.plan_unit_records:
+        lines.append("")
+        lines.append("Planned units:")
+        for record in ctx.plan_unit_records:
+            lines.append(f"- {record['unit']} [{record['status']}] {record['reason']}")
+    if ctx.plan_file_records:
+        lines.append("")
+        lines.append("Planned files:")
+        for record in ctx.plan_file_records:
+            lines.append(f"- {record['path']} [{record['status']}] {record['reason']}")
+    if ctx.plan_notes:
+        lines.append("")
+        lines.append("Notes:")
+        for note in ctx.plan_notes:
+            lines.append(f"- {note}")
+    return "\n".join(lines)
+
+
+def print_build_summary(ctx: BuildRunContext) -> None:
+    if ctx.options.quiet:
+        return
+    print("Build summary:")
+    for note in ctx.plan_notes:
+        print(f"  NOTE           {note}")
+    for record in ctx.unit_records:
+        note = f" ({record['note']})" if record.get("note") else ""
+        print(f"  UNIT {record['status']:>8}  {record['unit']}{note}")
+    for record in ctx.file_records:
+        note = f" ({record['note']})" if record.get("note") else ""
+        print(f"  FILE {record['status']:>8}  {record['path']} [{record['unit']}]{note}")
+
+
+def write_summary_json(ctx: BuildRunContext) -> None:
+    if ctx.options.json_summary is None:
+        return
+    ctx.options.json_summary.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "command": ctx.options.command,
+        "scope": ctx.options.scope,
+        "plan": {
+            "units": ctx.plan_unit_records,
+            "files": ctx.plan_file_records,
+            "notes": ctx.plan_notes,
+        },
+        "result": {
+            "units": ctx.unit_records,
+            "files": ctx.file_records,
+        },
+    }
+    ctx.options.json_summary.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def parse_cli_args(argv: Optional[Sequence[str]] = None) -> BuildOptions:
+    raw_args = list(argv if argv is not None else sys.argv[1:])
+    known_commands = {"build", "plan", "clean", "legacy-full-build"}
+    if not raw_args:
+        raw_args = ["build"]
+    elif raw_args[0] not in known_commands and raw_args[0] not in {"-h", "--help"}:
+        raw_args = ["build", *raw_args]
+
+    parser = argparse.ArgumentParser(description="Build PTS report/dashboard bundles with granular selectors.")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    def add_common_build_flags(subparser: argparse.ArgumentParser) -> None:
+        subparser.add_argument("--scope", choices=("all", "report", "hub"), default="all")
+        subparser.add_argument("--report-component", action="append", choices=REPORT_COMPONENT_CHOICES, default=[])
+        subparser.add_argument("--report-data-unit", action="append", choices=REPORT_DATA_UNIT_CHOICES, default=[])
+        subparser.add_argument("--report-profile", action="append", choices=("all", *REPORT_PROFILES), default=[])
+        subparser.add_argument("--report-js-module", action="append", choices=REPORT_JS_MODULE_CHOICES, default=[])
+        subparser.add_argument("--hub-component", action="append", choices=HUB_COMPONENT_CHOICES, default=[])
+        subparser.add_argument("--hub-data-unit", action="append", choices=HUB_DATA_UNIT_CHOICES, default=[])
+        subparser.add_argument("--force", action="store_true")
+        subparser.add_argument("--no-cache", action="store_true")
+        subparser.add_argument("--quiet", action="store_true")
+        subparser.add_argument("--json-summary", default="", help="Optional path to write a JSON execution summary.")
+
+    add_common_build_flags(subparsers.add_parser("build", help="Build selected bundles/components"))
+    add_common_build_flags(subparsers.add_parser("plan", help="Print the normalized build plan without writing outputs"))
+
+    clean_parser = subparsers.add_parser("clean", help="Remove cached unit files")
+    clean_parser.add_argument("--scope", choices=("all", "report", "hub"), default="all")
+    clean_parser.add_argument("--unit", action="append", default=[], help="Optional cache unit name to remove.")
+
+    subparsers.add_parser("legacy-full-build", help="Run the legacy monolithic full build path")
+
+    args = parser.parse_args(raw_args)
+    report_data_selection_explicit = bool(getattr(args, "report_data_unit", [])) or bool(getattr(args, "report_profile", []))
+    hub_data_selection_explicit = bool(getattr(args, "hub_data_unit", []))
+    report_profiles = expand_report_profiles(set(args.report_profile)) if hasattr(args, "report_profile") else set(REPORT_PROFILES)
+    report_components = expand_report_components(set(args.report_component)) if hasattr(args, "report_component") else set()
+    report_data_requested = "data" in report_components or bool(getattr(args, "report_data_unit", [])) or bool(getattr(args, "report_profile", []))
+    report_data_units = (
+        expand_report_data_units(set(args.report_data_unit), bool(getattr(args, "report_profile", [])))
+        if hasattr(args, "report_data_unit") and report_data_requested
+        else set()
+    )
+    report_js_modules = expand_report_js_modules(set(args.report_js_module)) if hasattr(args, "report_js_module") else set()
+    hub_components = expand_hub_components(set(args.hub_component)) if hasattr(args, "hub_component") else set()
+    hub_data_requested = "data" in hub_components or bool(getattr(args, "hub_data_unit", []))
+    hub_data_units = expand_hub_data_units(set(args.hub_data_unit)) if hasattr(args, "hub_data_unit") and hub_data_requested else set()
+    json_summary = Path(args.json_summary) if getattr(args, "json_summary", "") else None
+    return BuildOptions(
+        command=args.command,
+        scope=getattr(args, "scope", "all"),
+        report_components=report_components,
+        report_data_units=report_data_units,
+        report_profiles=report_profiles,
+        report_js_modules=report_js_modules,
+        hub_components=hub_components,
+        hub_data_units=hub_data_units,
+        report_data_selection_explicit=report_data_selection_explicit,
+        hub_data_selection_explicit=hub_data_selection_explicit,
+        force=getattr(args, "force", False),
+        use_cache=not getattr(args, "no_cache", False),
+        quiet=getattr(args, "quiet", False),
+        json_summary=json_summary,
+        clean_units=list(getattr(args, "unit", []) or []),
+    )
+
+
+def clean_cache(scope: str, units: Optional[Sequence[str]] = None) -> int:
+    if not CACHE_ROOT.exists():
+        return 0
+    requested_units = [str(unit).strip() for unit in (units or []) if str(unit).strip()]
+    if requested_units:
+        manifest = load_cache_manifest()
+        manifest_units = manifest.get("units") or {}
+        for unit_name in requested_units:
+            if scope != "all" and not (unit_name.startswith(f"{scope}.") or unit_name == "shared.autopts_guide"):
+                raise ValueError(f"Unit {unit_name} is incompatible with scope {scope}")
+            cache_file = CACHE_UNITS_DIR / f"{path_cache_slug(unit_name)}.json"
+            if cache_file.exists():
+                cache_file.unlink()
+            manifest_units.pop(unit_name, None)
+        CACHE_ROOT.mkdir(parents=True, exist_ok=True)
+        CACHE_MANIFEST_PATH.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        return 0
+    if scope == "all":
+        shutil.rmtree(CACHE_ROOT)
+        return 0
+    manifest = load_cache_manifest()
+    units = manifest.get("units") or {}
+    prefix = "report." if scope == "report" else "hub."
+    for unit_name in list(units.keys()):
+        if not str(unit_name).startswith(prefix):
+            continue
+        cache_file = CACHE_UNITS_DIR / f"{path_cache_slug(unit_name)}.json"
+        if cache_file.exists():
+            cache_file.unlink()
+        units.pop(unit_name, None)
+    CACHE_MANIFEST_PATH.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return 0
+
+
+def run_modular_build(options: BuildOptions) -> int:
+    if options.command == "legacy-full-build":
+        legacy_full_build()
+        return 0
+    if options.command == "clean":
+        clean_units = getattr(options, "clean_units", [])
+        return clean_cache(options.scope, clean_units)
+
+    ctx = BuildRunContext(options=options, manifest=load_cache_manifest())
+    ensure_execution_plan(ctx)
+    if options.command == "plan":
+        print(render_plan(ctx))
+        write_summary_json(ctx)
+        return 0
+
+    if options.scope in ("all", "report"):
+        if "data" in options.report_components:
+            materialize_report_data(ctx)
+        report_asset_components = options.report_components - {"data"}
+        if report_asset_components:
+            write_report_asset_units(ctx, report_asset_components)
+
+    if options.scope in ("all", "hub"):
+        if "data" in options.hub_components:
+            materialize_hub_data(ctx)
+        hub_asset_components = options.hub_components - {"data"}
+        if hub_asset_components:
+            write_hub_asset_units(ctx, hub_asset_components)
+
+    save_cache_manifest(ctx)
+    print_build_summary(ctx)
+    write_summary_json(ctx)
+    return 0
+
+
+def main() -> int:
+    return run_modular_build(parse_cli_args())
+
+
+def legacy_full_build() -> None:
     profile_sources = resolve_profile_sources()
     validate_profile_sources(profile_sources)
     official_sources = build_official_sources(profile_sources)
@@ -4336,4 +6146,4 @@ HTML_TEMPLATE = """<!doctype html>
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
