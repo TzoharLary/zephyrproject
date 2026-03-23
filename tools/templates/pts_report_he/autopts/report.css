@@ -259,6 +259,190 @@ pre code {
   display: none;
 }
 
+.section-nav-card h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
+.section-nav-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.section-nav-btn {
+  border: 1px solid #c8dbe8;
+  background: #f6fbff;
+  color: #174e70;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.section-nav-btn:hover {
+  background: #eaf6ff;
+}
+
+.official-tests-toolbar,
+.code-toolbar,
+.table-copy-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.official-tests-toolbar {
+  margin-bottom: 10px;
+}
+
+.mini-copy-btn {
+  border: 1px solid #c8dbe8;
+  background: #fff;
+  color: #1d4f70;
+  border-radius: 8px;
+  padding: 5px 8px;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mini-copy-btn.copy-ok,
+.mini-btn.copy-ok {
+  background: #e9f9ef;
+  border-color: #7fd0a0;
+  color: #125438;
+}
+
+.mini-copy-btn.copy-failed,
+.mini-btn.copy-failed {
+  background: #fff1f0;
+  border-color: #e7a6a0;
+  color: #8a2e24;
+}
+
+.action-list {
+  display: grid;
+  gap: 10px;
+}
+
+.action-row {
+  display: grid;
+  gap: 8px;
+}
+
+.action-main {
+  font-weight: 700;
+  color: #123b54;
+}
+
+.action-condition {
+  color: var(--muted);
+}
+
+.info-strip {
+  border: 1px solid #d6e7f3;
+  background: #f7fbff;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.implementation-files {
+  display: grid;
+  gap: 10px;
+}
+
+.implementation-file-detail summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-weight: 700;
+}
+
+.implementation-file-detail pre {
+  margin-top: 10px;
+}
+
+.implementation-code-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.95fr);
+  gap: 12px;
+  align-items: start;
+  direction: ltr;
+}
+
+.implementation-code-pane {
+  min-width: 0;
+}
+
+.implementation-code-block,
+.implementation-code-block code {
+  direction: ltr;
+  text-align: left;
+  unicode-bidi: isolate;
+}
+
+.implementation-code-block code {
+  display: block;
+  white-space: pre;
+}
+
+.implementation-explainer {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+  border: 1px solid #d8e6f0;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fbfdff 0%, #f5fbff 100%);
+  padding: 12px;
+}
+
+.implementation-explainer-head h4,
+.implementation-guide-section h5 {
+  margin: 0;
+}
+
+.implementation-explainer-head p,
+.implementation-guide-section p {
+  margin: 0;
+}
+
+.implementation-guide-section {
+  display: grid;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid #dce8f0;
+}
+
+.implementation-guide-section:first-of-type {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.logic-evidence-section {
+  margin-top: 16px;
+}
+
+@media (max-width: 860px) {
+  .section-nav-grid,
+  .official-tests-toolbar,
+  .code-toolbar,
+  .table-copy-head,
+  .implementation-file-detail summary {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .implementation-code-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
 .hub-panel.active {
   display: block;
 }

@@ -67,6 +67,15 @@ const PROFILE_CATEGORY_LABELS = {
 const PROFILE_TYPE_LABELS = { Simple: "פשוט", Complex: "מורכב" };
 const PROFILE_COMPLEXITY_LABELS = { Low: "נמוכה", Medium: "בינונית", High: "גבוהה" };
 const PROFILE_PATTERN_LABELS = { Indicate: "Indicate", Notify: "Notify", Mixed: "משולב", Read: "Read", Write: "Write" };
+const GLOSSARY_INLINE = [
+  ["Indication", "הודעה עם אישור מהלקוח"],
+  ["Notification", "הודעה בלי אישור מהלקוח"],
+  ["ACK", "אישור חזרה מהלקוח"],
+  ["CCCD", "הגדרת ההרשמה של הלקוח"],
+  ["bonding", "זיווג ושמירת אמון"],
+  ["Control Point", "מאפיין פקודות ייעודי"],
+  ["RACP", "מנגנון שליפת רשומות"],
+];
 
 const taskStateApi = {
   available: false,
@@ -218,10 +227,257 @@ function coverageStatusPill(status) {
   return pill("לא הוכח", "optional");
 }
 
+function annotateGlossary(text, seenTerms) {
+  let output = String(text || "");
+  const seen = seenTerms || new Set();
+  for (const [term, explanation] of GLOSSARY_INLINE) {
+    if (seen.has(term)) continue;
+    const pattern = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    if (!pattern.test(output)) continue;
+    output = output.replace(pattern, `${term} (${explanation})`);
+    seen.add(term);
+  }
+  return output;
+}
+
+function officialTestsForProfile(profileId) {
+  return (((((DATA.group_b || {}).overview_presentation || {}).profiles) || {})[profileId] || {}).official_tests || {};
+}
+
+function officialTestRow(profileId, officialRowId) {
+  return ((officialTestsForProfile(profileId).rows || []).find((row) => row.official_row_id === officialRowId)) || null;
+}
+
+function implementationVm(profileId) {
+  return (((((DATA.group_b || {}).implementation_presentation || {}).profiles) || {})[profileId]) || {};
+}
+
+function implementationFile(profileId, fileId) {
+  return ((implementationVm(profileId).files || []).find((row) => row.file_id === fileId)) || null;
+}
+
+async function copyText(text) {
+  const value = String(text || "");
+  if (!value) return false;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    try {
+      await navigator.clipboard.writeText(value);
+      return true;
+    } catch (error) {
+      // Fallback below.
+    }
+  }
+  try {
+    const area = document.createElement("textarea");
+    area.value = value;
+    area.setAttribute("readonly", "readonly");
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.appendChild(area);
+    area.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(area);
+    return ok;
+  } catch (error) {
+    return false;
+  }
+}
+
+function flashCopyButton(button, ok) {
+  if (!button) return;
+  const original = button.getAttribute("data-copy-original-label") || button.textContent || "";
+  button.setAttribute("data-copy-original-label", original);
+  button.textContent = ok ? "הועתק" : "נכשל";
+  button.classList.add(ok ? "copy-ok" : "copy-failed");
+  window.setTimeout(() => {
+    button.textContent = original;
+    button.classList.remove("copy-ok", "copy-failed");
+  }, 1400);
+}
+
 function renderListOrMuted(items, emptyText = "אין נתונים") {
   const rows = (items || []).filter(Boolean);
   if (!rows.length) return `<p class="muted">${esc(emptyText)}</p>`;
   return `<ul class="compact-list">${rows.map((x) => `<li data-searchable="true">${esc(String(x))}</li>`).join("")}</ul>`;
+}
+
+function stripConfidenceFromText(value) {
+  return String(value || "")
+    .split("\n")
+    .filter((line) => !/^\s*"?confidence(?:_scores)?"?\s*:/.test(line))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trimEnd();
+}
+
+function withoutConfidence(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => withoutConfidence(item));
+  }
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+  const out = {};
+  for (const [key, val] of Object.entries(value)) {
+    if (key === "confidence" || key === "confidence_scores") continue;
+    out[key] = withoutConfidence(val);
+  }
+  return out;
+}
+
+function renderJsonPreview(value) {
+  return `<pre><code>${esc(JSON.stringify(withoutConfidence(value), null, 2))}</code></pre>`;
+}
+
+function implementationIncludeExplanation(includePath, filename) {
+  const path = String(includePath || "");
+  const fileStem = String(filename || "").replace(/\.[^.]+$/, "");
+  if (!path) return "מוסיפים כאן תלות נקודתית שנדרשת לקובץ הזה.";
+  if (path === "string.h") return "מייבאים helpers לעבודה על buffer כמו memset או memcpy.";
+  if (path === "stdbool.h") return "מייבאים את טיפוסי bool כדי לבטא gating או state פשוט.";
+  if (path === "stdint.h") return "מייבאים טיפוסים בגודל קבוע עבור payloads ו-wire format.";
+  if (path === "zephyr/kernel.h") return "מייבאים primitives של Zephyr כמו work queue, timing או helpers של kernel.";
+  if (path === "zephyr/bluetooth/bluetooth.h") return "מייבאים APIs כלליים של stack ה-Bluetooth לצורך bring-up או flow בסיסי.";
+  if (path === "zephyr/bluetooth/conn.h") return "מייבאים טיפוסי connection כי הקובץ עובד מול peer מסוים או broadcast.";
+  if (path === "zephyr/bluetooth/gatt.h") return "מייבאים את APIs של GATT עבור service definition, read/write handlers ו-CCC.";
+  if (path === "zephyr/bluetooth/uuid.h") return "מייבאים helpers של UUID כדי להצהיר services ו-characteristics בצורה Zephyr-native.";
+  if (path === "zephyr/logging/log.h") return "מייבאים logging כדי להשאיר trace ברור סביב flow של השירות.";
+  if (path.endsWith(`/${fileStem}.h`) || path === `${fileStem}.h`) {
+    return "מייבאים את ה-header הציבורי של אותו מודול כדי לעבוד מול החוזה המוצהר שלו.";
+  }
+  if (path.endsWith(".h")) {
+    return `מייבאים header מקומי או ספרייתי שמספק טיפוסים/פונקציות עבור ${path.split("/").pop()}.`;
+  }
+  return "מייבאים תלות ממוקדת שנדרשת למסלול המימוש של הקובץ הזה.";
+}
+
+function collectImplementationFunctions(code) {
+  const staticFns = [];
+  const publicFns = [];
+  const seen = new Set();
+  const regex = /^(static\s+)?(?:inline\s+)?(?:const\s+)?[A-Za-z_][\w\s\*]*?\s+([A-Za-z_]\w*)\s*\([^;]*\)\s*\{/gm;
+  const skip = new Set(["if", "for", "while", "switch"]);
+  let match = regex.exec(String(code || ""));
+  while (match) {
+    const isStatic = !!match[1];
+    const name = String(match[2] || "");
+    if (name && !skip.has(name) && !seen.has(name)) {
+      seen.add(name);
+      (isStatic ? staticFns : publicFns).push(name);
+    }
+    match = regex.exec(String(code || ""));
+  }
+  return { staticFns, publicFns };
+}
+
+function summarizeImplementationFunctions(names, labelHe) {
+  const rows = (names || []).filter(Boolean);
+  if (!rows.length) return "";
+  const visible = rows.slice(0, 4);
+  const suffix = rows.length > visible.length ? " ועוד" : "";
+  return `${labelHe}: ${visible.join(", ")}${suffix}.`;
+}
+
+function implementationGuideSections(file) {
+  const code = String(file.code || "");
+  const includeMatches = Array.from(code.matchAll(/^#include\s+[<"]([^>"]+)[>"]/gm));
+  const includes = Array.from(new Set(includeMatches.map((match) => String(match[1] || "")).filter(Boolean)));
+  const functions = collectImplementationFunctions(code);
+  const behavior = [];
+  const rationale = [];
+
+  if (/\bBT_GATT_SERVICE_DEFINE\b/.test(code)) {
+    behavior.push("הקובץ מגדיר כאן את טבלת ה-GATT עצמה, ולכן זה המקום שבו השירות נחשף ללקוח.");
+  }
+  if (/\bBT_GATT_CHARACTERISTIC\b/.test(code)) {
+    behavior.push("רואים כאן את הצהרת ה-characteristics שהלקוח יפגוש בזמן גילוי השירות.");
+  }
+  if (/\bBT_GATT_CCC\b/.test(code)) {
+    behavior.push("מוגדר כאן מסלול CCCD שמחזיק הרשמה של הלקוח ל-notify או indicate.");
+  }
+  if (/\b(bt_gatt_notify|notify)\b/.test(code)) {
+    behavior.push("הקובץ כולל publish path של Notification שמופעל רק אחרי שה-payload כבר מוכן.");
+  }
+  if (/\b(bt_gatt_indicate|indicat)\b/.test(code)) {
+    behavior.push("הקובץ כולל publish path של Indication, ולכן חשוב בו gating מול ACK או subscription.");
+  }
+  if (/\bencode_[A-Za-z_0-9]+\b/.test(code)) {
+    behavior.push("יש כאן שלב encoding שמתרגם מודל נתונים פנימי ל-payload בפורמט BLE-wire.");
+  }
+  if (/\bcan_publish\b/.test(code)) {
+    behavior.push("נמצא כאן gate מפורש שקובע האם מותר לפרסם כרגע או שצריך להמתין.");
+  }
+  if (/\bwrite_[A-Za-z_0-9]+\b/.test(code)) {
+    behavior.push("הקובץ כולל write handler שמקבל קלט מהלקוח ומפרק אותו למבנה פנימי.");
+  }
+  if (/\bread_[A-Za-z_0-9]+\b/.test(code)) {
+    behavior.push("הקובץ כולל read handler שמחזיר ערך ללקוח לפי כללי GATT.");
+  }
+  if (/\b(register_callbacks?|cb_register)\b/.test(code)) {
+    behavior.push("מוגדר כאן חוזה callbacks כדי ששכבות גבוהות יותר יתחברו בלי להיכנס לפרטי ה-GATT.");
+  }
+  const publicSummary = summarizeImplementationFunctions(functions.publicFns, "ה-API הגלוי לשאר המערכת");
+  if (publicSummary) behavior.push(publicSummary);
+  const staticSummary = summarizeImplementationFunctions(functions.staticFns, "הפונקציות הפנימיות ששומרות את פרטי המימוש");
+  if (staticSummary) behavior.push(staticSummary);
+  if (!behavior.length) {
+    behavior.push("זהו קובץ מימוש ממוקד: הקטע משקף את החוזה של הקובץ ואת ה-flow שהוא מחזיק, גם אם אין בו macro בולט כמו GATT service.");
+  }
+
+  const derivationRefs = []
+    .concat((file.derived_from && file.derived_from.logic_ids) || [])
+    .concat((file.derived_from && file.derived_from.structure_ids) || [])
+    .concat((file.derived_from && file.derived_from.pattern_ids) || []);
+  if (file.is_in_structure_inventory) {
+    rationale.push("הקובץ הזה כבר הופיע גם בתכנית המבנה, ולכן כאן רואים את המימוש הקונקרטי של אותו חוזה.");
+  }
+  if (derivationRefs.length) {
+    rationale.push(`הקובץ נגזר מהמזהים: ${derivationRefs.join(", ")}.`);
+  }
+  for (const note of (file.decision_notes_he || [])) {
+    rationale.push(String(note));
+  }
+
+  return [
+    includes.length
+      ? {
+          title: "Imports במקטע הזה",
+          intro: "כאן רואים אילו תלויות הקובץ מושך פנימה כדי לממש בדיוק את האחריות שלו.",
+          items: includes.map((includePath) => `${includePath} — ${implementationIncludeExplanation(includePath, file.filename || "")}`),
+        }
+      : null,
+    {
+      title: "מה הקוד עושה בפועל",
+      intro: file.purpose_he || "זהו תיאור תכליתי של האחריות שמקופלת בקובץ הזה.",
+      items: behavior,
+    },
+    rationale.length
+      ? {
+          title: "למה הוא בנוי כך",
+          intro: "אלה ההחלטות שמסבירות למה הקובץ נראה כך ולא כקובץ גדול או מפוצל יותר.",
+          items: rationale,
+        }
+      : null,
+  ].filter(Boolean);
+}
+
+function renderImplementationGuide(file) {
+  const sections = implementationGuideSections(file);
+  return `
+    <aside class="implementation-explainer" dir="rtl">
+      <div class="implementation-explainer-head">
+        <h4>הסבר על קטע הקוד</h4>
+        <p class="muted">הקוד עצמו נשאר משמאל לימין, וההסבר כאן מתאר מה נמשך פנימה, מה הקובץ עושה, ולמה בחרנו במבנה הזה.</p>
+      </div>
+      ${sections.map((section) => `
+        <section class="implementation-guide-section">
+          <h5>${esc(section.title || "הסבר")}</h5>
+          ${section.intro ? `<p>${esc(section.intro)}</p>` : ""}
+          ${renderListOrMuted(section.items || [], "אין הערות להצגה.")}
+        </section>
+      `).join("")}
+    </aside>
+  `;
 }
 
 function renderNamedObjectKv(obj, labels = {}) {
@@ -869,47 +1125,61 @@ function renderQuickStatus() {
   `;
 }
 
-function renderProfileSubtabGuide(profileId, subtab) {
-  const guides = {
+function renderProfileSectionNavigator(profileId, subtab) {
+  const maps = {
     overview: {
-      title: "איך לקרוא את הסקירה",
-      text: "כאן מתחילים. קודם מבינים מהו הפרופיל, מה המסמכים הרשמיים שיש לנו, ואילו טסטים רשמיים אמורים להיות לו.",
-      bullets: [
-        "אם אתה חדש, זו הלשונית הראשונה שצריך לקרוא.",
-        "טבלת הטסטים למטה היא המקום המהיר להבין מה יש ב-PTS ומה עוד לא מוכח ב-AutoPTS.",
+      title: "מה תרצה לראות?",
+      items: [
+        { label: "מה זה הפרופיל", anchor: `${profileId}-overview-intro` },
+        { label: "איך הוא בנוי לפי התקן", anchor: `${profileId}-overview-spec-shape` },
+        { label: "רשימת הבדיקות", anchor: `${profileId}-overview-tests` },
+        { label: "מה עוד פתוח", anchor: `${profileId}-overview-open` },
       ],
     },
     logic: {
-      title: "איך לקרוא את לשונית הלוגיקה",
-      text: "הלשונית הזו מסבירה מה הפרופיל צריך לדעת לעשות בפועל. קודם קוראים את היכולות והדגשים, ורק אחר כך פותחים את המקורות אם צריך.",
-      bullets: [
-        "התחל ב'תכלס, מה הפרופיל הזה צריך לדעת לעשות'.",
-        "המקורות נשארים זמינים, אבל הם לא נקודת הכניסה.",
+      title: "מה תרצה לראות?",
+      items: [
+        { label: "מה הפרופיל צריך לדעת לעשות", anchor: `${profileId}-logic-actions` },
+        { label: "יכולות ופירוט מקורות", anchor: `${profileId}-logic-evidence` },
+        { label: "מקורות שנחקרו להבנת הלוגיקה", anchor: `${profileId}-logic-sources` },
       ],
     },
     structure: {
-      title: "איך לקרוא את לשונית המבנה",
-      text: "הלשונית הזו מתרגמת את המחקר למבנה קוד ברור: אילו קבצים יהיו, מה האחריות של כל קובץ, ומה לקחנו מזפיר או מ-TI.",
-      bullets: [
-        "התחל מהמבנה המומלץ ותכנית הקבצים.",
-        "פתח את המקורות רק אם אתה רוצה להבין את הרציונל המלא.",
+      title: "מה תרצה לראות?",
+      items: [
+        { label: "איזה מבנה בחרנו", anchor: `${profileId}-structure-choice` },
+        { label: "קבצים ונתיבים", anchor: `${profileId}-structure-files` },
+        { label: "מבנה פנימי", anchor: `${profileId}-structure-blueprints` },
+        { label: "פירוט מקורות", anchor: `${profileId}-structure-sources` },
+      ],
+    },
+    implementation: {
+      title: "מה תרצה לראות?",
+      items: [
+        { label: "רשימת קבצים", anchor: `${profileId}-implementation-files` },
+        { label: "למה זה נבנה כך", anchor: `${profileId}-implementation-decisions` },
+        { label: "פירוט מקורות", anchor: `${profileId}-implementation-sources` },
       ],
     },
     status: {
-      title: "מה נותנת לשונית מצב עבודה נוכחי",
-      text: "ברירת המחדל היא סקירה פשוטה: מה ברור, מה הצעד הבא, ומה עדיין פתוח. המצב המתקדם נשאר כאן רק כשצריך לעבוד עם לוח המשימות המלא.",
-      bullets: [
-        "אם אתה רק מנסה להבין איפה עומדים, מספיק להישאר במצב הפשוט.",
-        "את הלוח המלא פותחים רק כשבאמת צריך לעדכן owner/status או לצלול לשלבים.",
+      title: "מה תרצה לראות?",
+      items: [
+        { label: "מה ברור", anchor: `${profileId}-status-simple` },
+        { label: "מה הצעד הבא", anchor: `${profileId}-status-next-step` },
+        { label: "מה פתוח", anchor: `${profileId}-status-open` },
+        { label: "לוח מתקדם", anchor: `${profileId}-status-advanced` },
       ],
     },
   };
-  const g = guides[subtab] || guides.overview;
+  const map = maps[subtab] || maps.overview;
   return `
-    <section class="hub-card span-12 tab-guide-card" data-searchable="true" data-search-text="${esc(`${profileId} ${subtab} ${g.title} ${g.text}`)}">
-      <h3>${esc(g.title)}</h3>
-      <p>${esc(g.text)}</p>
-      <ul class="compact-list">${(g.bullets || []).map((b) => `<li>${esc(b)}</li>`).join("")}</ul>
+    <section class="hub-card span-12 section-nav-card" data-searchable="true" data-search-text="${esc(`${profileId} ${subtab} ${map.title}`)}">
+      <h3>${esc(map.title)}</h3>
+      <div class="section-nav-grid">
+        ${(map.items || []).map((item) => `
+          <button type="button" class="section-nav-btn" data-hub-anchor="${esc(item.anchor)}">${esc(item.label)}</button>
+        `).join("")}
+      </div>
     </section>
   `;
 }
@@ -1232,10 +1502,11 @@ function renderPatternCards(cards) {
       ${cards.map((card) => `
         <article class="hub-card nested-card" data-searchable="true" data-search-text="${esc(`${card.title_he || ""} ${card.summary_he || ""} ${(card.tags || []).join(" ")}`)}">
           <h4>${esc(card.title_he || "Pattern")}</h4>
-          <p>${esc(card.summary_he || "")}</p>
-          ${(card.highlights_he || []).length ? renderListOrMuted(card.highlights_he, "אין דגשים") : ""}
-          ${(card.tags || []).length ? `<div class="chip-row">${(card.tags || []).map((tag) => pill(tag)).join(" ")}</div>` : ""}
-          ${sourceDetails(card.sources || [], "מקורות pattern")}
+          ${(card.learned_from_he || []).length ? `<div class="obs-row"><span>נלמד מ</span><p>${(card.learned_from_he || []).map((item) => `<code>${esc(item)}</code>`).join(" ")}</p></div>` : ""}
+          <div class="obs-row"><span>הכלל שנלקח</span><p>${esc(card.rule_he || card.summary_he || "")}</p></div>
+          ${(card.relevant_he || card.summary_he) ? `<div class="obs-row"><span>למה זה רלוונטי</span><p>${esc(card.relevant_he || card.summary_he || "")}</p></div>` : ""}
+          ${(card.tags || []).length ? `<div><strong>תגיות תבנית</strong><div class="chip-row">${(card.tags || []).map((tag) => pill(tag)).join(" ")}</div></div>` : ""}
+          ${(card.highlights_he || []).length ? `<details class="inline-detail"><summary>פירוט מקורות</summary><div class="detail-body">${renderListOrMuted(card.highlights_he, "אין דגשים")}${sourceDetails(card.sources || [], "מקורות pattern")}</div></details>` : sourceDetails(card.sources || [], "מקורות pattern")}
         </article>
       `).join("")}
     </div>
@@ -1263,9 +1534,18 @@ function renderOfficialTestsTable(profileId, officialTests) {
           ${rows.map((row) => {
             const noteEntry = testNoteEntry(profileId, row.official_row_id);
             return `
-              <tr data-searchable="true" data-search-text="${esc(`${row.tcid || ""} ${row.title_he || ""} ${row.pts_status || ""} ${row.autopts_status || ""}`)}">
+              <tr data-searchable="true" data-search-text="${esc(`${row.tcid || ""} ${row.tcid_cli || ""} ${row.title_he || ""} ${row.pts_status || ""} ${row.autopts_status || ""}`)}">
                 <td>
-                  <strong>${esc(row.tcid || "-")}</strong>
+                  <div class="table-copy-head">
+                    <strong>${esc(row.tcid || "-")}</strong>
+                    <button
+                      type="button"
+                      class="mini-copy-btn"
+                      data-copy-test-row="${esc(row.copy_value || row.tcid_cli || row.tcid || "")}"
+                      aria-label="העתק את שם הטסט ${esc(row.tcid_cli || row.tcid || "")}"
+                    >העתק</button>
+                  </div>
+                  ${row.tcid_cli ? `<div class="mini-meta"><code>${esc(row.tcid_cli)}</code></div>` : ""}
                   ${row.suite_family ? `<div class="mini-meta">${esc(row.suite_family)}</div>` : ""}
                 </td>
                 <td>
@@ -1311,7 +1591,7 @@ function renderProfileOverviewSimple(profileId) {
   const governance = vm.source_governance || {};
   return `
     <div class="profile-sections">
-      <section class="hub-card" data-searchable="true">
+      <section id="${profileId}-overview-intro" class="hub-card" data-searchable="true" tabindex="-1">
         <h3>מהו הפרופיל הזה בקצרה</h3>
         <p class="lead">${esc(vm.intro_he || "אין עדיין תקציר profile-level.")}</p>
         <div class="kv-grid compact">
@@ -1323,7 +1603,7 @@ function renderProfileOverviewSimple(profileId) {
         ${(vm.known_now_he || []).length ? `<h4>מה אנחנו יודעים עליו כרגע</h4>${renderListOrMuted(vm.known_now_he, "אין עדיין תקציר מצב.")}` : ""}
       </section>
 
-      <section class="hub-card">
+      <section id="${profileId}-overview-spec-shape" class="hub-card" tabindex="-1">
         <h3>איך הוא בנוי לפי התקן</h3>
         <div class="cards-grid two">
           <article class="hub-card nested-card">
@@ -1367,9 +1647,18 @@ function renderProfileOverviewSimple(profileId) {
         ${renderPatternCards(vm.pattern_cards || [])}
       </section>
 
-      <section class="hub-card">
+      <section id="${profileId}-overview-tests" class="hub-card" tabindex="-1">
         <h3>רשימת הבדיקות הרשמיות</h3>
-        <p class="muted">כאן רואים את רשימת ה-TCIDs שחולצה מ-TCRL/TS, ובשפה פשוטה האם הטסט קיים ב-PTS והאם יש לו מימוש ב-AutoPTS. אם צריך, אפשר להשאיר הערה חופשית ליד כל טסט.</p>
+        <p class="muted">כאן רואים את רשימת ה-TCIDs שחולצה מ-TCRL/TS, ובשפה פשוטה האם הטסט קיים ב-PTS והאם יש לו מימוש ב-AutoPTS. אפשר גם להעתיק את כל שמות הטסטים או טסט בודד בפורמט CLI.</p>
+        <div class="official-tests-toolbar">
+          <button
+            type="button"
+            class="mini-btn"
+            data-copy-all-tests="${esc(profileId)}"
+            aria-label="העתק את כל שמות הטסטים של ${esc(uiLabel(profileId))}"
+          >העתק את כל שמות הטסטים</button>
+          <span class="muted">מעתיק את כל טסטי הפרופיל בפורמט שמתאים ל-CLI</span>
+        </div>
         <div class="mini-metrics-grid">
           <div><span>סה"כ טסטים</span><strong>${esc(String((officialTests.summary || {}).total || 0))}</strong></div>
           <div><span>קיים ב-PTS</span><strong>${esc(String((officialTests.summary || {}).pts_present || 0))}</strong></div>
@@ -1401,7 +1690,7 @@ function renderProfileOverviewSimple(profileId) {
         </details>
       </section>
 
-      ${(vm.open_points_he || []).length ? `<section class="hub-card"><h3>מה עדיין פתוח</h3>${renderListOrMuted(vm.open_points_he, "אין כרגע נקודות פתוחות.")}</section>` : ""}
+      <section id="${profileId}-overview-open" class="hub-card" tabindex="-1"><h3>מה עדיין פתוח</h3>${renderListOrMuted(vm.open_points_he || [], "אין כרגע נקודות פתוחות.")}</section>
     </div>
   `;
 }
@@ -1433,53 +1722,79 @@ function renderResearchedSourcesCards(items, kindLabel) {
   `;
 }
 
+function renderExecutionActions(actions) {
+  if (!actions || !actions.length) {
+    return '<p class="muted">אין עדיין רשימת פעולות מסונתזת.</p>';
+  }
+  const seenTerms = new Set();
+  return `
+    <div class="action-list">
+      ${actions.map((action) => `
+        <article class="hub-card nested-card action-row" data-searchable="true" data-search-text="${esc(`${action.action_he || ""} ${action.condition_he || ""}`)}">
+          <div class="action-main">${esc(annotateGlossary(action.action_he || "", seenTerms))}</div>
+          <div class="action-condition">${esc(annotateGlossary(action.condition_he || "", seenTerms))}</div>
+          <details class="inline-detail">
+            <summary>מאיפה למדנו</summary>
+            <div class="detail-body">
+              ${(action.source_badges || []).length ? `<div class="chip-row">${(action.source_badges || []).map((badge) => pill(SOURCE_BADGE_LABELS[badge] || badge)).join(" ")}</div>` : ""}
+              ${(action.finding_ids || []).length ? `<div class="mini-meta">${(action.finding_ids || []).map((id) => `<code>${esc(id)}</code>`).join(" ")}</div>` : ""}
+              ${sourceDetails(action.sources || [], "מקורות פעולה")}
+            </div>
+          </details>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderCapabilityEvidence(cards) {
+  if (!cards || !cards.length) return '<p class="muted">אין כרגע כרטיסי evidence להצגה.</p>';
+  return `
+    <div class="cards-grid two">
+      ${cards.map((card) => `
+        <article class="hub-card nested-card" data-searchable="true" data-search-text="${esc(`${card.title_he || ""} ${card.evidence_he || ""}`)}">
+          <div class="finding-head">
+            <h4>${esc(card.title_he || "Evidence")}</h4>
+            <div class="chip-row">
+              ${(card.source_badges || []).map((badge) => pill(SOURCE_BADGE_LABELS[badge] || badge)).join(" ")}
+            </div>
+          </div>
+          <div class="obs-row"><span>מה הראיה</span><p>${esc(card.evidence_he || "-")}</p></div>
+          <div class="obs-row"><span>למה זה משנה</span><p>${esc(card.reasoning_he || "-")}</p></div>
+          <details class="inline-detail">
+            <summary>פירוט מקורות</summary>
+            <div class="detail-body">
+              ${(card.source_ids || []).length ? `<div class="mini-meta">${(card.source_ids || []).map((sid) => `<code>${esc(sid)}</code>`).join(" ")}</div>` : ""}
+              ${sourceDetails(card.sources || [], "מקורות capability")}
+            </div>
+          </details>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
 function renderProfileLogicSimple(profileId) {
   const vm = ((((DATA.group_b || {}).logic_presentation || {}).profiles) || {})[profileId] || {};
   const summary = vm.logic_summary || {};
-  const capabilities = vm.logic_capabilities || [];
+  const actions = vm.execution_actions || [];
+  const evidence = vm.capability_evidence || [];
   return `
     <div class="profile-sections">
-      <section class="hub-card">
+      <section id="${profileId}-logic-actions" class="hub-card" tabindex="-1">
         <h3>תכלס, מה הפרופיל הזה צריך לדעת לעשות</h3>
         <p class="lead">${esc(summary.summary_he || "אין עדיין סיכום לוגיקה.")}</p>
         ${renderPatternCards(vm.pattern_cards || [])}
-        <div class="cards-grid two">
-          <article class="hub-card nested-card">
-            <h4>מה הוא חייב לעשות</h4>
-            ${renderListOrMuted(summary.must_do_he || summary.behaviors_required_he || [], "אין עדיין סעיפים מסונתזים.")}
-          </article>
-          <article class="hub-card nested-card">
-            <h4>מה לא כלול כרגע / נדחה</h4>
-            ${renderListOrMuted(summary.deferred_he || [], "לא זוהו כרגע פריטים שנדחו מה-scope.")}
-          </article>
-        </div>
+        ${renderExecutionActions(actions)}
         ${summary.important_conditions_he && summary.important_conditions_he.length ? `<h4>דברים שעדיין דורשים בדיקה</h4>${renderListOrMuted(summary.important_conditions_he, "אין")}` : ""}
-        ${capabilities.length ? `
+        ${evidence.length ? `
+          <section id="${profileId}-logic-evidence" class="logic-evidence-section" tabindex="-1">
           <h4>יכולות ופירוט מקורות</h4>
-          <div class="cards-grid two">
-            ${capabilities.map((cap) => `
-              <article class="hub-card nested-card" data-searchable="true" data-search-text="${esc(`${cap.title_he || ""} ${cap.summary_he || ""} ${(cap.source_badges || []).join(" ")}`)}">
-                <div class="finding-head">
-                  <h4>${esc(cap.title_he || "יכולת")}</h4>
-                  <div class="chip-row">
-                    ${coverageStatusPill(cap.status === "required" ? "present" : (cap.status === "unknown" ? "partial" : "missing"))}
-                    ${(cap.source_badges || []).map((badge) => pill(SOURCE_BADGE_LABELS[badge] || badge)).join(" ")}
-                  </div>
-                </div>
-                <p>${esc(cap.summary_he || "")}</p>
-                <details class="inline-detail">
-                  <summary>מאיפה למדנו את זה</summary>
-                  <div class="detail-body">
-                    ${(cap.source_ids || []).length ? `<div class="mini-meta">${(cap.source_ids || []).map((sid) => `<code>${esc(sid)}</code>`).join(" ")}</div>` : ""}
-                    ${sourceDetails(cap.sources || [], "מקורות capability")}
-                  </div>
-                </details>
-              </article>
-            `).join("")}
-          </div>` : ""}
+          ${renderCapabilityEvidence(evidence)}
+          </section>` : ""}
         ${sourceDetails(summary.sources || [], "מקורות הסיכום")}
       </section>
-      <section class="hub-card">
+      <section id="${profileId}-logic-sources" class="hub-card" tabindex="-1">
         <h3>מקורות שנחקרו להבנת הלוגיקה</h3>
         <p class="muted">זה החלק המורחב. אם כל מה שרצית הוא להבין מה הפרופיל עושה, מספיק בדרך כלל לקרוא את הסיכום למעלה.</p>
         ${renderResearchedSourcesCards(vm.researched_sources || [], "לוגיקה")}
@@ -1538,9 +1853,10 @@ function renderProfileStructureSimple(profileId) {
   const referenceCard = vm.reference_profile_card || {};
   return `
     <div class="profile-sections">
-      <section class="hub-card">
+      <section id="${profileId}-structure-choice" class="hub-card" tabindex="-1">
         <h3>איזה מבנה בחרנו</h3>
         <p class="lead">${esc(summary.summary_he || "אין עדיין סיכום מבנה.")}</p>
+        ${summary.structure_choice_he ? `<div class="info-strip">${esc(summary.structure_choice_he)}</div>` : ""}
         <div class="cards-grid two">
           <article class="hub-card nested-card">
             <h4>למה המבנה הזה</h4>
@@ -1562,18 +1878,24 @@ function renderProfileStructureSimple(profileId) {
           <strong>מבנה בסיסי לכל פרופיל:</strong>
           ${esc(baseRef.detail_he || "המקור הבסיסי טרם הוזן; כרגע מוצג fallback מסונתז מהמחקר והחוזה.")}
         </div>
+      </section>
+      <section id="${profileId}-structure-files" class="hub-card" tabindex="-1">
         <h4>תכנית קבצים מוצעת</h4>
-        ${renderStructureFilePlanTable(summary.file_plan || [])}
+        ${renderStructureFilePlanTable(summary.file_inventory || summary.file_plan || [])}
+      </section>
+      <section id="${profileId}-structure-blueprints" class="hub-card" tabindex="-1">
         <h4>מבנה פנימי מוצע לכל קובץ</h4>
-        ${renderFileBlueprints(summary.file_internal_blueprints || [])}
-        ${(summary.vendor_reference_role || {}).zephyr_he ? `
+        ${renderFileBlueprints(summary.internal_blueprints || summary.file_internal_blueprints || [])}
+      </section>
+      <section id="${profileId}-structure-sources" class="hub-card" tabindex="-1">
+        ${(summary.source_roles || summary.vendor_reference_role || {}).zephyr_he ? `
           <details class="hub-detail">
             <summary>מה לקחנו מזפיר / TI / Nordic</summary>
             <div class="detail-body">
-              <div class="obs-row"><span>Zephyr</span><p>${esc((summary.vendor_reference_role || {}).zephyr_he || "-")}</p></div>
-              <div class="obs-row"><span>TI</span><p>${esc((summary.vendor_reference_role || {}).ti_he || "-")}</p></div>
-              <div class="obs-row"><span>Nordic</span><p>${esc((summary.vendor_reference_role || {}).nordic_he || "-")}</p></div>
-              ${sourceDetails((summary.vendor_reference_role || {}).sources || [], "מקורות role mapping")}
+              <div class="obs-row"><span>Zephyr</span><p>${esc(((summary.source_roles || {}).zephyr_he) || ((summary.vendor_reference_role || {}).zephyr_he) || "-")}</p></div>
+              <div class="obs-row"><span>TI</span><p>${esc(((summary.source_roles || {}).ti_he) || ((summary.vendor_reference_role || {}).ti_he) || "-")}</p></div>
+              <div class="obs-row"><span>Nordic</span><p>${esc(((summary.source_roles || {}).nordic_he) || ((summary.vendor_reference_role || {}).nordic_he) || "-")}</p></div>
+              ${sourceDetails(((summary.source_roles || {}).sources) || ((summary.vendor_reference_role || {}).sources) || [], "מקורות role mapping")}
             </div>
           </details>` : ""}
         ${sourceDetails(summary.sources || [], "מקורות סיכום מבנה")}
@@ -1582,6 +1904,103 @@ function renderProfileStructureSimple(profileId) {
         <h3>מקורות שנחקרו להבנת המבנה</h3>
         <p class="muted">החלק הזה מיועד למצב שבו אתה רוצה להבין למה המבנה הוצע דווקא כך, ולא רק מהו המבנה עצמו.</p>
         ${renderResearchedSourcesCards(vm.researched_sources || [], "מבנה")}
+      </section>
+    </div>
+  `;
+}
+
+function renderImplementationFiles(profileId, files) {
+  if (!files || !files.length) return '<p class="muted">אין עדיין קבצי מימוש להצגה.</p>';
+  return `
+    <div class="implementation-files">
+      ${files.map((file) => `
+        <details class="hub-detail implementation-file-detail" data-searchable="true" id="${esc(`${profileId}-impl-file-${file.file_id}`)}">
+          <summary>
+            <span>${esc(file.filename || "-")}</span>
+            <button
+              type="button"
+              class="mini-copy-btn"
+              data-copy-impl-filename="${esc(profileId)}:${esc(file.file_id)}"
+              aria-label="העתק את שם הקובץ ${esc(file.filename || "")}"
+            >העתק שם קובץ</button>
+          </summary>
+          <div class="detail-body">
+            <div class="mini-meta">Relative Path: <code>${esc(file.relative_path || "-")}</code></div>
+            <div class="implementation-code-layout">
+              <div class="implementation-code-pane">
+                <div class="code-toolbar">
+                  <button
+                    type="button"
+                    class="mini-btn"
+                    data-copy-impl-code="${esc(profileId)}:${esc(file.file_id)}"
+                    aria-label="העתק את הקוד של ${esc(file.filename || "")}"
+                  >העתק קוד</button>
+                </div>
+                <pre class="implementation-code-block"><code>${esc(file.code || "")}</code></pre>
+              </div>
+              ${renderImplementationGuide(file)}
+            </div>
+            <details class="inline-detail">
+              <summary>פירוט מקורות</summary>
+              <div class="detail-body">
+                <div class="mini-meta">
+                  ${(file.is_in_structure_inventory ? 'מופיע גם ב-`מבנה`' : 'קובץ שהוגדר מפורשות במימוש')}
+                </div>
+                <div class="mini-meta">
+                  ${(file.derived_from && file.derived_from.logic_ids || []).map((id) => `<code>${esc(id)}</code>`).join(" ")}
+                  ${(file.derived_from && file.derived_from.structure_ids || []).map((id) => `<code>${esc(id)}</code>`).join(" ")}
+                  ${(file.derived_from && file.derived_from.pattern_ids || []).map((id) => `<code>${esc(id)}</code>`).join(" ")}
+                </div>
+                ${sourceDetails(file.sources || [], "מקורות הקובץ")}
+              </div>
+            </details>
+          </div>
+        </details>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderImplementationDecisions(decisions) {
+  if (!decisions || !decisions.length) return '<p class="muted">אין עדיין החלטות מימוש להצגה.</p>';
+  return `
+    <div class="cards-grid two">
+      ${decisions.map((decision) => `
+        <details class="hub-detail">
+          <summary>${esc(decision.title_he || "החלטת מימוש")}</summary>
+          <div class="detail-body">
+            <div class="obs-row"><span>מה החלטנו</span><p>${esc(decision.decision_he || "-")}</p></div>
+            <div class="obs-row"><span>למה</span><p>${esc(decision.why_needed_he || "-")}</p></div>
+            ${decision.pattern_he ? `<div class="obs-row"><span>Pattern</span><p>${esc(decision.pattern_he)}</p></div>` : ""}
+            ${(decision.tags || []).length ? `<div class="chip-row">${(decision.tags || []).map((tag) => pill(tag)).join(" ")}</div>` : ""}
+            ${(decision.applies_to_files || []).length ? `<div class="mini-meta">${(decision.applies_to_files || []).map((fileId) => `<code>${esc(fileId)}</code>`).join(" ")}</div>` : ""}
+            ${sourceDetails(decision.sources || [], "מקורות החלטה")}
+          </div>
+        </details>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderProfileImplementationSimple(profileId) {
+  const vm = implementationVm(profileId);
+  return `
+    <div class="profile-sections">
+      <section id="${profileId}-implementation-files" class="hub-card" tabindex="-1">
+        <h3>מימוש</h3>
+        <p class="lead">${esc(vm.summary_he || "אין עדיין סיכום מימוש.")}</p>
+        ${vm.structure_choice_he ? `<div class="info-strip">${esc(vm.structure_choice_he)}</div>` : ""}
+        ${vm.logic_summary_he ? `<p class="muted">${esc(vm.logic_summary_he)}</p>` : ""}
+        ${renderImplementationFiles(profileId, vm.files || [])}
+      </section>
+      <section id="${profileId}-implementation-decisions" class="hub-card" tabindex="-1">
+        <h3>למה צריך את הקבצים האלה</h3>
+        ${renderImplementationDecisions(vm.decision_summary || [])}
+      </section>
+      <section id="${profileId}-implementation-sources" class="hub-card" tabindex="-1">
+        <h3>פירוט מקורות</h3>
+        ${renderPatternCards(vm.pattern_cards || [])}
+        ${sourceDetails(vm.sources || [], "מקורות מימוש")}
       </section>
     </div>
   `;
@@ -2189,7 +2608,7 @@ function renderProfileCurrentWorkSimple(profileId) {
   const overview = ((((DATA.group_b || {}).overview_presentation || {}).profiles) || {})[profileId] || {};
   return `
     <div class="profile-sections">
-      <section class="hub-card">
+      <section id="${profileId}-status-simple" class="hub-card" tabindex="-1">
         <div class="profile-card-head">
           <div>
             <h3>מה קורה עכשיו באמת</h3>
@@ -2205,13 +2624,13 @@ function renderProfileCurrentWorkSimple(profileId) {
             <h4>מה כבר ברור</h4>
             ${renderListOrMuted(simple.what_is_clear_he || [], "אין עדיין תקציר.")}
           </article>
-          <article class="hub-card nested-card">
+          <article id="${profileId}-status-next-step" class="hub-card nested-card" tabindex="-1">
             <h4>הצעד הבא בפועל</h4>
             <p>${esc(simple.next_step_he || "אין צעד הבא זמין כרגע.")}</p>
             <p class="muted">${esc(simple.advanced_hint_he || "")}</p>
           </article>
         </div>
-        ${(simple.still_open_he || []).length ? `<section class="hub-card nested-card"><h4>מה עדיין פתוח</h4>${renderListOrMuted(simple.still_open_he, "אין חסמים כרגע.")}</section>` : ""}
+        ${(simple.still_open_he || []).length ? `<section id="${profileId}-status-open" class="hub-card nested-card" tabindex="-1"><h4>מה עדיין פתוח</h4>${renderListOrMuted(simple.still_open_he, "אין חסמים כרגע.")}</section>` : ""}
         ${(overview.pattern_cards || []).length ? `<section class="hub-card nested-card"><h4>הדגש הכי חשוב בפרופיל הזה</h4>${renderPatternCards((overview.pattern_cards || []).slice(0, 1))}</section>` : ""}
       </section>
     </div>
@@ -2221,7 +2640,7 @@ function renderProfileCurrentWorkSimple(profileId) {
 function renderProfileCurrentWorkAdvanced(profileId) {
   const ctx = deriveTaskBoardContext(profileId);
   return `
-    <div class="profile-sections">
+    <div id="${profileId}-status-advanced" class="profile-sections" tabindex="-1">
       ${renderTaskBoardControls(profileId, ctx)}
       ${renderTaskBoardSummaryCards(ctx)}
       ${renderTaskBoardStageLayout(profileId, ctx)}
@@ -2305,7 +2724,7 @@ function renderKnowledgeCenterTab() {
                       <div><span>artifacts</span><strong>${esc(String(e.artifact_count || 0))}</strong></div>
                       <div><span>spec dir</span><code>${esc(e.spec_dir || "-")}</code></div>
                     </div>
-                    <details class="inline-detail"><summary>kind_counts</summary><div class="detail-body"><pre><code>${esc(JSON.stringify(e.kind_counts || {}, null, 2))}</code></pre></div></details>
+                    <details class="inline-detail"><summary>kind_counts</summary><div class="detail-body">${renderJsonPreview(e.kind_counts || {})}</div></details>
                     ${e.spec_page_url ? `<a class="mini-btn linkish" target="_blank" rel="noopener" href="${esc(e.spec_page_url)}">עמוד spec</a>` : ""}
                   </article>`).join("")}
               </div>` : '<p class="muted">אין נתוני metadata למפרטים.</p>'}
@@ -2313,7 +2732,7 @@ function renderKnowledgeCenterTab() {
               ${(byId.readiness_validation_qa && (byId.readiness_validation_qa.panels || [])).map((p) => `
                 <article class="hub-card nested-card">
                   <h4>${esc(p.label_he || p.id || "panel")}</h4>
-                  <pre><code>${esc(JSON.stringify(p.data || {}, null, 2))}</code></pre>
+                  ${renderJsonPreview(p.data || {})}
                 </article>`).join("")}
             </div>
             ${["BPS", "WSS", "SCPS"].map((pid) => `
@@ -2333,7 +2752,7 @@ function renderKnowledgeCenterTab() {
               ${(((byId.autopts_deep_dive || {}).panels) || []).map((p) => `
                 <article class="hub-card nested-card">
                   <h4>${esc(p.label_he || p.id || "")}</h4>
-                  <pre><code>${esc(JSON.stringify(p.data || {}, null, 2))}</code></pre>
+                  ${renderJsonPreview(p.data || {})}
                 </article>`).join("")}
             </div>
           </div>
@@ -2348,9 +2767,9 @@ function renderKnowledgeCenterTab() {
               <article class="hub-card nested-card">
                 <h4>${esc(e.ui_label || e.profile_id || "")}</h4>
                 <p class="muted">לוגיקה: <code>${esc(e.logic_path || "-")}</code></p>
-                <details class="inline-detail"><summary>Preview לוגיקה</summary><div class="detail-body"><pre><code>${esc(e.logic_raw_markdown_preview || "")}</code></pre></div></details>
+                <details class="inline-detail"><summary>Preview לוגיקה</summary><div class="detail-body"><pre><code>${esc(stripConfidenceFromText(e.logic_raw_markdown_preview || ""))}</code></pre></div></details>
                 <p class="muted">מבנה: <code>${esc(e.structure_path || "-")}</code></p>
-                <details class="inline-detail"><summary>Preview מבנה</summary><div class="detail-body"><pre><code>${esc(e.structure_raw_markdown_preview || "")}</code></pre></div></details>
+                <details class="inline-detail"><summary>Preview מבנה</summary><div class="detail-body"><pre><code>${esc(stripConfidenceFromText(e.structure_raw_markdown_preview || ""))}</code></pre></div></details>
               </article>`).join("")}
           </div>
         </details>
@@ -2376,7 +2795,7 @@ function renderFindingsCards(findings) {
         <article class="hub-card finding-card" data-searchable="true" data-search-text="${esc(`${f.title_he || ""} ${f.statement_he || ""} ${f.why_it_matters_he || ""}`)}">
           <div class="finding-head">
             <h4>${esc(f.title_he || "ממצא")}</h4>
-            <div class="chip-row">${confidencePill(f.confidence)} ${statusPill(f.status)}</div>
+            <div class="chip-row">${statusPill(f.status)}</div>
           </div>
           <p>${esc(f.statement_he || "")}</p>
           ${f.why_it_matters_he ? `<p class="muted">${esc(f.why_it_matters_he)}</p>` : ""}
@@ -2423,7 +2842,6 @@ function renderSourceObservations(observations) {
         <article class="hub-card source-obs-card" data-searchable="true" data-search-text="${esc(`${o.what_identified_he || ""} ${o.how_identified_he || ""} ${o.source_id || ""}`)}">
           <div class="finding-head">
             <h4>${esc(o.source_id || "מקור")}</h4>
-            <div>${confidencePill(o.confidence)}</div>
           </div>
           <div class="obs-row"><span>מה זוהה</span><p>${esc(o.what_identified_he || "-")}</p></div>
           <div class="obs-row"><span>איך זוהה</span><p>${esc(o.how_identified_he || "-")}</p></div>
@@ -2507,12 +2925,6 @@ function renderKnowledgeDoc(profileId, kind) {
   ];
 
   const implications = analysis.implementation_implications || [];
-  const confidenceMap = analysis.confidence_scores || {};
-  const confidenceChips = Object.keys(confidenceMap).length
-    ? Object.entries(confidenceMap)
-        .map(([k, v]) => `${confidencePill(k)} <span class="muted">x${esc(String(v))}</span>`)
-        .join(" ")
-    : '<span class="muted">אין עדיין confidence distribution</span>';
 
   return `
     <div class="knowledge-layout">
@@ -2539,7 +2951,6 @@ function renderKnowledgeDoc(profileId, kind) {
             <div><span>שאלות פתוחות</span><strong>${esc(String((analysis.open_questions || []).length || 0))}</strong></div>
             <div><span>שאלות שעדיין פתוחות</span><strong>${esc(String((analysis.open_questions || []).filter((q) => String(q.status || "") === "open").length))}</strong></div>
           </div>
-          <div class="mini-meta"><span>התפלגות ודאות:</span> ${confidenceChips}</div>
           <details class="inline-detail">
             <summary>פרטים טכניים של מסמך המקור (לא חובה לקריאה)</summary>
             <div class="detail-body">
@@ -2584,7 +2995,7 @@ function renderKnowledgeDoc(profileId, kind) {
           <details class="hub-detail">
             <summary>הצג Markdown גולמי (לא התצוגה הראשית)</summary>
             <div class="detail-body">
-              <pre><code>${esc(analysis.raw_markdown || "")}</code></pre>
+              <pre><code>${esc(stripConfidenceFromText(analysis.raw_markdown || ""))}</code></pre>
             </div>
           </details>
         </section>
@@ -2604,7 +3015,7 @@ function renderPhase1Decisions(profileId) {
         <article class="hub-card nested-card" data-searchable="true" data-search-text="${esc(`${d.id || ""} ${d.title_he || ""} ${d.decision_he || ""}`)}">
           <div class="profile-card-head">
             <h4>${esc(d.title_he || d.id || "החלטה")}</h4>
-            <div class="chip-row">${statusPill(d.status)} ${confidencePill(d.confidence)}</div>
+            <div class="chip-row">${statusPill(d.status)}</div>
           </div>
           <p>${esc(d.decision_he || "")}</p>
           ${d.rationale_he ? `<p class="muted">${esc(d.rationale_he)}</p>` : ""}
@@ -2861,6 +3272,7 @@ function renderProfilePanel(profileId) {
   else if (subtab === "specs") body = renderProfileOverviewSimple(profileId);
   else if (subtab === "logic") body = renderProfileLogicSimple(profileId);
   else if (subtab === "structure") body = renderProfileStructureSimple(profileId);
+  else if (subtab === "implementation") body = renderProfileImplementationSimple(profileId);
   else body = renderProfileCurrentWork(profileId);
 
   root.innerHTML = `
@@ -2879,7 +3291,7 @@ function renderProfilePanel(profileId) {
         </div>
         ${renderProfileSubtabs(profileId)}
       </section>
-      ${renderProfileSubtabGuide(profileId, subtab)}
+      ${renderProfileSectionNavigator(profileId, subtab)}
       <section class="span-12">
         ${body}
       </section>
@@ -3063,6 +3475,51 @@ function bindEvents() {
   }
 
   document.addEventListener("click", (event) => {
+    const copyAllBtn = event.target.closest ? event.target.closest("[data-copy-all-tests]") : null;
+    if (copyAllBtn) {
+      event.preventDefault();
+      const profileId = copyAllBtn.getAttribute("data-copy-all-tests") || "";
+      const rows = (officialTestsForProfile(profileId).rows || []);
+      copyText((rows || []).map((row) => row.copy_value || row.tcid_cli || row.tcid || "").filter(Boolean).join("\n")).then((ok) => {
+        flashCopyButton(copyAllBtn, ok);
+      });
+      return;
+    }
+
+    const copyTestBtn = event.target.closest ? event.target.closest("[data-copy-test-row]") : null;
+    if (copyTestBtn) {
+      event.preventDefault();
+      const value = copyTestBtn.getAttribute("data-copy-test-row") || "";
+      copyText(value).then((ok) => {
+        flashCopyButton(copyTestBtn, ok);
+      });
+      return;
+    }
+
+    const copyFilenameBtn = event.target.closest ? event.target.closest("[data-copy-impl-filename]") : null;
+    if (copyFilenameBtn) {
+      event.preventDefault();
+      const raw = copyFilenameBtn.getAttribute("data-copy-impl-filename") || "";
+      const [profileId, fileId] = raw.split(":");
+      const file = implementationFile(profileId, fileId);
+      copyText((file && file.filename) || "").then((ok) => {
+        flashCopyButton(copyFilenameBtn, ok);
+      });
+      return;
+    }
+
+    const copyCodeBtn = event.target.closest ? event.target.closest("[data-copy-impl-code]") : null;
+    if (copyCodeBtn) {
+      event.preventDefault();
+      const raw = copyCodeBtn.getAttribute("data-copy-impl-code") || "";
+      const [profileId, fileId] = raw.split(":");
+      const file = implementationFile(profileId, fileId);
+      copyText((file && file.code) || "").then((ok) => {
+        flashCopyButton(copyCodeBtn, ok);
+      });
+      return;
+    }
+
     const jumpBtn = event.target.closest ? event.target.closest("[data-jump-profile]") : null;
     if (jumpBtn) {
       const pid = jumpBtn.getAttribute("data-jump-profile");
@@ -3087,7 +3544,15 @@ function bindEvents() {
       const target = document.getElementById(id);
       if (!target) return;
       event.preventDefault();
+      if (!target.hasAttribute("tabindex")) {
+        target.setAttribute("tabindex", "-1");
+      }
       target.scrollIntoView({ behavior: "smooth", block: "start" });
+      window.setTimeout(() => {
+        if (typeof target.focus === "function") {
+          target.focus({ preventScroll: true });
+        }
+      }, 120);
       return;
     }
 
