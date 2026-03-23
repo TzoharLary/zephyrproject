@@ -77,6 +77,49 @@ def _warn_uncategorized_task_groups(data: dict) -> list[str]:
     return warnings
 
 
+def _check_github_seed_consistency(repo_root: Path, data: dict) -> tuple[list[str], list[str]]:
+    failures: list[str] = []
+    warnings: list[str] = []
+    group_b = data.get("group_b", {}) if isinstance(data, dict) else {}
+    github_assets = group_b.get("github_assets", {}) if isinstance(group_b, dict) else {}
+    profile_db = (github_assets.get("profile_db") or {}).get("profiles", {}) if isinstance(github_assets, dict) else {}
+    overview = (group_b.get("overview_presentation") or {}).get("profiles", {}) if isinstance(group_b, dict) else {}
+
+    for pid in PROFILE_IDS:
+        seed = profile_db.get(pid, {}) if isinstance(profile_db, dict) else {}
+        if not isinstance(seed, dict) or not seed:
+            failures.append(f"github_assets.profile_db.profiles.{pid}: missing seed entry")
+            continue
+        spec_doc = seed.get("spec_doc")
+        if spec_doc:
+            spec_path = repo_root / str(spec_doc)
+            if not spec_path.exists():
+                failures.append(f"github_assets.profile_db.profiles.{pid}.spec_doc missing on disk: {spec_doc}")
+        reference_files = seed.get("reference_files", {}) if isinstance(seed.get("reference_files"), dict) else {}
+        for key in ("header", "impl"):
+            ref = str(reference_files.get(key) or "").strip()
+            if not ref:
+                warnings.append(f"github_assets.profile_db.profiles.{pid}.reference_files.{key}: empty")
+                continue
+            candidates = [repo_root / ref, repo_root / "zephyr" / ref]
+            if not any(path.exists() for path in candidates):
+                warnings.append(f"github_assets.profile_db.profiles.{pid}.reference_files.{key}: not found locally ({ref})")
+        similar_profiles = seed.get("similar_profiles", []) if isinstance(seed.get("similar_profiles"), list) else []
+        for similar in similar_profiles:
+            if not isinstance(similar, str) or not similar.strip():
+                warnings.append(f"github_assets.profile_db.profiles.{pid}.similar_profiles contains invalid item: {similar!r}")
+        pts_tracked = seed.get("pts_tracked")
+        official_tests = ((overview.get(pid) or {}).get("official_tests") or {}) if isinstance(overview, dict) else {}
+        pts_present = int((official_tests.get("summary") or {}).get("pts_present") or 0) if isinstance(official_tests, dict) else 0
+        total = int((official_tests.get("summary") or {}).get("total") or 0) if isinstance(official_tests, dict) else 0
+        if pts_tracked is False and pts_present > 0:
+            warnings.append(f"github_assets.profile_db.profiles.{pid}.pts_tracked=false but overview derives pts_present={pts_present}/{total}")
+        orow = overview.get(pid, {}) if isinstance(overview, dict) else {}
+        if not isinstance(orow, dict) or not (orow.get("profile_db_seed") or {}).get("name"):
+            failures.append(f"group_b.overview_presentation.profiles.{pid}: missing profile_db_seed.name")
+    return failures, warnings
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate Group B Hub data/schema/readiness thresholds.")
     parser.add_argument("--repo-root", default=".", help="Repository root (default: current directory)")
@@ -106,6 +149,9 @@ def main() -> int:
 
     threshold_failures, warnings = _summarize_profile_thresholds(data, args.findings_min, args.source_obs_min)
     warnings.extend(_warn_uncategorized_task_groups(data))
+    github_failures, github_warnings = _check_github_seed_consistency(repo_root, data)
+    warnings.extend(github_warnings)
+    failures.extend(github_failures)
     if not args.allow_threshold_fail:
         failures.extend(threshold_failures)
 

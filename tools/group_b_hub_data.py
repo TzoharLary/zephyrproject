@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple
+from typing import Any, Dict, Iterable, Iterator, List, Optional, Set, Tuple
 from urllib.parse import urlparse
 
 try:
@@ -70,6 +71,8 @@ REQUIRED_SECTIONS_BY_KIND = {
 class Paths:
     repo: Path
     tools: Path
+    github_root: Path
+    github_data_dir: Path
     templates_root: Path
     group_b_root: Path
     group_b_logic_dir: Path
@@ -77,11 +80,21 @@ class Paths:
     docs_profiles_root: Path
     data_dir: Path
     builder_script: Path
+    github_profiles_db: Path
+    github_profile_patterns: Path
+    github_sources_map: Path
+    github_system_journal: Path
+    github_builder_instructions: Path
+    github_builder_prompt: Path
+    github_pts_hub_workflow: Path
+    workspace_pqw6: Path
+    autopts_zephyr_init: Path
 
 
 def _paths(repo_root: Path | str = ".") -> Paths:
     repo = Path(repo_root).resolve()
     tools = repo / "tools"
+    github_root = repo / ".github"
     templates_root = tools / "templates" / "pts_report_he"
     group_b_root = templates_root / "Group_B_data"
     docs_profiles_root = repo / "docs" / "Profiles"
@@ -92,6 +105,8 @@ def _paths(repo_root: Path | str = ".") -> Paths:
     return Paths(
         repo=repo,
         tools=tools,
+        github_root=github_root,
+        github_data_dir=github_root / "data",
         templates_root=templates_root,
         group_b_root=group_b_root,
         group_b_logic_dir=group_b_root / "Logic",
@@ -99,6 +114,15 @@ def _paths(repo_root: Path | str = ".") -> Paths:
         docs_profiles_root=docs_profiles_root,
         data_dir=tools / "data",
         builder_script=tools / "build_pts_report_bundle.py",
+        github_profiles_db=github_root / "data" / "profiles-db.yaml",
+        github_profile_patterns=github_root / "data" / "profile-patterns.md",
+        github_sources_map=github_root / "data" / "sources-map.yaml",
+        github_system_journal=github_root / "docs" / "system-journal.md",
+        github_builder_instructions=github_root / "instructions" / "zephyr-bt-profile-builder.instructions.md",
+        github_builder_prompt=github_root / "prompts" / "zephyr-bt-profile-builder.prompt.md",
+        github_pts_hub_workflow=github_root / "workflows" / "pts-hub-check.yml",
+        workspace_pqw6=repo / "auto-pts" / "autopts" / "workspaces" / "zephyr" / "zephyr-master" / "zephyr-master.pqw6",
+        autopts_zephyr_init=repo / "auto-pts" / "autopts" / "ptsprojects" / "zephyr" / "__init__.py",
     )
 
 
@@ -151,11 +175,22 @@ def _parse_scalar(value: str) -> Any:
         return raw.lower() == "true"
     if raw.lower() in ("null", "none"):
         return None
-    if raw.startswith("[") or raw.startswith("{"):
-        try:
-            return json.loads(raw)
-        except Exception:
-            return raw
+    if raw.startswith("[") and raw.endswith("]"):
+        inner = raw[1:-1].strip()
+        if not inner:
+            return []
+        return [_parse_scalar(part) for part in _split_inline_yaml(inner)]
+    if raw.startswith("{") and raw.endswith("}"):
+        inner = raw[1:-1].strip()
+        if not inner:
+            return {}
+        out: Dict[str, Any] = {}
+        for part in _split_inline_yaml(inner):
+            if ":" not in part:
+                continue
+            key, val = part.split(":", 1)
+            out[_strip_quotes(key.strip())] = _parse_scalar(val)
+        return out
     if re.fullmatch(r"-?\d+", raw):
         try:
             return int(raw)
@@ -164,26 +199,204 @@ def _parse_scalar(value: str) -> Any:
     return _strip_quotes(raw)
 
 
-def parse_simple_yaml(yaml_text: str) -> Dict[str, Any]:
+def _split_inline_yaml(text: str) -> List[str]:
+    parts: List[str] = []
+    current: List[str] = []
+    depth = 0
+    quote = ""
+    for char in text:
+        if quote:
+            current.append(char)
+            if char == quote:
+                quote = ""
+            continue
+        if char in {"'", '"'}:
+            quote = char
+            current.append(char)
+            continue
+        if char in "[{(":
+            depth += 1
+            current.append(char)
+            continue
+        if char in "]})":
+            depth = max(0, depth - 1)
+            current.append(char)
+            continue
+        if char == "," and depth == 0:
+            part = "".join(current).strip()
+            if part:
+                parts.append(part)
+            current = []
+            continue
+        current.append(char)
+    tail = "".join(current).strip()
+    if tail:
+        parts.append(tail)
+    return parts
+
+
+def _next_yaml_significant(lines: List[str], start: int) -> Optional[int]:
+    idx = start
+    while idx < len(lines):
+        raw = lines[idx]
+        if raw.strip() and not raw.lstrip().startswith("#"):
+            return idx
+        idx += 1
+    return None
+
+
+def _yaml_indent(line: str) -> int:
+    return len(line) - len(line.lstrip(" "))
+
+
+def _parse_yaml_block_scalar(lines: List[str], start: int, indent: int, style: str) -> Tuple[str, int]:
+    chunks: List[str] = []
+    idx = start
+    while idx < len(lines):
+        raw = lines[idx]
+        if not raw.strip():
+            chunks.append("")
+            idx += 1
+            continue
+        cur_indent = _yaml_indent(raw)
+        if cur_indent < indent:
+            break
+        chunks.append(raw[indent:])
+        idx += 1
+    if style == ">":
+        paragraphs: List[str] = []
+        current: List[str] = []
+        for chunk in chunks:
+            if chunk == "":
+                if current:
+                    paragraphs.append(" ".join(part.strip() for part in current if part.strip()).strip())
+                    current = []
+                continue
+            current.append(chunk)
+        if current:
+            paragraphs.append(" ".join(part.strip() for part in current if part.strip()).strip())
+        return "\n\n".join([p for p in paragraphs if p]).strip(), idx
+    return "\n".join(chunks).rstrip("\n"), idx
+
+
+def _parse_yaml_block(lines: List[str], start: int, indent: int) -> Tuple[Any, int]:
+    idx = _next_yaml_significant(lines, start)
+    if idx is None:
+        return {}, len(lines)
+    line = lines[idx]
+    if line.lstrip().startswith("- "):
+        return _parse_yaml_list(lines, idx, _yaml_indent(line))
+    return _parse_yaml_map(lines, idx, _yaml_indent(line))
+
+
+def _parse_yaml_map(lines: List[str], start: int, indent: int) -> Tuple[Dict[str, Any], int]:
     out: Dict[str, Any] = {}
-    current_key: Optional[str] = None
-    for raw_line in yaml_text.splitlines():
-        line = raw_line.rstrip()
-        if not line.strip() or line.lstrip().startswith("#"):
+    idx = start
+    while True:
+        current_idx = _next_yaml_significant(lines, idx)
+        if current_idx is None:
+            return out, len(lines)
+        line = lines[current_idx]
+        cur_indent = _yaml_indent(line)
+        if cur_indent < indent:
+            return out, current_idx
+        if cur_indent > indent:
+            return out, current_idx
+        content = line[cur_indent:]
+        if content.startswith("- "):
+            return out, current_idx
+        key, sep, rest = content.partition(":")
+        if not sep:
+            idx = current_idx + 1
             continue
-        if re.match(r"^\s+-\s+", line) and current_key and isinstance(out.get(current_key), list):
-            out[current_key].append(_parse_scalar(line.split("-", 1)[1]))
+        key = key.strip()
+        rest = rest.strip()
+        if rest in {"|", "|-", ">", ">-"}:
+            value, next_idx = _parse_yaml_block_scalar(lines, current_idx + 1, indent + 2, rest[0])
+            out[key] = value
+            idx = next_idx
             continue
-        m = re.match(r"^([A-Za-z0-9_]+)\s*:\s*(.*)$", line)
-        if not m:
+        if rest == "":
+            next_idx = _next_yaml_significant(lines, current_idx + 1)
+            if next_idx is None or _yaml_indent(lines[next_idx]) <= indent:
+                out[key] = {}
+                idx = current_idx + 1
+                continue
+            value, after = _parse_yaml_block(lines, next_idx, _yaml_indent(lines[next_idx]))
+            out[key] = value
+            idx = after
             continue
-        key, value = m.group(1), m.group(2)
-        current_key = key
-        if value == "":
-            out[key] = []
+        out[key] = _parse_scalar(rest)
+        idx = current_idx + 1
+
+
+def _parse_yaml_list(lines: List[str], start: int, indent: int) -> Tuple[List[Any], int]:
+    out: List[Any] = []
+    idx = start
+    while True:
+        current_idx = _next_yaml_significant(lines, idx)
+        if current_idx is None:
+            return out, len(lines)
+        line = lines[current_idx]
+        cur_indent = _yaml_indent(line)
+        if cur_indent < indent:
+            return out, current_idx
+        if cur_indent > indent:
+            return out, current_idx
+        content = line[cur_indent:]
+        if not content.startswith("- "):
+            return out, current_idx
+        rest = content[2:].strip()
+        if not rest:
+            next_idx = _next_yaml_significant(lines, current_idx + 1)
+            if next_idx is None or _yaml_indent(lines[next_idx]) <= indent:
+                out.append("")
+                idx = current_idx + 1
+            else:
+                value, after = _parse_yaml_block(lines, next_idx, _yaml_indent(lines[next_idx]))
+                out.append(value)
+                idx = after
             continue
-        out[key] = _parse_scalar(value)
-    return out
+        key, sep, value_part = rest.partition(":")
+        if sep:
+            item: Dict[str, Any] = {}
+            value_part = value_part.strip()
+            if value_part in {"|", "|-", ">", ">-"}:
+                value, next_idx = _parse_yaml_block_scalar(lines, current_idx + 1, indent + 2, value_part[0])
+                item[key.strip()] = value
+            elif value_part == "":
+                next_idx = _next_yaml_significant(lines, current_idx + 1)
+                if next_idx is None or _yaml_indent(lines[next_idx]) <= indent:
+                    item[key.strip()] = {}
+                    next_idx = current_idx + 1
+                else:
+                    value, after = _parse_yaml_block(lines, next_idx, _yaml_indent(lines[next_idx]))
+                    item[key.strip()] = value
+                    next_idx = after
+            else:
+                item[key.strip()] = _parse_scalar(value_part)
+                next_idx = current_idx + 1
+            extra_idx = _next_yaml_significant(lines, next_idx)
+            if extra_idx is not None and _yaml_indent(lines[extra_idx]) > indent:
+                extra, after = _parse_yaml_map(lines, extra_idx, indent + 2)
+                item.update(extra)
+                next_idx = after
+            out.append(item)
+            idx = next_idx
+            continue
+        out.append(_parse_scalar(rest))
+        idx = current_idx + 1
+
+
+def parse_yaml_document(yaml_text: str) -> Any:
+    lines = yaml_text.splitlines()
+    value, _ = _parse_yaml_block(lines, 0, 0)
+    return value
+
+
+def parse_simple_yaml(yaml_text: str) -> Dict[str, Any]:
+    parsed = parse_yaml_document(yaml_text)
+    return parsed if isinstance(parsed, dict) else {}
 
 
 def split_front_matter(text: str) -> Tuple[Dict[str, Any], str]:
@@ -375,6 +588,246 @@ def load_group_b_manifests(paths: Paths) -> Dict[str, Any]:
             "sources": [repo_source(paths, sync_manifest_path)] if sync_manifest_path.exists() else [],
         },
         "source_catalog": source_catalog,
+    }
+
+
+PROFILE_TCRL_CONFIG = {
+    "BPS": {
+        "official_prefix": "BLS",
+        "workspace_label": "Blood Pressure Service (BLS)",
+        "iopt_prefix": "IOPT/BLS/",
+    },
+    "WSS": {
+        "official_prefix": "WSS",
+        "workspace_label": "Weight Scale Service (WSS)",
+        "iopt_prefix": "IOPT/WSS/",
+    },
+    "SCPS": {
+        "official_prefix": "SCPS",
+        "workspace_label": "Scan Parameters Service (SCPS)",
+        "iopt_prefix": "IOPT/SCPS/",
+    },
+}
+
+PROFILE_PATTERN_SECTIONS = {
+    "BPS": ("10.2", "10.3"),
+    "WSS": ("10.2", "10.3"),
+    "SCPS": ("10.1",),
+}
+
+PROFILE_PATTERN_HE = {
+    "10.1": {
+        "title_he": "תבנית: השרת מבקש מה-client לשלוח שוב נתונים",
+        "summary_he": "ב-SCPS ה-notify לא מייצג מדידה חדשה. הוא אומר ל-client: שלח שוב את פרמטרי הסריקה שלך.",
+        "highlights_he": [
+            "השרת שולח refresh קטן כדי לבקש מה-client לכתוב שוב את Scan Interval Window.",
+            "השרת שומר את ערכי הסריקה האחרונים שנשלחו אליו ומשתמש בהם כ-state תפעולי.",
+            "אחרי ניתוק לא מניחים state אופטימי; מניחים את תרחיש הסריקה השמרני האחרון.",
+        ],
+        "tags": ["server-requests-refresh", "notify", "write-without-response"],
+    },
+    "10.2": {
+        "title_he": "תבנית: מדידות נשלחות עם אישור",
+        "summary_he": "ב-BPS וב-WSS המדידה הראשית נשלחת ב-Indicate. המשמעות הפשוטה: לא שולחים מדידה חדשה לפני שהקודמת אושרה.",
+        "highlights_he": [
+            "צריך לעקוב אם indication קודמת עדיין ממתינה לאישור.",
+            "אם יש מדידות בתור, שולחים אותן אחת-אחת לפי הסדר.",
+            "ה-CCC של ה-measurement הוא gate אמיתי: בלי הרשמה של ה-client לא שולחים מדידה.",
+        ],
+        "tags": ["indicate", "measurement", "pending-ack"],
+    },
+    "10.3": {
+        "title_he": "תבנית: Feature שלפעמים גם עושה Indicate",
+        "summary_he": "מאפיין Feature הוא בדרך כלל לקריאה בלבד. מוסיפים לו Indicate רק אם המכשיר תומך bonding והערך שלו באמת יכול להשתנות לאורך החיים שלו.",
+        "highlights_he": [
+            "אם ה-Feature קבוע לכל חיי המכשיר, לרוב מספיק Read בלבד.",
+            "אם ה-Feature עשוי להשתנות וצריך לעדכן לקוח מזווג, אפשר להוסיף לו CCC + Indicate.",
+            "החלטה כזו צריכה להיות מפורשת במבנה ובמימוש, ולא להופיע במקרה.",
+        ],
+        "tags": ["feature", "conditional-indicate", "bonding"],
+    },
+}
+
+CATEGORY_HE = {
+    "Health": "בריאות",
+    "Sport": "ספורט",
+    "Alert": "התראות",
+    "User": "משתמש",
+    "Location": "מיקום",
+}
+
+PATTERN_HE = {
+    "Indicate": "Indicate",
+    "Notify": "Notify",
+    "Mixed": "משולב",
+    "Read": "Read",
+    "Write": "Write",
+}
+
+SOURCE_BADGE_LABELS = {
+    "spec": "spec",
+    "pattern": "pattern",
+    "validation": "validation",
+    "vendor_logic_reference": "vendor logic reference",
+    "implementation_pattern": "implementation pattern",
+}
+
+
+def _line_number_containing(path: Path, needle: str) -> Optional[int]:
+    if not path.exists():
+        return None
+    for idx, line in enumerate(read_text(path).splitlines(), start=1):
+        if needle in line:
+            return idx
+    return None
+
+
+def _file_exists_from_reference(paths: Paths, ref: str) -> Tuple[bool, str]:
+    ref_clean = str(ref or "").strip().lstrip("/")
+    if not ref_clean:
+        return False, ""
+    candidates = [
+        paths.repo / ref_clean,
+        paths.repo / "zephyr" / ref_clean,
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return True, _norm_rel(paths.repo, candidate)
+    return False, _norm_rel(paths.repo, candidates[-1])
+
+
+def _markdown_sections_with_titles(path: Path) -> Dict[str, Dict[str, Any]]:
+    if not path.exists():
+        return {}
+    sections = parse_sections(read_text(path))
+    return {str(sec.get("title") or ""): sec for sec in sections if isinstance(sec, dict)}
+
+
+def load_github_profile_db(paths: Paths) -> Dict[str, Any]:
+    parsed = parse_yaml_document(read_text(paths.github_profiles_db)) if paths.github_profiles_db.exists() else {}
+    raw_profiles = parsed.get("profiles", []) if isinstance(parsed, dict) else []
+    profiles: Dict[str, Any] = {}
+    for row in raw_profiles if isinstance(raw_profiles, list) else []:
+        if not isinstance(row, dict):
+            continue
+        raw_pid = str(row.get("id") or "").upper()
+        pid = "SCPS" if raw_pid == "SPS" and "SCPS" in str(row.get("spec_doc") or "").upper() else raw_pid
+        if pid not in PROFILE_IDS:
+            continue
+        line = _line_number_containing(paths.github_profiles_db, f"id: {raw_pid}")
+        entry = dict(row)
+        entry["id"] = pid
+        if raw_pid != pid:
+            entry["id_alias_from"] = raw_pid
+        entry["sources"] = [repo_source(paths, paths.github_profiles_db, line)]
+        profiles[pid] = entry
+    return {
+        "profiles": profiles,
+        "sources": [repo_source(paths, paths.github_profiles_db, 1)] if paths.github_profiles_db.exists() else [],
+    }
+
+
+def _pattern_card_from_section(paths: Paths, section: Dict[str, Any], section_id: str) -> Dict[str, Any]:
+    preset = PROFILE_PATTERN_HE.get(section_id, {})
+    body = str(section.get("body") or "")
+    paragraphs = [p.strip() for p in re.split(r"\n\s*\n", body) if p.strip()]
+    source_line = _line_number_containing(paths.github_profile_patterns, str(section.get("title") or ""))
+    source_paragraph = paragraphs[0] if paragraphs else ""
+    source_ref = repo_source(paths, paths.github_profile_patterns, source_line)
+    return {
+        "section_id": section_id,
+        "title_he": preset.get("title_he") or str(section.get("title") or ""),
+        "summary_he": preset.get("summary_he") or source_paragraph,
+        "highlights_he": list(preset.get("highlights_he") or []),
+        "tags": list(preset.get("tags") or []),
+        "source_excerpt_en": source_paragraph,
+        "sources": [source_ref],
+    }
+
+
+def load_github_profile_patterns(paths: Paths) -> Dict[str, Any]:
+    sections_by_title = _markdown_sections_with_titles(paths.github_profile_patterns)
+    by_id: Dict[str, Dict[str, Any]] = {}
+    for title, section in sections_by_title.items():
+        if not str(title).startswith("10."):
+            continue
+        section_id = str(title).split(" ", 1)[0]
+        by_id[section_id] = _pattern_card_from_section(paths, section, section_id)
+
+    profiles: Dict[str, List[Dict[str, Any]]] = {}
+    for pid, section_ids in PROFILE_PATTERN_SECTIONS.items():
+        profiles[pid] = [dict(by_id[sid]) for sid in section_ids if sid in by_id]
+    return {
+        "by_section_id": by_id,
+        "profiles": profiles,
+        "sources": [repo_source(paths, paths.github_profile_patterns, 1)] if paths.github_profile_patterns.exists() else [],
+    }
+
+
+def load_github_sources_map(paths: Paths) -> Dict[str, Any]:
+    parsed = parse_yaml_document(read_text(paths.github_sources_map)) if paths.github_sources_map.exists() else {}
+    raw_sources = parsed.get("sources", []) if isinstance(parsed, dict) else []
+    rows: List[Dict[str, Any]] = []
+    for row in raw_sources if isinstance(raw_sources, list) else []:
+        if not isinstance(row, dict):
+            continue
+        sid = str(row.get("id") or "").strip()
+        if sid not in {"zephyr", "ti_simplelink", "intel_auto_pts", "bt_sig", "nordic_nrf"}:
+            continue
+        line = _line_number_containing(paths.github_sources_map, f"id: {sid}")
+        rows.append(
+            {
+                "id": sid,
+                "name": row.get("name"),
+                "type": row.get("type"),
+                "priority": row.get("priority"),
+                "description": row.get("description"),
+                "use_for": row.get("use_for", []),
+                "do_not_use_for": row.get("do_not_use_for", []),
+                "paths": row.get("paths", []),
+                "sources": [repo_source(paths, paths.github_sources_map, line)],
+            }
+        )
+    rows.sort(key=lambda item: int(item.get("priority") or 99))
+    return {
+        "version": parsed.get("version") if isinstance(parsed, dict) else None,
+        "sources": rows,
+        "source_priority_rules": parsed.get("source_priority_rules", []) if isinstance(parsed, dict) else [],
+        "implementation_rules": parsed.get("implementation_rules", []) if isinstance(parsed, dict) else [],
+        "file_sources": [repo_source(paths, paths.github_sources_map, 1)] if paths.github_sources_map.exists() else [],
+    }
+
+
+def build_github_workflow_context(paths: Paths) -> Dict[str, Any]:
+    journal_lines = read_text(paths.github_system_journal).splitlines() if paths.github_system_journal.exists() else []
+    tracked_phase2_fields = []
+    for needle in ("errata_refs", "zephyr_impl_status", "pts_coverage"):
+        line = _line_number_containing(paths.github_system_journal, needle)
+        tracked_phase2_fields.append({"field": needle, "line": line})
+    return {
+        "authoring_workflow": {
+            "identify_and_classify": "להתחיל מזיהוי הפרופיל והסיווג שלו לפני שמחליטים על מימוש.",
+            "research": "להשתמש ב-source map וב-runbook כדי להפריד בין spec, לוגיקה, validation ומבנה.",
+            "explain": "לעדכן קודם את שכבת הנתונים/מחקר, ורק אחר כך את שכבת התצוגה למשתמש.",
+            "sources": [
+                repo_source(paths, paths.github_builder_prompt, 1) if paths.github_builder_prompt.exists() else {},
+                repo_source(paths, paths.github_builder_instructions, 1) if paths.github_builder_instructions.exists() else {},
+            ],
+        },
+        "schema_phase2_seed": {
+            "fields": tracked_phase2_fields,
+            "sources": [repo_source(paths, paths.github_system_journal, 400)] if paths.github_system_journal.exists() else [],
+        },
+        "ci_entrypoint": {
+            "path": _norm_rel(paths.repo, paths.github_pts_hub_workflow),
+            "sources": [repo_source(paths, paths.github_pts_hub_workflow, 1)] if paths.github_pts_hub_workflow.exists() else [],
+        },
+        "sources": [
+            repo_source(paths, paths.github_builder_prompt, 1) if paths.github_builder_prompt.exists() else {},
+            repo_source(paths, paths.github_builder_instructions, 1) if paths.github_builder_instructions.exists() else {},
+            repo_source(paths, paths.github_system_journal, 1) if paths.github_system_journal.exists() else {},
+            repo_source(paths, paths.github_pts_hub_workflow, 1) if paths.github_pts_hub_workflow.exists() else {},
+        ],
     }
 
 
@@ -660,6 +1113,357 @@ def _merge_source_lists(*groups: Any) -> List[Dict[str, Any]]:
             seen.add(key)
             out.append(item)
     return out
+
+
+def _official_prefix_for_profile(profile_id: str) -> str:
+    return str((PROFILE_TCRL_CONFIG.get(profile_id) or {}).get("official_prefix") or profile_id)
+
+
+def _ui_label(profile_id: str) -> str:
+    return "ScPS" if profile_id == "SCPS" else profile_id
+
+
+def _load_pts_report_bundle_helpers() -> Dict[str, Any]:
+    tools_dir = str(Path(__file__).resolve().parent)
+    if tools_dir not in sys.path:
+        sys.path.insert(0, tools_dir)
+    try:
+        from build_pts_report_bundle import (  # type: ignore
+            apply_ts_titles_to_tc_rows,
+            extract_tc,
+            extract_ts_profile_data,
+            read_sheet_rows,
+        )
+    except Exception:
+        from tools.build_pts_report_bundle import (  # type: ignore
+            apply_ts_titles_to_tc_rows,
+            extract_tc,
+            extract_ts_profile_data,
+            read_sheet_rows,
+        )
+    return {
+        "read_sheet_rows": read_sheet_rows,
+        "extract_tc": extract_tc,
+        "extract_ts_profile_data": extract_ts_profile_data,
+        "apply_ts_titles_to_tc_rows": apply_ts_titles_to_tc_rows,
+    }
+
+
+def _first_spec_artifact_path(spec_row: Dict[str, Any], kind: str) -> Optional[Path]:
+    artifacts = spec_row.get("artifacts", []) if isinstance(spec_row, dict) else []
+    for artifact in artifacts if isinstance(artifacts, list) else []:
+        if not isinstance(artifact, dict):
+            continue
+        if str(artifact.get("kind") or "") == kind:
+            path = artifact.get("path")
+            if path:
+                return Path(str(path))
+    return None
+
+
+def _build_profile_intro_he(profile_id: str, display_name_he: str, profile_seed: Dict[str, Any]) -> str:
+    pid = str(profile_id or "").upper()
+    if pid == "BPS":
+        return "שירות לחץ דם הוא פרופיל BLE שמיועד לשליחת מדידות לחץ דם בצורה מבוקרת. המדידה הראשית נשלחת ב-Indicate, יש מאפיין Feature לקריאה, ויש גם ערוץ אופציונלי ל-Intermediate Cuff Pressure בזמן המדידה."
+    if pid == "WSS":
+        return "שירות משקל הוא פרופיל BLE פשוט יחסית: הוא יודע לדווח מדידת משקל, ולצידה Feature שמתאר את יכולות המכשיר. המדידה עצמה נשלחת ב-Indicate, כלומר בדרך שמחכה לאישור מהצד השני."
+    if pid == "SCPS":
+        return "שירות פרמטרי סריקה הוא פרופיל BLE שבו ה-client כותב לשרת את פרמטרי הסריקה שלו, והשרת יכול לבקש ממנו לשלוח אותם שוב. זה פרופיל קטן, אבל ההתנהגות שלו שונה מפרופילי מדידה רגילים."
+    name = str(profile_seed.get("name") or "")
+    pattern = PATTERN_HE.get(str(profile_seed.get("pattern") or ""), str(profile_seed.get("pattern") or ""))
+    characteristics = (
+        ((profile_seed.get("uuids") or {}).get("characteristics") or []) if isinstance(profile_seed.get("uuids"), dict) else []
+    )
+    mandatory = [c for c in characteristics if isinstance(c, dict) and bool(c.get("mandatory"))]
+    optional = [c for c in characteristics if isinstance(c, dict) and not bool(c.get("mandatory"))]
+    if not name:
+        return "אין עדיין metadata מסודר לפרופיל הזה."
+    text = f"{display_name_he or name} הוא פרופיל BLE מקטגוריית {CATEGORY_HE.get(str(profile_seed.get('category') or ''), str(profile_seed.get('category') or 'לא מסווג'))}."
+    if mandatory:
+        names = ", ".join(str(c.get("name") or "") for c in mandatory[:3] if str(c.get("name") or "").strip())
+        text += f" לפי ה-spec יש בו {len(mandatory)} מאפיינים חובה, כולל {names}."
+    if optional:
+        names = ", ".join(str(c.get("name") or "") for c in optional[:2] if str(c.get("name") or "").strip())
+        text += f" יש גם יכולות אופציונליות כמו {names}."
+    if pattern:
+        text += f" דפוס התקשורת המרכזי שלו הוא {pattern}."
+    return text
+
+
+def _characteristics_summary(profile_seed: Dict[str, Any]) -> List[Dict[str, Any]]:
+    characteristics = (
+        ((profile_seed.get("uuids") or {}).get("characteristics") or []) if isinstance(profile_seed.get("uuids"), dict) else []
+    )
+    out: List[Dict[str, Any]] = []
+    for item in characteristics if isinstance(characteristics, list) else []:
+        if not isinstance(item, dict):
+            continue
+        props = item.get("properties", []) if isinstance(item.get("properties"), list) else []
+        mandatory = bool(item.get("mandatory"))
+        role = "חובה" if mandatory else "אופציונלי"
+        out.append(
+            {
+                "name": item.get("name"),
+                "uuid": item.get("uuid"),
+                "properties": props,
+                "mandatory": mandatory,
+                "summary_he": f"{role}: {item.get('name') or 'Characteristic'} ({', '.join(str(p) for p in props) or 'ללא מאפייני גישה מתועדים'})",
+            }
+        )
+    return out
+
+
+def _build_zephyr_impl_status(paths: Paths, profile_seed: Dict[str, Any]) -> Dict[str, Any]:
+    reference_files = profile_seed.get("reference_files", {}) if isinstance(profile_seed, dict) else {}
+    header_ref = str((reference_files or {}).get("header") or "")
+    impl_ref = str((reference_files or {}).get("impl") or "")
+    header_exists, header_path = _file_exists_from_reference(paths, header_ref)
+    impl_exists, impl_path = _file_exists_from_reference(paths, impl_ref)
+    if header_exists and impl_exists:
+        status = "upstream"
+        detail = "נמצאו גם header וגם קובץ מימוש ב-Zephyr המקומי."
+    elif header_exists or impl_exists:
+        status = "partial"
+        detail = "נמצא רק חלק מה-reference implementation המקומי."
+    else:
+        status = "missing"
+        detail = "לא נמצא בריפו המקומי מימוש Zephyr תואם ל-reference files שהוגדרו ב-.github."
+    return {
+        "status": status,
+        "detail_he": detail,
+        "reference_files": [
+            {"kind": "header", "path": header_path, "exists": header_exists},
+            {"kind": "impl", "path": impl_path, "exists": impl_exists},
+        ],
+        "sources": _merge_source_lists(profile_seed.get("sources", [])),
+    }
+
+
+def _build_errata_refs(spec_row: Dict[str, Any]) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    for artifact in spec_row.get("artifacts", []) if isinstance(spec_row.get("artifacts"), list) else []:
+        if not isinstance(artifact, dict):
+            continue
+        if str(artifact.get("kind") or "") != "errata_pdf":
+            continue
+        out.append(
+            {
+                "name": artifact.get("name"),
+                "path": artifact.get("path"),
+                "sources": artifact.get("sources", []),
+            }
+        )
+    return out
+
+
+def _workspace_profile_presence(paths: Paths, profile_id: str) -> Dict[str, Any]:
+    config = PROFILE_TCRL_CONFIG.get(profile_id, {})
+    label = str(config.get("workspace_label") or "")
+    if not paths.workspace_pqw6.exists():
+        return {"present": False, "line": None, "sources": []}
+    line = _line_number_containing(paths.workspace_pqw6, label)
+    return {
+        "present": bool(line),
+        "line": line,
+        "sources": [repo_source(paths, paths.workspace_pqw6, line)] if line else [repo_source(paths, paths.workspace_pqw6, 1)],
+    }
+
+
+def _autopts_profile_support(paths: Paths, profile_id: str, workspace_presence: Dict[str, Any]) -> Dict[str, Any]:
+    init_text = read_text(paths.autopts_zephyr_init) if paths.autopts_zephyr_init.exists() else ""
+    module_token = str(profile_id or "").lower()
+    explicit_module = bool(re.search(rf"\b{re.escape(module_token)}\b", init_text))
+    module_line = _line_number_containing(paths.autopts_zephyr_init, module_token) if explicit_module else None
+    if explicit_module:
+        status = "present"
+        detail = "נמצא מודול מפורש של הפרופיל בתוך auto-pts/ptsprojects/zephyr."
+    elif workspace_presence.get("present"):
+        status = "partial"
+        detail = "הפרופיל מופיע ב-workspace של PTS, אבל לא נמצאה שכבת קוד מפורשת שלו תחת auto-pts/ptsprojects/zephyr."
+    else:
+        status = "missing"
+        detail = "לא נמצאה כרגע ראיית code/workspace שתומכת בפרופיל הזה בתוך auto-pts."
+    sources = []
+    if paths.autopts_zephyr_init.exists():
+        sources.append(repo_source(paths, paths.autopts_zephyr_init, module_line or 1))
+    sources.extend(workspace_presence.get("sources", []))
+    return {"status": status, "detail_he": detail, "sources": _merge_source_lists(sources)}
+
+
+def _build_official_tests(paths: Paths, profile_id: str, spec_row: Dict[str, Any], profile_seed: Dict[str, Any]) -> Dict[str, Any]:
+    helpers = _load_pts_report_bundle_helpers()
+    read_sheet_rows = helpers["read_sheet_rows"]
+    extract_tc = helpers["extract_tc"]
+    extract_ts_profile_data = helpers["extract_ts_profile_data"]
+    apply_ts_titles_to_tc_rows = helpers["apply_ts_titles_to_tc_rows"]
+    prefix = _official_prefix_for_profile(profile_id)
+    gatt_xlsx = _first_spec_artifact_path(spec_row, "tcrl_xlsx")
+    tcrl_folder = _first_spec_artifact_path(spec_row, "tcrl_folder")
+    if not gatt_xlsx and tcrl_folder and tcrl_folder.exists():
+        candidates = sorted(tcrl_folder.rglob("GATTBased*.xlsx"))
+        gatt_xlsx = candidates[0] if candidates else None
+    iopt_xlsx = None
+    if tcrl_folder and tcrl_folder.exists():
+        candidates = sorted(tcrl_folder.rglob("IOPT*.xlsx"))
+        iopt_xlsx = candidates[0] if candidates else None
+    ts_pdf = _first_spec_artifact_path(spec_row, "ts_pdf")
+    rows: List[Dict[str, Any]] = []
+    if gatt_xlsx and (paths.repo / gatt_xlsx).exists():
+        gatt_path = paths.repo / gatt_xlsx
+        tc_rows = extract_tc(read_sheet_rows(gatt_path, prefix), f"{prefix}/", gatt_path, prefix)
+        if ts_pdf and (paths.repo / ts_pdf).exists():
+            ts_path = paths.repo / ts_pdf
+            ts_data = extract_ts_profile_data(prefix, ts_path, [])
+            apply_ts_titles_to_tc_rows(tc_rows, ts_data.get("tcid_titles", {}), ts_path)
+        for row in tc_rows:
+            rows.append({**row, "suite_family": "GATT"})
+    if iopt_xlsx and (paths.repo / iopt_xlsx).exists():
+        iopt_path = paths.repo / iopt_xlsx
+        iopt_rows = extract_tc(read_sheet_rows(iopt_path, "IOPT"), str((PROFILE_TCRL_CONFIG.get(profile_id) or {}).get("iopt_prefix") or ""), iopt_path, "IOPT")
+        if ts_pdf and (paths.repo / ts_pdf).exists():
+            ts_path = paths.repo / ts_pdf
+            ts_data = extract_ts_profile_data(prefix, ts_path, [])
+            apply_ts_titles_to_tc_rows(iopt_rows, ts_data.get("tcid_titles", {}), ts_path)
+        for row in iopt_rows:
+            rows.append({**row, "suite_family": "IOPT"})
+
+    workspace_presence = _workspace_profile_presence(paths, profile_id)
+    autopts_support = _autopts_profile_support(paths, profile_id, workspace_presence)
+    normalized_rows: List[Dict[str, Any]] = []
+    for row in rows:
+        tcid = str(row.get("tcid") or "")
+        ts_title = str(row.get("ts_title") or "").strip()
+        raw_desc = str(row.get("desc") or "").strip()
+        desc = ts_title
+        if not desc or ("[" in desc and len(raw_desc) > len(desc)) or re.fullmatch(r"[0-9\[\]\s]+", desc):
+            desc = raw_desc
+        if raw_desc and len(raw_desc) > len(desc) + 20:
+            desc = raw_desc
+        desc = desc or "ללא תיאור"
+        pts_status = "present" if workspace_presence.get("present") else "unknown"
+        autopts_status = str(autopts_support.get("status") or "missing")
+        normalized_rows.append(
+            {
+                "official_row_id": f"{profile_id}:{row.get('suite_family')}:{tcid}",
+                "suite_family": row.get("suite_family"),
+                "tcid": tcid,
+                "title_he": desc,
+                "category": row.get("category"),
+                "active_date": row.get("active_date"),
+                "pts_status": pts_status,
+                "pts_detail_he": (
+                    "הטסט מופיע ברשימת הבדיקות הרשמית והפרופיל קיים ב-workspace המקומי של PTS."
+                    if pts_status == "present"
+                    else "הטסט מופיע ברשימת הבדיקות הרשמית, אבל אין כאן הוכחה מקומית שהפרופיל קיים ב-workspace."
+                ),
+                "autopts_status": autopts_status,
+                "autopts_detail_he": str(autopts_support.get("detail_he") or ""),
+                "sources": _merge_source_lists(
+                    [repo_source(paths, paths.repo / str(gatt_xlsx), note=f"{prefix} TCRL workbook")] if gatt_xlsx else [],
+                    [repo_source(paths, paths.repo / str(iopt_xlsx), note="IOPT TCRL workbook")] if iopt_xlsx and str(row.get("suite_family")) == "IOPT" else [],
+                    [repo_source(paths, paths.repo / str(ts_pdf), note="TS PDF")] if ts_pdf else [],
+                    [row.get("source")] if isinstance(row.get("source"), dict) else [],
+                    [row.get("ts_title_source")] if isinstance(row.get("ts_title_source"), dict) else [],
+                    workspace_presence.get("sources", []),
+                    autopts_support.get("sources", []),
+                ),
+            }
+        )
+    summary = Counter(str(r.get("autopts_status") or "missing") for r in normalized_rows)
+    return {
+        "rows": normalized_rows,
+        "summary": {
+            "total": len(normalized_rows),
+            "pts_present": sum(1 for row in normalized_rows if row.get("pts_status") == "present"),
+            "autopts_present": summary.get("present", 0),
+            "autopts_partial": summary.get("partial", 0),
+            "autopts_missing": summary.get("missing", 0),
+            "autopts_unknown": summary.get("unknown", 0),
+        },
+        "workspace_presence": workspace_presence,
+        "autopts_support": autopts_support,
+        "sources": _merge_source_lists(workspace_presence.get("sources", []), autopts_support.get("sources", [])),
+    }
+
+
+def _build_source_badges(source_ids: List[str], source_catalog: Dict[str, Dict[str, Any]]) -> List[str]:
+    badges: List[str] = []
+    for source_id in source_ids:
+        row = source_catalog.get(source_id) if isinstance(source_catalog, dict) else {}
+        sid = str(source_id or "").lower()
+        vendor = str((row or {}).get("vendor") or "").lower()
+        category = str((row or {}).get("category") or "").lower()
+        if sid.startswith("sig_") or category in {"sig", "spec"}:
+            badges.append("spec")
+        elif sid.startswith("ti_") or vendor == "ti":
+            badges.append("implementation_pattern")
+        elif sid.startswith("nordic_") or vendor == "nordic":
+            badges.append("vendor_logic_reference")
+        elif sid.startswith("autopts") or "pts" in sid:
+            badges.append("validation")
+        else:
+            badges.append("pattern")
+    return list(dict.fromkeys([badge for badge in badges if badge]))
+
+
+def _build_logic_capabilities(
+    analysis: Dict[str, Any],
+    contract: Dict[str, Any],
+    profile_seed: Dict[str, Any],
+    source_catalog: Dict[str, Dict[str, Any]],
+) -> Tuple[List[Dict[str, Any]], List[str], List[str]]:
+    capabilities: List[Dict[str, Any]] = []
+    required: List[str] = []
+    deferred: List[str] = []
+    seen: Set[str] = set()
+    for finding in analysis.get("core_findings", []) if isinstance(analysis.get("core_findings"), list) else []:
+        if not isinstance(finding, dict):
+            continue
+        statement = str(finding.get("statement_he") or "").strip()
+        if not statement or statement in seen:
+            continue
+        seen.add(statement)
+        status = "required"
+        if str(finding.get("status") or "").lower() in {"needs_validation", "inferred"}:
+            status = "unknown"
+        badges = _build_source_badges([str(x) for x in (finding.get("source_ids") or [])], source_catalog)
+        capabilities.append(
+            {
+                "title_he": str(finding.get("title_he") or statement),
+                "summary_he": statement,
+                "status": status,
+                "source_badges": badges,
+                "source_ids": finding.get("source_ids", []),
+                "sources": finding.get("sources", []),
+            }
+        )
+        if status == "required":
+            required.append(statement)
+    for item in contract.get("scope_out", []) if isinstance(contract.get("scope_out"), list) else []:
+        text = str(item).strip()
+        if text:
+            deferred.append(text)
+    if bool(profile_seed.get("has_control_point")) and not deferred:
+        deferred.append("אם נרצה Control Point או RACP בעתיד, נצטרך state machine מלא ולא רק subset בסיסי.")
+    return capabilities[:8], required[:6], deferred[:6]
+
+
+def _build_structure_reference_card(paths: Paths, profile_seed: Dict[str, Any]) -> Dict[str, Any]:
+    similar_profiles = profile_seed.get("similar_profiles", []) if isinstance(profile_seed.get("similar_profiles"), list) else []
+    reference_files = profile_seed.get("reference_files", {}) if isinstance(profile_seed, dict) else {}
+    header_exists, header_path = _file_exists_from_reference(paths, str((reference_files or {}).get("header") or ""))
+    impl_exists, impl_path = _file_exists_from_reference(paths, str((reference_files or {}).get("impl") or ""))
+    return {
+        "type": profile_seed.get("type"),
+        "complexity": profile_seed.get("complexity"),
+        "pattern": profile_seed.get("pattern"),
+        "similar_profiles": similar_profiles,
+        "reference_files": [
+            {"kind": "header", "path": header_path, "exists": header_exists},
+            {"kind": "impl", "path": impl_path, "exists": impl_exists},
+        ],
+        "sources": profile_seed.get("sources", []),
+    }
 
 
 def _pick_best_block(candidates: List[Dict[str, Any]], preferred_doc_kind: str = "structure") -> Dict[str, Any]:
@@ -1820,6 +2624,133 @@ def build_specs_presentation(profile_map: Dict[str, Any], spec_research: Dict[st
     return {"profiles": out_profiles, "rows": rows, "sources": spec_research.get("sources", []) if isinstance(spec_research, dict) else []}
 
 
+def build_overview_presentation(
+    paths: Paths,
+    profile_map: Dict[str, Any],
+    spec_research: Dict[str, Any],
+    logic_analysis: Dict[str, Any],
+    structure_analysis: Dict[str, Any],
+    status_tracker: Dict[str, Any],
+    github_profile_db: Dict[str, Any],
+    github_patterns: Dict[str, Any],
+    github_sources_map: Dict[str, Any],
+) -> Dict[str, Any]:
+    out_profiles: Dict[str, Any] = {}
+    rows: List[Dict[str, Any]] = []
+    status_by_id = {
+        str(row.get("profile_id") or "").upper(): row
+        for row in (status_tracker.get("rows") or [])
+        if isinstance(row, dict)
+    }
+    spec_profiles = (spec_research.get("profiles") or {}) if isinstance(spec_research, dict) else {}
+    seed_profiles = (github_profile_db.get("profiles") or {}) if isinstance(github_profile_db, dict) else {}
+    pattern_profiles = (github_patterns.get("profiles") or {}) if isinstance(github_patterns, dict) else {}
+    governance_rows = (github_sources_map.get("sources") or []) if isinstance(github_sources_map, dict) else []
+    governance_rules = (github_sources_map.get("source_priority_rules") or []) if isinstance(github_sources_map, dict) else []
+
+    for p_row in profile_map.get("profiles", []) if isinstance(profile_map.get("profiles"), list) else []:
+        if not isinstance(p_row, dict):
+            continue
+        pid = str(p_row.get("profile_id") or "").upper()
+        if pid not in PROFILE_IDS:
+            continue
+        spec_row = spec_profiles.get(pid, {}) if isinstance(spec_profiles, dict) else {}
+        logic_row = logic_analysis.get(pid, {}) if isinstance(logic_analysis, dict) else {}
+        structure_row = structure_analysis.get(pid, {}) if isinstance(structure_analysis, dict) else {}
+        status_row = status_by_id.get(pid, {})
+        profile_seed = seed_profiles.get(pid, {}) if isinstance(seed_profiles, dict) else {}
+        characteristics = _characteristics_summary(profile_seed)
+        zephyr_impl_status = _build_zephyr_impl_status(paths, profile_seed)
+        official_tests = _build_official_tests(paths, pid, spec_row, profile_seed)
+        errata_refs = _build_errata_refs(spec_row)
+        summary = spec_row.get("summary", {}) if isinstance(spec_row.get("summary"), dict) else {}
+        artifacts = [
+            {
+                "label_he": "Spec רשמי",
+                "present": bool(summary.get("has_spec_pdf")),
+                "detail_he": "מסמך ה-spec הראשי של הפרופיל קיים מקומית.",
+            },
+            {
+                "label_he": "ICS",
+                "present": bool(summary.get("has_ics_pdf")),
+                "detail_he": "מסמך conformance רשמי שמגדיר capability-level expectations.",
+            },
+            {
+                "label_he": "TS",
+                "present": bool(summary.get("has_ts_pdf")),
+                "detail_he": "מסמך test suite שמסביר מה הטסטים עושים.",
+            },
+            {
+                "label_he": "TCRL",
+                "present": bool(summary.get("has_tcrl_folder")),
+                "detail_he": "רשימת ה-TCIDs הרשמיים של הפרופיל.",
+            },
+            {
+                "label_he": "IXIT",
+                "present": bool(summary.get("has_ixit")),
+                "detail_he": "קבצי פרמטרים למימוש/בדיקה, אם סונכרנו.",
+            },
+        ]
+        autopts_support = official_tests.get("autopts_support", {})
+        known_now = [
+            f"יש חומר רשמי מסונכרן: sync={spec_row.get('sync_status') or 'missing'}",
+            f"דפוס התקשורת העיקרי הוא {PATTERN_HE.get(str(profile_seed.get('pattern') or ''), str(profile_seed.get('pattern') or 'לא ידוע'))}.",
+            f"יש {len(characteristics)} characteristics ידועים במבנה הפרופיל לפי seed של .github.",
+            f"רשימת הבדיקות הרשמית שמופיעה כאן כוללת {int((official_tests.get('summary') or {}).get('total') or 0)} טסטים.",
+            f"סטטוס המימוש הנגזר ב-auto-pts הוא {str((autopts_support or {}).get('status') or 'missing')}.",
+        ]
+        open_points = []
+        if not summary.get("has_ixit"):
+            open_points.append("לא נמצא כרגע IXIT מקומי לפרופיל הזה.")
+        if str((autopts_support or {}).get("status") or "") != "present":
+            open_points.append(str((autopts_support or {}).get("detail_he") or "אין עדיין תמיכת AutoPTS מלאה מוכחת."))
+        if str((zephyr_impl_status.get("status") or "")) != "upstream":
+            open_points.append(str(zephyr_impl_status.get("detail_he") or "אין כרגע reference implementation מקומי מלא."))
+        for gap in (status_row.get("gaps_he") or [])[:3] if isinstance(status_row.get("gaps_he"), list) else []:
+            open_points.append(str(gap))
+        vm = {
+            "profile_id": pid,
+            "ui_label": p_row.get("ui_label") or _ui_label(pid),
+            "display_name_he": p_row.get("display_name_he") or _ui_label(pid),
+            "intro_he": _build_profile_intro_he(pid, str(p_row.get("display_name_he") or _ui_label(pid)), profile_seed),
+            "profile_db_seed": {
+                "name": profile_seed.get("name"),
+                "category": profile_seed.get("category"),
+                "type": profile_seed.get("type"),
+                "complexity": profile_seed.get("complexity"),
+                "pattern": profile_seed.get("pattern"),
+                "uuid_service": ((profile_seed.get("uuids") or {}).get("service") if isinstance(profile_seed.get("uuids"), dict) else None),
+                "similar_profiles": profile_seed.get("similar_profiles", []),
+                "notes": profile_seed.get("notes"),
+                "sources": profile_seed.get("sources", []),
+            },
+            "characteristics_summary": characteristics,
+            "official_artifacts": artifacts,
+            "known_now_he": list(dict.fromkeys([item for item in known_now if item]))[:6],
+            "open_points_he": list(dict.fromkeys([item for item in open_points if item]))[:6],
+            "official_tests": official_tests,
+            "zephyr_impl_status": zephyr_impl_status,
+            "errata_refs": errata_refs,
+            "pattern_cards": pattern_profiles.get(pid, []),
+            "source_governance": {
+                "summary_he": "המידע בפרופיל הזה מחובר בין spec רשמי, pattern cards מ-.github, ותיעוד לוגיקה/מבנה שכבר נחקר בפרויקט.",
+                "ordered_sources": governance_rows,
+                "priority_rules": governance_rules,
+                "sources": _merge_source_lists(github_sources_map.get("file_sources", []), github_profile_db.get("sources", []), github_patterns.get("sources", [])),
+            },
+            "sources": _merge_source_lists(
+                profile_seed.get("sources", []),
+                spec_row.get("sources", []),
+                logic_row.get("sources", []),
+                structure_row.get("sources", []),
+                official_tests.get("sources", []),
+            ),
+        }
+        out_profiles[pid] = vm
+        rows.append(vm)
+    return {"profiles": out_profiles, "rows": rows, "sources": _merge_source_lists(github_profile_db.get("sources", []), github_patterns.get("sources", []), github_sources_map.get("file_sources", []))}
+
+
 def _source_entry_label(source_id: str, source_catalog: Dict[str, Dict[str, Any]]) -> str:
     entry = source_catalog.get(source_id, {}) if isinstance(source_catalog, dict) else {}
     if isinstance(entry, dict):
@@ -1972,9 +2903,13 @@ def build_logic_presentation(
     logic_analysis: Dict[str, Any],
     implementation_contracts: Dict[str, Any],
     source_catalog: Dict[str, Dict[str, Any]],
+    github_profile_db: Dict[str, Any],
+    github_patterns: Dict[str, Any],
 ) -> Dict[str, Any]:
     profiles: Dict[str, Any] = {}
     rows: List[Dict[str, Any]] = []
+    seed_profiles = (github_profile_db.get("profiles") or {}) if isinstance(github_profile_db, dict) else {}
+    pattern_profiles = (github_patterns.get("profiles") or {}) if isinstance(github_patterns, dict) else {}
     for p_row in profile_map.get("profiles", []) if isinstance(profile_map.get("profiles"), list) else []:
         if not isinstance(p_row, dict):
             continue
@@ -1983,17 +2918,22 @@ def build_logic_presentation(
             continue
         analysis = logic_analysis.get(pid, {}) if isinstance(logic_analysis, dict) else {}
         contract = implementation_contracts.get(pid, {}) if isinstance(implementation_contracts, dict) else {}
+        profile_seed = seed_profiles.get(pid, {}) if isinstance(seed_profiles, dict) else {}
         findings = analysis.get("core_findings", []) if isinstance(analysis.get("core_findings"), list) else []
         observations = analysis.get("source_observations", []) if isinstance(analysis.get("source_observations"), list) else []
         researched_sources = _group_source_observations_for_presentation(observations, findings, source_catalog, "logic")
+        logic_capabilities, must_do, deferred = _build_logic_capabilities(analysis, contract, profile_seed, source_catalog)
         vm = {
             "profile_id": pid,
             "ui_label": p_row.get("ui_label") or _ui_label(pid),
             "display_name_he": p_row.get("display_name_he") or _ui_label(pid),
             "researched_sources": researched_sources,
+            "pattern_cards": pattern_profiles.get(pid, []),
             "logic_summary": {
                 "summary_he": str(analysis.get("summary_he") or ""),
                 "behaviors_required_he": _logic_behaviors_from_analysis(analysis, contract),
+                "must_do_he": must_do,
+                "deferred_he": deferred,
                 "important_conditions_he": [
                     str(q.get("detail_he"))
                     for q in (analysis.get("open_questions", []) if isinstance(analysis.get("open_questions"), list) else [])
@@ -2002,6 +2942,7 @@ def build_logic_presentation(
                 "phase1_focus_he": [str(x) for x in (contract.get("scope_in") if isinstance(contract.get("scope_in"), list) else [])][:6],
                 "sources": _merge_source_lists(analysis.get("sources", []), contract.get("sources", [])),
             },
+            "logic_capabilities": logic_capabilities,
             "sources": _merge_source_lists(analysis.get("sources", []), contract.get("sources", [])),
         }
         profiles[pid] = vm
@@ -2159,9 +3100,14 @@ def build_structure_presentation(
     structure_analysis: Dict[str, Any],
     implementation_contracts: Dict[str, Any],
     source_catalog: Dict[str, Dict[str, Any]],
+    paths: Paths,
+    github_profile_db: Dict[str, Any],
+    github_patterns: Dict[str, Any],
 ) -> Dict[str, Any]:
     profiles: Dict[str, Any] = {}
     rows: List[Dict[str, Any]] = []
+    seed_profiles = (github_profile_db.get("profiles") or {}) if isinstance(github_profile_db, dict) else {}
+    pattern_profiles = (github_patterns.get("profiles") or {}) if isinstance(github_patterns, dict) else {}
     for p_row in profile_map.get("profiles", []) if isinstance(profile_map.get("profiles"), list) else []:
         if not isinstance(p_row, dict):
             continue
@@ -2170,24 +3116,41 @@ def build_structure_presentation(
             continue
         analysis = structure_analysis.get(pid, {}) if isinstance(structure_analysis, dict) else {}
         contract = implementation_contracts.get(pid, {}) if isinstance(implementation_contracts, dict) else {}
+        profile_seed = seed_profiles.get(pid, {}) if isinstance(seed_profiles, dict) else {}
         findings = analysis.get("core_findings", []) if isinstance(analysis.get("core_findings"), list) else []
         observations = analysis.get("source_observations", []) if isinstance(analysis.get("source_observations"), list) else []
         researched_sources = _group_source_observations_for_presentation(observations, findings, source_catalog, "structure")
         file_plan, blueprints = _build_file_plan_and_blueprints(pid, contract)
+        reference_card = _build_structure_reference_card(paths, profile_seed)
         vm = {
             "profile_id": pid,
             "ui_label": p_row.get("ui_label") or _ui_label(pid),
             "display_name_he": p_row.get("display_name_he") or _ui_label(pid),
             "researched_sources": researched_sources,
+            "pattern_cards": pattern_profiles.get(pid, []),
+            "reference_profile_card": reference_card,
             "profile_complexity": _structure_complexity(pid, analysis, contract),
             "similar_profiles": _derive_similar_profiles(analysis),
             "structure_summary": {
                 "summary_he": str(analysis.get("summary_he") or ""),
                 "base_profile_structure_ref": {
-                    "status": "placeholder",
-                    "label_he": "מבנה בסיסי לכל פרופיל (placeholder עתידי)",
-                    "detail_he": "כרגע משתמשים ב-fallback המבוסס על findings + implementation contract עד שהמקור הבסיסי יוזן.",
-                    "sources": [],
+                    "status": reference_card.get("complexity", "placeholder"),
+                    "label_he": "מבנה בסיסי שנגזר מסוג הפרופיל",
+                    "detail_he": (
+                        f"ה-profile מסווג כ-{reference_card.get('type') or 'לא מסווג'} / {reference_card.get('complexity') or 'ללא complexity'}, ולכן המבנה המוצע נשען על service + logic + adapter ברמה שנגזרה מה-contract."
+                    ),
+                    "sources": reference_card.get("sources", []),
+                },
+                "pattern_basis": pattern_profiles.get(pid, []),
+                "zephyr_reference_files": reference_card.get("reference_files", []),
+                "vendor_reference_role": {
+                    "zephyr_he": "Zephyr משמש כ-reference pattern למבנה קבצים ו-GATT plumbing.",
+                    "ti_he": "TI משמש רק להבנת structure patterns כשיש ערך נוסף מעבר ל-Zephyr.",
+                    "nordic_he": "Nordic נשמר ללוגיקה ולהבנת flow, לא להעתקת מבנה מימוש.",
+                    "sources": _merge_source_lists(
+                        reference_card.get("sources", []),
+                        *[(card.get("sources") or []) for card in (pattern_profiles.get(pid, []) or []) if isinstance(card, dict)],
+                    ),
                 },
                 "file_plan": file_plan,
                 "file_internal_blueprints": blueprints,
@@ -2418,21 +3381,21 @@ TASK_GROUP_DEFS: Tuple[Dict[str, Any], ...] = (
     },
     {
         "group_id": "service_layer",
-        "label_he": "שכבת שירות",
-        "summary_he": "Service/GATT/CCC/API ציבורי וקבצי שירות מרכזיים.",
-        "goal_he": "להעמיד שכבת שירות יציבה (GATT + CCC + API) שעליה נשענות שאר השכבות.",
+        "label_he": "בניית שירות BLE",
+        "summary_he": "GATT, CCC, API ציבורי וקבצי השירות המרכזיים.",
+        "goal_he": "להעמיד את שלד השירות וה-API שעליהם נשענות שאר השכבות.",
         "order": 20,
     },
     {
         "group_id": "logic_layer",
-        "label_he": "שכבת לוגיקה",
+        "label_he": "מה השירות צריך לעשות",
         "summary_he": "Behavior / flow / policy / gating של הפרופיל.",
         "goal_he": "לממש את ההתנהגות והמדיניות של הפרופיל לפי סיכום הלוגיקה.",
         "order": 30,
     },
     {
         "group_id": "app_integration",
-        "label_he": "אינטגרציית אפליקציה",
+        "label_he": "חיבור לאפליקציה",
         "summary_he": "חיבור לאפליקציה/adapter/bring-up ושילוב במערכת.",
         "goal_he": "לחבר את מימוש הפרופיל לשכבת האפליקציה ולהביא את ה-flow לעבודה.",
         "order": 40,
@@ -2446,7 +3409,7 @@ TASK_GROUP_DEFS: Tuple[Dict[str, Any], ...] = (
     },
     {
         "group_id": "closure_decisions",
-        "label_he": "סגירת החלטות",
+        "label_he": "החלטות פתוחות",
         "summary_he": "החלטות, follow-ups וסגירות Phase 1/תיעוד משלים.",
         "goal_he": "לסגור follow-ups והחלטות כך שלא יישארו חסמי Phase 1 לא מנוהלים.",
         "order": 60,
@@ -2628,6 +3591,61 @@ def build_current_work_templates(
     }
 
 
+def _next_plain_task(tasks: List[Dict[str, Any]]) -> str:
+    ordered = sorted(
+        [t for t in tasks if isinstance(t, dict)],
+        key=lambda t: (
+            {"in_progress": 0, "todo": 1, "blocked": 2, "deferred": 3, "done": 4}.get(str(t.get("default_status") or "todo"), 9),
+            {"high": 0, "medium": 1, "low": 2}.get(str(t.get("suggested_priority") or "medium"), 9),
+            str(t.get("title_he") or ""),
+        ),
+    )
+    for task in ordered:
+        status = str(task.get("default_status") or "todo")
+        if status in {"todo", "in_progress"}:
+            return str(task.get("title_he") or "אין צעד הבא מנוסח")
+    return "אין כרגע צעד עבודה פתוח שנגזר מהתבניות."
+
+
+def add_current_work_simple_summaries(
+    current_work: Dict[str, Any],
+    overview_presentation: Dict[str, Any],
+    status_tracker: Dict[str, Any],
+    github_profile_db: Dict[str, Any],
+) -> Dict[str, Any]:
+    status_by_id = {
+        str(row.get("profile_id") or "").upper(): row
+        for row in (status_tracker.get("rows") or [])
+        if isinstance(row, dict)
+    }
+    overview_profiles = (overview_presentation.get("profiles") or {}) if isinstance(overview_presentation, dict) else {}
+    seed_profiles = (github_profile_db.get("profiles") or {}) if isinstance(github_profile_db, dict) else {}
+    for pid in PROFILE_IDS:
+        row = ((current_work.get("profiles") or {}).get(pid) or {}) if isinstance(current_work, dict) else {}
+        overview = overview_profiles.get(pid, {}) if isinstance(overview_profiles, dict) else {}
+        status_row = status_by_id.get(pid, {})
+        seed = seed_profiles.get(pid, {}) if isinstance(seed_profiles, dict) else {}
+        tasks = row.get("task_templates", []) if isinstance(row.get("task_templates"), list) else []
+        summary = row.get("summary", {}) if isinstance(row.get("summary"), dict) else {}
+        complexity = str(seed.get("complexity") or "Medium")
+        row["simple_summary"] = {
+            "headline_he": (
+                "אפשר כבר להתקדם למימוש ראשוני."
+                if bool(status_row.get("ready_for_impl_phase1"))
+                else "עדיין לא כדאי לקפוץ ישר למימוש; קודם צריך לסגור כמה נקודות בסיס."
+            ),
+            "what_is_clear_he": [
+                f"יש {int(summary.get('total') or 0)} משימות template פנימיות, אבל למשתמש חדש חשובים רק הצעד הבא והחסמים.",
+                f"מורכבות הפרופיל לפי .github היא {complexity}.",
+                *list((overview.get("known_now_he") or [])[:2]),
+            ],
+            "next_step_he": _next_plain_task(tasks),
+            "still_open_he": list((overview.get("open_points_he") or [])[:3]),
+            "advanced_hint_he": "פותחים מצב מתקדם רק כשצריך לעדכן owner/status של משימות או לצלול ללוח השלבים הפנימי.",
+        }
+    return current_work
+
+
 def build_knowledge_center(
     profile_map: Dict[str, Any],
     spec_research: Dict[str, Any],
@@ -2794,6 +3812,10 @@ def build_group_b_hub_data(repo_root: Path | str = ".", autopts_guide: Optional[
     paths = _paths(repo_root)
     profile_map = load_profile_map(paths)
     manifests = load_group_b_manifests(paths)
+    github_profile_db = load_github_profile_db(paths)
+    github_patterns = load_github_profile_patterns(paths)
+    github_sources_map = load_github_sources_map(paths)
+    github_workflow_context = build_github_workflow_context(paths)
     qa_meta = load_group_b_qa_meta(paths)
     spec_research = build_spec_research(paths, profile_map, manifests)
     logic_files, structure_files, logic_analysis, structure_analysis = build_md_file_inventory(paths, profile_map, manifests)
@@ -2824,8 +3846,34 @@ def build_group_b_hub_data(repo_root: Path | str = ".", autopts_guide: Optional[
     )
     source_catalog = manifests.get("source_catalog", {}) if isinstance(manifests, dict) else {}
     specs_presentation = build_specs_presentation(profile_map, spec_research)
-    logic_presentation = build_logic_presentation(profile_map, logic_analysis, implementation_contracts, source_catalog)
-    structure_presentation = build_structure_presentation(profile_map, structure_analysis, implementation_contracts, source_catalog)
+    overview_presentation = build_overview_presentation(
+        paths,
+        profile_map,
+        spec_research,
+        logic_analysis,
+        structure_analysis,
+        status_tracker,
+        github_profile_db,
+        github_patterns,
+        github_sources_map,
+    )
+    logic_presentation = build_logic_presentation(
+        profile_map,
+        logic_analysis,
+        implementation_contracts,
+        source_catalog,
+        github_profile_db,
+        github_patterns,
+    )
+    structure_presentation = build_structure_presentation(
+        profile_map,
+        structure_analysis,
+        implementation_contracts,
+        source_catalog,
+        paths,
+        github_profile_db,
+        github_patterns,
+    )
     current_work = build_current_work_templates(
         profile_map,
         status_tracker,
@@ -2836,6 +3884,7 @@ def build_group_b_hub_data(repo_root: Path | str = ".", autopts_guide: Optional[
         readiness_gates,
         phase1_artifacts.get("phase1_decisions", {}),
     )
+    current_work = add_current_work_simple_summaries(current_work, overview_presentation, status_tracker, github_profile_db)
     base_profile_structure_catalog = build_base_profile_structure_catalog_placeholder(paths)
     knowledge_center = build_knowledge_center(
         profile_map,
@@ -2853,7 +3902,7 @@ def build_group_b_hub_data(repo_root: Path | str = ".", autopts_guide: Optional[
     methods_manifest = manifests.get("methods", {}).get("manifest", {})
 
     sources_policy = {
-        "summary_he": "מדיניות מקורות לעמוד Hub: Specs מ-SIG בלבד, Logic מ-Nordic רשמי, Structure מ-TI רשמי + דפוסים ממקורות מאושרים.",
+        "summary_he": "מדיניות מקורות לעמוד Hub: facts למשתמש נבנים מסנכרון specs מקומי, findings של Group B, ונכסי .github שמשמשים seed ו-governance בלבד.",
         "sig": {
             "allowed_domains": (official_manifest.get("whitelists") or {}).get("sig", []),
             "rule_he": "מותר רק מקורות Bluetooth SIG/Qualification/PTS/Support רשמיים עבור Specs.",
@@ -2878,8 +3927,9 @@ def build_group_b_hub_data(repo_root: Path | str = ".", autopts_guide: Optional[
             "כל finding חייב confidence + source_ids + derivation_method_ids (אם קיים).",
             "כל URL חיצוני חייב להיות domain מאושר לפי הקטגוריה המתאימה.",
             "תצוגת פרופיל דורשת summary_he גם אם אין עדיין findings.",
+            "profiles-db.yaml הוא seed בלבד; אם הוא סותר docs/profiles או auto-pts, ההצגה הסופית חייבת להיות reconciled.",
         ],
-        "sources": manifests.get("official", {}).get("sources", []) + manifests.get("sdk", {}).get("sources", []),
+        "sources": manifests.get("official", {}).get("sources", []) + manifests.get("sdk", {}).get("sources", []) + github_sources_map.get("file_sources", []),
     }
 
     group_b = {
@@ -2893,6 +3943,7 @@ def build_group_b_hub_data(repo_root: Path | str = ".", autopts_guide: Optional[
         "implementation_contracts": implementation_contracts,
         "test_targets_phase1": test_targets_phase1,
         "review_signoffs": review_signoffs,
+        "overview_presentation": overview_presentation,
         "specs_presentation": specs_presentation,
         "logic_presentation": logic_presentation,
         "structure_presentation": structure_presentation,
@@ -2900,6 +3951,12 @@ def build_group_b_hub_data(repo_root: Path | str = ".", autopts_guide: Optional[
         "knowledge_center": knowledge_center,
         "base_profile_structure_catalog": base_profile_structure_catalog,
         "status_tracker": status_tracker,
+        "github_assets": {
+            "profile_db": github_profile_db,
+            "profile_patterns": github_patterns,
+            "sources_map": github_sources_map,
+            "workflow_context": github_workflow_context,
+        },
         "sources_policy": sources_policy,
         "official_sources": {
             "entries": official_manifest.get("entries", []) if isinstance(official_manifest, dict) else [],
@@ -2932,6 +3989,10 @@ def build_group_b_hub_data(repo_root: Path | str = ".", autopts_guide: Optional[
             + manifests.get("sdk", {}).get("sources", [])
             + manifests.get("methods", {}).get("sources", [])
             + manifests.get("spec_sync", {}).get("sources", [])
+            + github_profile_db.get("sources", [])
+            + github_patterns.get("sources", [])
+            + github_sources_map.get("file_sources", [])
+            + github_workflow_context.get("sources", [])
             + qa_meta.get("sources", [])
         ),
     }
@@ -2946,7 +4007,7 @@ def build_group_b_hub_data(repo_root: Path | str = ".", autopts_guide: Optional[
             {"id": "sources", "label": "מקורות ועקיבות"},
         ],
         "profile_subtabs": [
-            {"id": "specs", "label": "מפרטים"},
+            {"id": "overview", "label": "סקירה", "aliases": ["specs"]},
             {"id": "logic", "label": "לוגיקה"},
             {"id": "structure", "label": "מבנה"},
             {"id": "status", "label": "מצב עבודה נוכחי"},
@@ -3024,12 +4085,14 @@ def enforce_group_b_hub_source_policy(data: Dict[str, Any]) -> None:
         "test_targets_phase1",
         "review_signoffs",
         "phase1_decisions",
+        "overview_presentation",
         "specs_presentation",
         "logic_presentation",
         "structure_presentation",
         "current_work",
         "knowledge_center",
         "base_profile_structure_catalog",
+        "github_assets",
     ):
         if not isinstance(group_b.get(key), dict):
             raise ValueError(f"group_b.{key} must be a dict")
@@ -3096,7 +4159,7 @@ def enforce_group_b_hub_source_policy(data: Dict[str, Any]) -> None:
                 if not str(obs.get("how_identified_he") or "").strip():
                     raise ValueError(f"{analysis_key}.{pid} source observation missing how_identified_he")
 
-    for presentation_key in ("specs_presentation", "logic_presentation", "structure_presentation", "current_work"):
+    for presentation_key in ("overview_presentation", "specs_presentation", "logic_presentation", "structure_presentation", "current_work"):
         vm = group_b.get(presentation_key, {})
         profiles = vm.get("profiles", {}) if isinstance(vm, dict) else {}
         if not isinstance(profiles, dict):
@@ -3107,6 +4170,23 @@ def enforce_group_b_hub_source_policy(data: Dict[str, Any]) -> None:
                 raise ValueError(f"group_b.{presentation_key}.profiles.{pid} missing or invalid")
             if not str(row.get("profile_id") or "").strip():
                 raise ValueError(f"group_b.{presentation_key}.profiles.{pid}.profile_id missing")
+
+    overview_presentation = group_b.get("overview_presentation", {})
+    for pid in PROFILE_IDS:
+        orow = ((overview_presentation.get("profiles") or {}).get(pid) or {})
+        official_tests = orow.get("official_tests", {})
+        if not isinstance(orow.get("characteristics_summary"), list):
+            raise ValueError(f"group_b.overview_presentation.profiles.{pid}.characteristics_summary must be a list")
+        if not isinstance(official_tests, dict):
+            raise ValueError(f"group_b.overview_presentation.profiles.{pid}.official_tests must be a dict")
+        if not isinstance(official_tests.get("rows"), list):
+            raise ValueError(f"group_b.overview_presentation.profiles.{pid}.official_tests.rows must be a list")
+        for test_row in official_tests.get("rows", []):
+            if not isinstance(test_row, dict):
+                raise ValueError(f"group_b.overview_presentation.profiles.{pid}.official_tests.rows contains non-dict")
+            for key in ("official_row_id", "tcid", "title_he", "pts_status", "autopts_status"):
+                if not str(test_row.get(key) or "").strip():
+                    raise ValueError(f"group_b.overview_presentation.profiles.{pid}.official_tests row missing {key}")
 
     specs_presentation = group_b.get("specs_presentation", {})
     for pid in PROFILE_IDS:

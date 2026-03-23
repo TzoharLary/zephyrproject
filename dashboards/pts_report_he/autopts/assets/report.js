@@ -7,12 +7,13 @@ const hubSearchInput = document.getElementById("hubSearchInput");
 const state = {
   topTab: "BPS",
   profileSubtabs: {
-    BPS: "status",
-    WSS: "status",
-    SCPS: "status",
+    BPS: "overview",
+    WSS: "overview",
+    SCPS: "overview",
   },
   taskBoardUi: {
     viewModeByProfile: { BPS: "overview", WSS: "overview", SCPS: "overview" },
+    surfaceModeByProfile: { BPS: "simple", WSS: "simple", SCPS: "simple" },
     activeGroupByProfile: { BPS: "", WSS: "", SCPS: "" },
     expandedTaskByProfile: { BPS: null, WSS: null, SCPS: null },
     filtersByProfile: {
@@ -25,6 +26,7 @@ const state = {
 };
 
 const GROUP_B_TASKS_API_PATH = "/api/group-b-tasks";
+const GROUP_B_TEST_NOTES_API_PATH = "/api/group-b-test-notes";
 const TASK_STATUS_ORDER = ["todo", "in_progress", "blocked", "deferred", "done"];
 const TASK_STAGE_ORDER = ["foundations", "service_layer", "logic_layer", "app_integration", "validation_tests", "closure_decisions", "uncategorized"];
 const DEFAULT_TASK_ASSIGNEE = "tzohar";
@@ -47,6 +49,24 @@ const TASK_CATEGORY_LABELS = {
   integration: "אינטגרציה",
   docs: "תיעוד/החלטות",
 };
+const SOURCE_BADGE_LABELS = {
+  spec: "spec",
+  pattern: "pattern",
+  validation: "validation",
+  vendor_logic_reference: "vendor logic reference",
+  implementation_pattern: "implementation pattern",
+};
+const PROFILE_CATEGORY_LABELS = {
+  Health: "בריאות",
+  Sport: "ספורט",
+  Alert: "התראות",
+  User: "משתמש",
+  Location: "מיקום",
+  Generic: "כללי",
+};
+const PROFILE_TYPE_LABELS = { Simple: "פשוט", Complex: "מורכב" };
+const PROFILE_COMPLEXITY_LABELS = { Low: "נמוכה", Medium: "בינונית", High: "גבוהה" };
+const PROFILE_PATTERN_LABELS = { Indicate: "Indicate", Notify: "Notify", Mixed: "משולב", Read: "Read", Write: "Write" };
 
 const taskStateApi = {
   available: false,
@@ -66,6 +86,25 @@ const taskStateApi = {
 
 let taskSaveTimer = null;
 let pendingTaskSaveReason = "";
+
+const testNotesApi = {
+  available: false,
+  readOnly: true,
+  loading: false,
+  error: null,
+  payload: {
+    version: 1,
+    updated_at: null,
+    profiles: {
+      BPS: { notes: {} },
+      WSS: { notes: {} },
+      SCPS: { notes: {} },
+    },
+  },
+};
+
+let testNotesSaveTimer = null;
+let pendingTestNotesSaveReason = "";
 
 function esc(value) {
   return String(value ?? "").replace(/[&<>"']/g, (s) =>
@@ -169,6 +208,14 @@ function statusPill(status) {
 
 function boolPill(flag, yes = "כן", no = "לא") {
   return flag ? pill(yes, "mandatory") : pill(no, "conditional");
+}
+
+function coverageStatusPill(status) {
+  const s = String(status || "");
+  if (s === "present") return pill("קיים", "mandatory");
+  if (s === "partial") return pill("חלקי", "optional");
+  if (s === "missing") return pill("לא קיים", "conditional");
+  return pill("לא הוכח", "optional");
 }
 
 function renderListOrMuted(items, emptyText = "אין נתונים") {
@@ -380,6 +427,120 @@ function scheduleTaskSave(reason = "update") {
   }, 500);
 }
 
+function setTestNotesApiError(errorText) {
+  testNotesApi.error = errorText ? String(errorText) : null;
+}
+
+async function loadGroupBTestNotesState() {
+  testNotesApi.loading = true;
+  try {
+    const resp = await fetch(GROUP_B_TEST_NOTES_API_PATH, { cache: "no-store" });
+    if (!resp.ok) {
+      throw new Error(`HTTP ${resp.status}`);
+    }
+    const payload = await resp.json();
+    const profiles = payload.profiles && typeof payload.profiles === "object" ? payload.profiles : {};
+    testNotesApi.payload = {
+      version: Number(payload.version || 1),
+      updated_at: payload.updated_at || null,
+      profiles: {
+        BPS: profiles.BPS && typeof profiles.BPS === "object" ? profiles.BPS : { notes: {} },
+        WSS: profiles.WSS && typeof profiles.WSS === "object" ? profiles.WSS : { notes: {} },
+        SCPS: profiles.SCPS && typeof profiles.SCPS === "object" ? profiles.SCPS : { notes: {} },
+      },
+    };
+    testNotesApi.available = true;
+    testNotesApi.readOnly = false;
+    setTestNotesApiError(null);
+  } catch (err) {
+    testNotesApi.available = false;
+    testNotesApi.readOnly = true;
+    setTestNotesApiError(`שמירת הערות בדיקות מושבתת (אין שרת או API זמין: ${err && err.message ? err.message : err})`);
+  } finally {
+    testNotesApi.loading = false;
+  }
+}
+
+function ensureTestNotesProfileState(profileId) {
+  if (!testNotesApi.payload || typeof testNotesApi.payload !== "object") {
+    testNotesApi.payload = { version: 1, updated_at: null, profiles: {} };
+  }
+  if (!testNotesApi.payload.profiles || typeof testNotesApi.payload.profiles !== "object") {
+    testNotesApi.payload.profiles = {};
+  }
+  if (!testNotesApi.payload.profiles[profileId] || typeof testNotesApi.payload.profiles[profileId] !== "object") {
+    testNotesApi.payload.profiles[profileId] = { notes: {} };
+  }
+  if (!testNotesApi.payload.profiles[profileId].notes || typeof testNotesApi.payload.profiles[profileId].notes !== "object") {
+    testNotesApi.payload.profiles[profileId].notes = {};
+  }
+  return testNotesApi.payload.profiles[profileId].notes;
+}
+
+function testNoteEntry(profileId, officialRowId) {
+  const notes = ensureTestNotesProfileState(profileId);
+  return (notes[officialRowId] && typeof notes[officialRowId] === "object") ? notes[officialRowId] : { note: "", updated_at: null, updated_by: "" };
+}
+
+function updateTestNote(profileId, officialRowId, note) {
+  const notes = ensureTestNotesProfileState(profileId);
+  const noteText = String(note || "");
+  if (!noteText.trim()) {
+    delete notes[officialRowId];
+    return;
+  }
+  notes[officialRowId] = {
+    note: noteText,
+    updated_at: new Date().toISOString(),
+    updated_by: DEFAULT_TASK_ASSIGNEE,
+  };
+}
+
+async function saveGroupBTestNotesState(reason = "") {
+  if (!testNotesApi.available || testNotesApi.readOnly) return false;
+  const payload = {
+    version: Number((testNotesApi.payload || {}).version || 1),
+    updated_at: (testNotesApi.payload || {}).updated_at || null,
+    profiles: (testNotesApi.payload || {}).profiles || {},
+  };
+  try {
+    const resp = await fetch(GROUP_B_TEST_NOTES_API_PATH, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`HTTP ${resp.status} ${text}`);
+    }
+    testNotesApi.available = true;
+    testNotesApi.readOnly = false;
+    testNotesApi.payload.updated_at = new Date().toISOString();
+    setTestNotesApiError(null);
+    pendingTestNotesSaveReason = "";
+    return true;
+  } catch (err) {
+    testNotesApi.available = false;
+    testNotesApi.readOnly = true;
+    setTestNotesApiError(`שמירת הערות בדיקות נכשלה${reason ? ` (${reason})` : ""}: ${err && err.message ? err.message : err}`);
+    return false;
+  }
+}
+
+function scheduleTestNotesSave(reason = "update") {
+  pendingTestNotesSaveReason = reason;
+  if (testNotesSaveTimer) clearTimeout(testNotesSaveTimer);
+  testNotesSaveTimer = setTimeout(async () => {
+    testNotesSaveTimer = null;
+    const ok = await saveGroupBTestNotesState(pendingTestNotesSaveReason);
+    if (!ok) {
+      renderProfilePanel("BPS");
+      renderProfilePanel("WSS");
+      renderProfilePanel("SCPS");
+    }
+  }, 500);
+}
+
 function taskStatusLabel(status) {
   return TASK_STATUS_LABELS[String(status || "")] || String(status || "todo");
 }
@@ -398,14 +559,16 @@ function profileTaskGroups(profileId) {
 }
 
 function taskBoardUiProfileState(profileId) {
-  if (!state.taskBoardUi) state.taskBoardUi = { viewModeByProfile: {}, activeGroupByProfile: {}, expandedTaskByProfile: {}, filtersByProfile: {}, sortByProfile: {} };
+  if (!state.taskBoardUi) state.taskBoardUi = { viewModeByProfile: {}, surfaceModeByProfile: {}, activeGroupByProfile: {}, expandedTaskByProfile: {}, filtersByProfile: {}, sortByProfile: {} };
   const ui = state.taskBoardUi;
   if (!ui.viewModeByProfile) ui.viewModeByProfile = {};
+  if (!ui.surfaceModeByProfile) ui.surfaceModeByProfile = {};
   if (!ui.activeGroupByProfile) ui.activeGroupByProfile = {};
   if (!ui.expandedTaskByProfile) ui.expandedTaskByProfile = {};
   if (!ui.filtersByProfile) ui.filtersByProfile = {};
   if (!ui.sortByProfile) ui.sortByProfile = {};
   if (!ui.viewModeByProfile[profileId]) ui.viewModeByProfile[profileId] = "overview";
+  if (!ui.surfaceModeByProfile[profileId]) ui.surfaceModeByProfile[profileId] = "simple";
   if (!(profileId in ui.activeGroupByProfile)) ui.activeGroupByProfile[profileId] = "";
   if (!(profileId in ui.expandedTaskByProfile)) ui.expandedTaskByProfile[profileId] = null;
   if (!ui.filtersByProfile[profileId]) {
@@ -414,6 +577,7 @@ function taskBoardUiProfileState(profileId) {
   if (!ui.sortByProfile[profileId]) ui.sortByProfile[profileId] = "default";
   return {
     viewMode: ui.viewModeByProfile[profileId],
+    surfaceMode: ui.surfaceModeByProfile[profileId],
     activeGroup: ui.activeGroupByProfile[profileId] || "",
     expandedTask: ui.expandedTaskByProfile[profileId] || null,
     filters: ui.filtersByProfile[profileId],
@@ -427,6 +591,7 @@ function setTaskBoardUiField(profileId, key, value) {
   else if (key === "expandedTask") state.taskBoardUi.expandedTaskByProfile[profileId] = value || null;
   else if (key === "sort") state.taskBoardUi.sortByProfile[profileId] = value || "default";
   else if (key === "viewMode") state.taskBoardUi.viewModeByProfile[profileId] = value || "overview";
+  else if (key === "surfaceMode") state.taskBoardUi.surfaceModeByProfile[profileId] = value || "simple";
 }
 
 function setTaskBoardFilter(profileId, field, value) {
@@ -458,11 +623,11 @@ function toggleTaskBoardTaskCard(profileId, taskId) {
 function _fallbackTaskGroupMeta(groupId) {
   const defs = {
     foundations: { label_he: "יסודות והכנה", summary_he: "הכנה, reviews, חוזים וחתימות מוכנות.", goal_he: "לסגור תשתית והכנות לפני מימוש." },
-    service_layer: { label_he: "שכבת שירות", summary_he: "Service/GATT/CCC/API וקבצי שירות.", goal_he: "להעמיד שירות יציב ברמת GATT." },
-    logic_layer: { label_he: "שכבת לוגיקה", summary_he: "התנהגות, flow ומדיניות.", goal_he: "לממש את הלוגיקה שנגזרה מהמחקר." },
-    app_integration: { label_he: "אינטגרציית אפליקציה", summary_he: "Adapter/app integration ו-bring-up.", goal_he: "לחבר את המימוש למערכת/אפליקציה." },
+    service_layer: { label_he: "בניית שירות BLE", summary_he: "GATT, CCC, API ציבורי וקבצי השירות.", goal_he: "להעמיד את שלד השירות וה-API שעליהם הכל נשען." },
+    logic_layer: { label_he: "מה השירות צריך לעשות", summary_he: "התנהגות, flow, policy ו-gating.", goal_he: "לממש את הלוגיקה שנגזרה מהמחקר." },
+    app_integration: { label_he: "חיבור לאפליקציה", summary_he: "Adapter, hooks ו-bring-up במערכת.", goal_he: "לחבר את המימוש למערכת/אפליקציה." },
     validation_tests: { label_he: "בדיקות ואימות", summary_he: "Smoke/PTS/AutoPTS ויעדי בדיקות.", goal_he: "לאמת Phase 1 לפי יעדי בדיקות." },
-    closure_decisions: { label_he: "סגירת החלטות", summary_he: "Follow-ups והחלטות Phase 1/תיעוד.", goal_he: "לסגור חסמים והחלטות לפני סיום השלב." },
+    closure_decisions: { label_he: "החלטות פתוחות", summary_he: "Follow-ups והחלטות Phase 1/תיעוד.", goal_he: "לסגור חסמים והחלטות לפני סיום השלב." },
     uncategorized: { label_he: "לא משויך", summary_he: "משימות שעדיין לא שויכו לשלב.", goal_he: "לשייך את המשימות לשלב מתאים." },
   };
   return defs[groupId] || defs.uncategorized;
@@ -657,7 +822,7 @@ function activateTopTab(tabId) {
 }
 
 function setProfileSubtab(profileId, subtabId) {
-  state.profileSubtabs[profileId] = subtabId;
+  state.profileSubtabs[profileId] = subtabId === "specs" ? "overview" : subtabId;
   renderProfilePanel(profileId);
 }
 
@@ -706,40 +871,40 @@ function renderQuickStatus() {
 
 function renderProfileSubtabGuide(profileId, subtab) {
   const guides = {
-    specs: {
-      title: "מה יש כאן ולמה זה חשוב",
-      text: "הלשונית הזו מראה אילו מסמכי מפרט רשמיים (Spec / TCRL / מסמכי עזר) כבר סונכרנו לפרופיל. משתמשים בה כדי לוודא שלא חסר חומר רשמי לפני מימוש.",
+    overview: {
+      title: "איך לקרוא את הסקירה",
+      text: "כאן מתחילים. קודם מבינים מהו הפרופיל, מה המסמכים הרשמיים שיש לנו, ואילו טסטים רשמיים אמורים להיות לו.",
       bullets: [
-        "אם חסר מסמך חשוב: עוצרים ומרעננים sync.",
-        "אם הכל קיים: עוברים ללוגיקה/מבנה.",
+        "אם אתה חדש, זו הלשונית הראשונה שצריך לקרוא.",
+        "טבלת הטסטים למטה היא המקום המהיר להבין מה יש ב-PTS ומה עוד לא מוכח ב-AutoPTS.",
       ],
     },
     logic: {
       title: "איך לקרוא את לשונית הלוגיקה",
-      text: "הלשונית הזו מציגה רק שני דברים: אילו מקורות נחקרו כדי להבין את הלוגיקה, ומה סיכום הלוגיקה בפועל למימוש.",
+      text: "הלשונית הזו מסבירה מה הפרופיל צריך לדעת לעשות בפועל. קודם קוראים את היכולות והדגשים, ורק אחר כך פותחים את המקורות אם צריך.",
       bullets: [
-        "התחל ב'סיכום הלוגיקה של הפרופיל (תכלס)'.",
-        "חזור ל'מקורות שנחקרו' רק אם אתה רוצה להבין מאיפה הסיכום נגזר.",
+        "התחל ב'תכלס, מה הפרופיל הזה צריך לדעת לעשות'.",
+        "המקורות נשארים זמינים, אבל הם לא נקודת הכניסה.",
       ],
     },
     structure: {
       title: "איך לקרוא את לשונית המבנה",
-      text: "הלשונית הזו מציגה רק שני דברים: אילו מקורות נחקרו כדי להבין מבנה, ומה מבנה המימוש המומלץ (קבצים + מבנה פנימי).",
+      text: "הלשונית הזו מתרגמת את המחקר למבנה קוד ברור: אילו קבצים יהיו, מה האחריות של כל קובץ, ומה לקחנו מזפיר או מ-TI.",
       bullets: [
-        "התחל ב'סיכום מבנה המימוש המומלץ'.",
-        "השתמש ב'מקורות שנחקרו' רק כשצריך להבין למה המבנה הוצע כך.",
+        "התחל מהמבנה המומלץ ותכנית הקבצים.",
+        "פתח את המקורות רק אם אתה רוצה להבין את הרציונל המלא.",
       ],
     },
     status: {
       title: "מה נותנת לשונית מצב עבודה נוכחי",
-      text: "זו לשונית העבודה בפועל. כאן מנהלים משימות ותתי-משימות, רואים מה הבא, מה בוצע, ומה חסום — על בסיס הלוגיקה, המבנה וחוזה המימוש.",
+      text: "ברירת המחדל היא סקירה פשוטה: מה ברור, מה הצעד הבא, ומה עדיין פתוח. המצב המתקדם נשאר כאן רק כשצריך לעבוד עם לוח המשימות המלא.",
       bullets: [
-        "זו נקודת הכניסה המומלצת לכל פרופיל.",
-        "עדכן בעלים/סטטוס/עדיפות כאן, והמערכת שומרת לקובץ דרך השרת המקומי.",
+        "אם אתה רק מנסה להבין איפה עומדים, מספיק להישאר במצב הפשוט.",
+        "את הלוח המלא פותחים רק כשבאמת צריך לעדכן owner/status או לצלול לשלבים.",
       ],
     },
   };
-  const g = guides[subtab] || guides.specs;
+  const g = guides[subtab] || guides.overview;
   return `
     <section class="hub-card span-12 tab-guide-card" data-searchable="true" data-search-text="${esc(`${profileId} ${subtab} ${g.title} ${g.text}`)}">
       <h3>${esc(g.title)}</h3>
@@ -994,6 +1159,7 @@ function renderAutoptsTab() {
 }
 
 function renderProfileSubtabs(profileId) {
+  const activeSubtab = state.profileSubtabs[profileId] === "specs" ? "overview" : (state.profileSubtabs[profileId] || "overview");
   return `
     <div class="subtabs" role="tablist" aria-label="תתי לשוניות ${esc(uiLabel(profileId))}">
       ${profileSubtabs()
@@ -1001,7 +1167,7 @@ function renderProfileSubtabs(profileId) {
           (tab) => `
           <button
             type="button"
-            class="subtab-btn ${state.profileSubtabs[profileId] === tab.id ? "active" : ""}"
+            class="subtab-btn ${activeSubtab === tab.id ? "active" : ""}"
             data-profile-subtab="${esc(profileId)}:${esc(tab.id)}"
           >${esc(tab.label)}</button>`
         )
@@ -1059,51 +1225,189 @@ function renderProfileSpecs(profileId) {
   `;
 }
 
-function renderProfileSpecsSimple(profileId) {
-  const specP = ((((DATA.group_b || {}).specs_presentation || {}).profiles) || {})[profileId] || {};
-  const groups = specP.groups || [];
+function renderPatternCards(cards) {
+  if (!cards || !cards.length) return '<p class="muted">אין pattern cards זמינים להצגה.</p>';
   return `
-    <div class="profile-sections">
-      <section class="hub-card" data-searchable="true">
-        <h3>מה סונכרן, מאיזה מקור, ומה זה נותן לנו</h3>
-        <p class="muted">הלשונית הזו מיועדת להבנה מהירה של חומר המקור הרשמי שקיים לנו, ומה תפקיד כל קובץ/תיקייה בהכנה למימוש ולבדיקות.</p>
-        <div class="kv-grid compact">
-          <div><span>סטטוס סנכרון</span>${statusPill(specP.sync_status || "missing")}</div>
-          <div><span>קבוצות מקור</span><strong>${esc(String(groups.length || 0))}</strong></div>
-        </div>
-        ${specP.spec_page_url ? `<div class="row-actions"><a class="mini-btn linkish" href="${esc(specP.spec_page_url)}" target="_blank" rel="noopener">עמוד spec רשמי</a></div>` : ""}
-      </section>
-      ${groups.map((g, idx) => `
-        <section class="hub-card" data-searchable="true" data-search-text="${esc(`${g.source_label_he || ""} ${g.summary_he || ""}`)}">
-          <details class="hub-detail" ${idx === 0 ? "open" : ""}>
-            <summary>
-              <span>${esc(g.source_label_he || `מקור ${idx + 1}`)}</span>
-              <span class="muted">${esc(g.summary_he || "")}</span>
-            </summary>
-            <div class="detail-body">
-              <div class="row-actions">
-                ${g.source_url ? `<a class="mini-btn linkish" href="${esc(g.source_url)}" target="_blank" rel="noopener">פתח מקור</a>` : ""}
-                ${g.source_kind ? pill(`source:${g.source_kind}`) : ""}
-              </div>
-              <div class="cards-grid two">
-                ${(g.files || []).map((f) => `
-                  <article class="hub-card nested-card spec-file-card" data-searchable="true" data-search-text="${esc(`${f.name || ""} ${f.what_it_is_he || ""} ${f.what_we_take_from_it_he || ""}`)}">
-                    <h4><code>${esc(f.name || "-")}</code></h4>
-                    <p class="muted">${esc(f.display_kind_he || (f.is_dir ? "תיקייה" : "קובץ"))}</p>
-                    <div class="obs-row"><span>מה זה</span><p>${esc(f.what_it_is_he || "-")}</p></div>
-                    <div class="obs-row"><span>מה לוקחים ממנו</span><p>${esc(f.what_we_take_from_it_he || "-")}</p></div>
-                    ${f.relevance_he ? `<div class="chip-row">${pill(`רלוונטיות: ${f.relevance_he}`)}</div>` : ""}
-                    ${f.path ? `<div class="mini-meta"><span>נתיב מסונכרן:</span> <code>${esc(f.path)}</code></div>` : ""}
-                    ${sourceDetails(f.sources || [], "מקורות קובץ")}</article>
-                `).join("") || '<p class="muted">אין קבצים בקבוצה זו.</p>'}
-              </div>
-              ${sourceDetails(g.sources || [], "מקורות קבוצה")}
-            </div>
-          </details>
-        </section>
+    <div class="cards-grid two">
+      ${cards.map((card) => `
+        <article class="hub-card nested-card" data-searchable="true" data-search-text="${esc(`${card.title_he || ""} ${card.summary_he || ""} ${(card.tags || []).join(" ")}`)}">
+          <h4>${esc(card.title_he || "Pattern")}</h4>
+          <p>${esc(card.summary_he || "")}</p>
+          ${(card.highlights_he || []).length ? renderListOrMuted(card.highlights_he, "אין דגשים") : ""}
+          ${(card.tags || []).length ? `<div class="chip-row">${(card.tags || []).map((tag) => pill(tag)).join(" ")}</div>` : ""}
+          ${sourceDetails(card.sources || [], "מקורות pattern")}
+        </article>
       `).join("")}
     </div>
   `;
+}
+
+function renderOfficialTestsTable(profileId, officialTests) {
+  const rows = officialTests.rows || [];
+  if (!rows.length) {
+    return '<p class="muted">לא הצלחנו לחלץ כרגע רשימת טסטים רשמית מה-TCRL/TS.</p>';
+  }
+  return `
+    <div class="table-wrap official-tests-table">
+      <table>
+        <thead>
+          <tr>
+            <th>מזהה טסט</th>
+            <th>מה הוא בודק</th>
+            <th>קיים ב-PTS</th>
+            <th>מימוש ב-AutoPTS</th>
+            <th>הערות</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((row) => {
+            const noteEntry = testNoteEntry(profileId, row.official_row_id);
+            return `
+              <tr data-searchable="true" data-search-text="${esc(`${row.tcid || ""} ${row.title_he || ""} ${row.pts_status || ""} ${row.autopts_status || ""}`)}">
+                <td>
+                  <strong>${esc(row.tcid || "-")}</strong>
+                  ${row.suite_family ? `<div class="mini-meta">${esc(row.suite_family)}</div>` : ""}
+                </td>
+                <td>
+                  <div>${esc(row.title_he || "-")}</div>
+                  <details class="inline-detail">
+                    <summary>ראיות והסבר</summary>
+                    <div class="detail-body">
+                      ${row.category ? `<div class="mini-meta"><span>קטגוריה:</span> ${esc(row.category)}</div>` : ""}
+                      ${row.active_date ? `<div class="mini-meta"><span>active_date:</span> ${esc(row.active_date)}</div>` : ""}
+                      <div class="obs-row"><span>PTS</span><p>${esc(row.pts_detail_he || "-")}</p></div>
+                      <div class="obs-row"><span>AutoPTS</span><p>${esc(row.autopts_detail_he || "-")}</p></div>
+                      ${sourceDetails(row.sources || [], "מקורות הטסט")}
+                    </div>
+                  </details>
+                </td>
+                <td>${coverageStatusPill(row.pts_status)}</td>
+                <td>${coverageStatusPill(row.autopts_status)}</td>
+                <td>
+                  <textarea
+                    rows="2"
+                    class="test-note-input"
+                    data-test-note-field="note"
+                    data-profile-id="${esc(profileId)}"
+                    data-official-row-id="${esc(row.official_row_id)}"
+                    ${testNotesApi.readOnly ? "disabled" : ""}
+                  >${esc(noteEntry.note || "")}</textarea>
+                  ${noteEntry.updated_at ? `<div class="mini-meta">עודכן: <code>${esc(noteEntry.updated_at)}</code></div>` : ""}
+                </td>
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderProfileOverviewSimple(profileId) {
+  const vm = ((((DATA.group_b || {}).overview_presentation || {}).profiles) || {})[profileId] || {};
+  const seed = vm.profile_db_seed || {};
+  const officialTests = vm.official_tests || {};
+  const autoptsSupport = officialTests.autopts_support || {};
+  const governance = vm.source_governance || {};
+  return `
+    <div class="profile-sections">
+      <section class="hub-card" data-searchable="true">
+        <h3>מהו הפרופיל הזה בקצרה</h3>
+        <p class="lead">${esc(vm.intro_he || "אין עדיין תקציר profile-level.")}</p>
+        <div class="kv-grid compact">
+          <div><span>קטגוריה</span><strong>${esc(PROFILE_CATEGORY_LABELS[seed.category] || seed.category || "-")}</strong></div>
+          <div><span>סיווג</span><strong>${esc(`${PROFILE_TYPE_LABELS[seed.type] || seed.type || "-"} / ${PROFILE_COMPLEXITY_LABELS[seed.complexity] || seed.complexity || "-"}`)}</strong></div>
+          <div><span>Pattern</span><strong>${esc(PROFILE_PATTERN_LABELS[seed.pattern] || seed.pattern || "-")}</strong></div>
+          <div><span>Service UUID</span><code>${esc(seed.uuid_service || "-")}</code></div>
+        </div>
+        ${(vm.known_now_he || []).length ? `<h4>מה אנחנו יודעים עליו כרגע</h4>${renderListOrMuted(vm.known_now_he, "אין עדיין תקציר מצב.")}` : ""}
+      </section>
+
+      <section class="hub-card">
+        <h3>איך הוא בנוי לפי התקן</h3>
+        <div class="cards-grid two">
+          <article class="hub-card nested-card">
+            <h4>Characteristics ידועים</h4>
+            ${(vm.characteristics_summary || []).length ? `
+              <ul class="compact-list">
+                ${(vm.characteristics_summary || []).map((row) => `<li><strong>${esc(row.name || "-")}</strong> <code>${esc(row.uuid || "")}</code> — ${esc(row.summary_he || "")}</li>`).join("")}
+              </ul>` : '<p class="muted">אין עדיין רשימת characteristics.</p>'}
+          </article>
+          <article class="hub-card nested-card">
+            <h4>Reference / metadata</h4>
+            ${(seed.similar_profiles || []).length ? `<p class="muted">פרופילים דומים: ${(seed.similar_profiles || []).map((x) => `<code>${esc(x)}</code>`).join(" ")}</p>` : ""}
+            ${seed.notes ? `<details class="inline-detail"><summary>metadata raw מתוך .github</summary><div class="detail-body"><p>${esc(seed.notes)}</p></div></details>` : '<p class="muted">אין notes מתוך profiles-db.</p>'}
+            ${sourceDetails(seed.sources || [], "מקורות metadata")}
+          </article>
+        </div>
+      </section>
+
+      <section class="hub-card">
+        <h3>מה כבר יש לנו מקומית</h3>
+        <div class="cards-grid two">
+          <article class="hub-card nested-card">
+            <h4>מסמכים רשמיים</h4>
+            <ul class="compact-list">
+              ${(vm.official_artifacts || []).map((row) => `<li>${coverageStatusPill(row.present ? "present" : "missing")} <strong>${esc(row.label_he || "-")}</strong> — ${esc(row.detail_he || "")}</li>`).join("")}
+            </ul>
+            ${(vm.errata_refs || []).length ? `<p class="muted">Errata: ${(vm.errata_refs || []).map((row) => `<code>${esc(row.name || "")}</code>`).join(" ")}</p>` : ""}
+          </article>
+          <article class="hub-card nested-card">
+            <h4>מימוש Zephyr ו-AutoPTS</h4>
+            <div class="obs-row"><span>Zephyr</span><p>${esc((vm.zephyr_impl_status || {}).detail_he || "-")}</p></div>
+            <div class="obs-row"><span>AutoPTS</span><p>${esc(autoptsSupport.detail_he || "-")}</p></div>
+            ${((vm.zephyr_impl_status || {}).reference_files || []).length ? `<div class="mini-meta">${((vm.zephyr_impl_status || {}).reference_files || []).map((row) => `${row.exists ? "כן" : "לא"}: ${row.path || "-"}`).join(" | ")}</div>` : ""}
+            ${sourceDetails((vm.zephyr_impl_status || {}).sources || [], "מקורות Zephyr")}
+          </article>
+        </div>
+      </section>
+
+      <section class="hub-card">
+        <h3>Pattern cards שמסבירים איך השירות הזה מתנהג</h3>
+        ${renderPatternCards(vm.pattern_cards || [])}
+      </section>
+
+      <section class="hub-card">
+        <h3>רשימת הבדיקות הרשמיות</h3>
+        <p class="muted">כאן רואים את רשימת ה-TCIDs שחולצה מ-TCRL/TS, ובשפה פשוטה האם הטסט קיים ב-PTS והאם יש לו מימוש ב-AutoPTS. אם צריך, אפשר להשאיר הערה חופשית ליד כל טסט.</p>
+        <div class="mini-metrics-grid">
+          <div><span>סה"כ טסטים</span><strong>${esc(String((officialTests.summary || {}).total || 0))}</strong></div>
+          <div><span>קיים ב-PTS</span><strong>${esc(String((officialTests.summary || {}).pts_present || 0))}</strong></div>
+          <div><span>מימוש AutoPTS חלקי</span><strong>${esc(String((officialTests.summary || {}).autopts_partial || 0))}</strong></div>
+          <div><span>מימוש AutoPTS מלא</span><strong>${esc(String((officialTests.summary || {}).autopts_present || 0))}</strong></div>
+        </div>
+        ${testNotesApi.error ? `<div class="warning-box"><strong>הערות טסטים:</strong> ${esc(testNotesApi.error)}</div>` : ""}
+        ${renderOfficialTestsTable(profileId, officialTests)}
+      </section>
+
+      <section class="hub-card">
+        <details class="hub-detail">
+          <summary>למה אנחנו סומכים על המידע הזה</summary>
+          <div class="detail-body">
+            <p>${esc(governance.summary_he || "")}</p>
+            ${(governance.priority_rules || []).length ? `<ul class="compact-list">${(governance.priority_rules || []).map((rule) => `<li>${esc(rule.rule || "")} — ${esc(rule.detail || "")}</li>`).join("")}</ul>` : ""}
+            <div class="cards-grid two">
+              ${(governance.ordered_sources || []).map((row) => `
+                <article class="hub-card nested-card">
+                  <h4>${esc(row.name || row.id || "source")}</h4>
+                  <p class="muted">priority ${esc(String(row.priority || "-"))} · ${esc(row.type || "-")}</p>
+                  <p>${esc(row.description || "")}</p>
+                  ${(row.use_for || []).length ? `<p class="muted">משמש ל: ${(row.use_for || []).slice(0, 3).map((item) => esc(item)).join(" | ")}</p>` : ""}
+                  ${sourceDetails(row.sources || [], "מקור governance")}
+                </article>
+              `).join("")}
+            </div>
+          </div>
+        </details>
+      </section>
+
+      ${(vm.open_points_he || []).length ? `<section class="hub-card"><h3>מה עדיין פתוח</h3>${renderListOrMuted(vm.open_points_he, "אין כרגע נקודות פתוחות.")}</section>` : ""}
+    </div>
+  `;
+}
+
+function renderProfileSpecsSimple(profileId) {
+  return renderProfileOverviewSimple(profileId);
 }
 
 function renderResearchedSourcesCards(items, kindLabel) {
@@ -1132,22 +1436,53 @@ function renderResearchedSourcesCards(items, kindLabel) {
 function renderProfileLogicSimple(profileId) {
   const vm = ((((DATA.group_b || {}).logic_presentation || {}).profiles) || {})[profileId] || {};
   const summary = vm.logic_summary || {};
+  const capabilities = vm.logic_capabilities || [];
   return `
     <div class="profile-sections">
       <section class="hub-card">
-        <h3>מקורות שנחקרו להבנת הלוגיקה</h3>
-        <p class="muted">כאן רואים מה בדקנו בכל מקור, מה מצאנו, ומה לקחנו ממנו כדי להבין את ההתנהגות הנדרשת של הפרופיל.</p>
-        ${renderResearchedSourcesCards(vm.researched_sources || [], "לוגיקה")}
+        <h3>תכלס, מה הפרופיל הזה צריך לדעת לעשות</h3>
+        <p class="lead">${esc(summary.summary_he || "אין עדיין סיכום לוגיקה.")}</p>
+        ${renderPatternCards(vm.pattern_cards || [])}
+        <div class="cards-grid two">
+          <article class="hub-card nested-card">
+            <h4>מה הוא חייב לעשות</h4>
+            ${renderListOrMuted(summary.must_do_he || summary.behaviors_required_he || [], "אין עדיין סעיפים מסונתזים.")}
+          </article>
+          <article class="hub-card nested-card">
+            <h4>מה לא כלול כרגע / נדחה</h4>
+            ${renderListOrMuted(summary.deferred_he || [], "לא זוהו כרגע פריטים שנדחו מה-scope.")}
+          </article>
+        </div>
+        ${summary.important_conditions_he && summary.important_conditions_he.length ? `<h4>דברים שעדיין דורשים בדיקה</h4>${renderListOrMuted(summary.important_conditions_he, "אין")}` : ""}
+        ${capabilities.length ? `
+          <h4>יכולות ופירוט מקורות</h4>
+          <div class="cards-grid two">
+            ${capabilities.map((cap) => `
+              <article class="hub-card nested-card" data-searchable="true" data-search-text="${esc(`${cap.title_he || ""} ${cap.summary_he || ""} ${(cap.source_badges || []).join(" ")}`)}">
+                <div class="finding-head">
+                  <h4>${esc(cap.title_he || "יכולת")}</h4>
+                  <div class="chip-row">
+                    ${coverageStatusPill(cap.status === "required" ? "present" : (cap.status === "unknown" ? "partial" : "missing"))}
+                    ${(cap.source_badges || []).map((badge) => pill(SOURCE_BADGE_LABELS[badge] || badge)).join(" ")}
+                  </div>
+                </div>
+                <p>${esc(cap.summary_he || "")}</p>
+                <details class="inline-detail">
+                  <summary>מאיפה למדנו את זה</summary>
+                  <div class="detail-body">
+                    ${(cap.source_ids || []).length ? `<div class="mini-meta">${(cap.source_ids || []).map((sid) => `<code>${esc(sid)}</code>`).join(" ")}</div>` : ""}
+                    ${sourceDetails(cap.sources || [], "מקורות capability")}
+                  </div>
+                </details>
+              </article>
+            `).join("")}
+          </div>` : ""}
+        ${sourceDetails(summary.sources || [], "מקורות הסיכום")}
       </section>
       <section class="hub-card">
-        <h3>סיכום הלוגיקה של הפרופיל (תכלס)</h3>
-        <p class="lead">${esc(summary.summary_he || "אין עדיין סיכום לוגיקה.")}</p>
-        <h4>מה הפרופיל צריך לדעת לעשות</h4>
-        ${renderListOrMuted(summary.behaviors_required_he || [], "אין סעיפי לוגיקה מסונתזים עדיין.")}
-        <h4>פוקוס לשלב 1 (Phase 1)</h4>
-        ${renderListOrMuted(summary.phase1_focus_he || [], "לא הוגדר פוקוס Phase 1 בלוגיקה.")}
-        ${summary.important_conditions_he && summary.important_conditions_he.length ? `<h4>תנאים/דגשים חשובים</h4>${renderListOrMuted(summary.important_conditions_he, "אין")}` : ""}
-        ${sourceDetails(summary.sources || [], "מקורות הסיכום")}
+        <h3>מקורות שנחקרו להבנת הלוגיקה</h3>
+        <p class="muted">זה החלק המורחב. אם כל מה שרצית הוא להבין מה הפרופיל עושה, מספיק בדרך כלל לקרוא את הסיכום למעלה.</p>
+        ${renderResearchedSourcesCards(vm.researched_sources || [], "לוגיקה")}
       </section>
     </div>
   `;
@@ -1200,31 +1535,29 @@ function renderProfileStructureSimple(profileId) {
   const complexity = vm.profile_complexity || {};
   const summary = vm.structure_summary || {};
   const baseRef = summary.base_profile_structure_ref || {};
+  const referenceCard = vm.reference_profile_card || {};
   return `
     <div class="profile-sections">
       <section class="hub-card">
-        <h3>מקורות שנחקרו להבנת המבנה</h3>
-        <p class="muted">כאן מוצגים המקורות והדפוסים שנבדקו כדי להבין איך נכון לבנות את המימוש בקוד, כולל דמיון לפרופילים אחרים.</p>
+        <h3>איזה מבנה בחרנו</h3>
+        <p class="lead">${esc(summary.summary_he || "אין עדיין סיכום מבנה.")}</p>
         <div class="cards-grid two">
           <article class="hub-card nested-card">
-            <h4>סיווג מורכבות</h4>
+            <h4>למה המבנה הזה</h4>
             <div class="chip-row">${complexity.classification === "complex" ? pill("Profile מורכב", "optional") : pill("Profile פשוט", "mandatory")}</div>
             <p>${esc(complexity.classification_reason_he || "אין נימוק זמין.")}</p>
             ${sourceDetails(complexity.sources || [], "מקורות סיווג")}
           </article>
           <article class="hub-card nested-card">
-            <h4>פרופילים דומים שנמצאו</h4>
-            ${(vm.similar_profiles || []).length ? `
+            <h4>אם היה לנו profile דומה, מאיפה היינו מתחילים</h4>
+            ${(referenceCard.reference_files || []).length ? `
               <ul class="compact-list">
-                ${(vm.similar_profiles || []).map((sp) => `<li><strong>${esc(sp.profile_name || "-")}</strong> — ${esc(sp.why_similar_he || "")}<br><span class="muted">${esc(sp.what_can_be_learned_he || "")}</span></li>`).join("")}
-              </ul>` : '<p class="muted">לא זוהו פרופילים דומים מפורשים בממצאים הנוכחיים.</p>'}
+                ${(referenceCard.reference_files || []).map((row) => `<li><strong>${esc(row.kind || "-")}</strong> — <code>${esc(row.path || "-")}</code> ${row.exists ? coverageStatusPill("present") : coverageStatusPill("missing")}</li>`).join("")}
+              </ul>` : '<p class="muted">אין כרגע reference files מתועדים.</p>'}
+            ${(referenceCard.similar_profiles || []).length ? `<p class="muted">פרופילים דומים: ${(referenceCard.similar_profiles || []).map((x) => `<code>${esc(x)}</code>`).join(" ")}</p>` : ""}
           </article>
         </div>
-        ${renderResearchedSourcesCards(vm.researched_sources || [], "מבנה")}
-      </section>
-      <section class="hub-card">
-        <h3>סיכום מבנה המימוש המומלץ</h3>
-        <p class="lead">${esc(summary.summary_he || "אין עדיין סיכום מבנה.")}</p>
+        ${renderPatternCards(vm.pattern_cards || [])}
         <div class="warning-box">
           <strong>מבנה בסיסי לכל פרופיל:</strong>
           ${esc(baseRef.detail_he || "המקור הבסיסי טרם הוזן; כרגע מוצג fallback מסונתז מהמחקר והחוזה.")}
@@ -1233,7 +1566,22 @@ function renderProfileStructureSimple(profileId) {
         ${renderStructureFilePlanTable(summary.file_plan || [])}
         <h4>מבנה פנימי מוצע לכל קובץ</h4>
         ${renderFileBlueprints(summary.file_internal_blueprints || [])}
+        ${(summary.vendor_reference_role || {}).zephyr_he ? `
+          <details class="hub-detail">
+            <summary>מה לקחנו מזפיר / TI / Nordic</summary>
+            <div class="detail-body">
+              <div class="obs-row"><span>Zephyr</span><p>${esc((summary.vendor_reference_role || {}).zephyr_he || "-")}</p></div>
+              <div class="obs-row"><span>TI</span><p>${esc((summary.vendor_reference_role || {}).ti_he || "-")}</p></div>
+              <div class="obs-row"><span>Nordic</span><p>${esc((summary.vendor_reference_role || {}).nordic_he || "-")}</p></div>
+              ${sourceDetails((summary.vendor_reference_role || {}).sources || [], "מקורות role mapping")}
+            </div>
+          </details>` : ""}
         ${sourceDetails(summary.sources || [], "מקורות סיכום מבנה")}
+      </section>
+      <section class="hub-card">
+        <h3>מקורות שנחקרו להבנת המבנה</h3>
+        <p class="muted">החלק הזה מיועד למצב שבו אתה רוצה להבין למה המבנה הוצע דווקא כך, ולא רק מהו המבנה עצמו.</p>
+        ${renderResearchedSourcesCards(vm.researched_sources || [], "מבנה")}
       </section>
     </div>
   `;
@@ -1834,13 +2182,70 @@ function renderTaskBoardStageLayout(profileId, ctx) {
   `;
 }
 
-function renderProfileCurrentWork(profileId) {
+function renderProfileCurrentWorkSimple(profileId) {
+  const vm = profileCurrentWorkVm(profileId);
+  const simple = vm.simple_summary || {};
+  const statusRow = ((((DATA.group_b || {}).status_tracker || {}).rows) || []).find((row) => row.profile_id === profileId) || {};
+  const overview = ((((DATA.group_b || {}).overview_presentation || {}).profiles) || {})[profileId] || {};
+  return `
+    <div class="profile-sections">
+      <section class="hub-card">
+        <div class="profile-card-head">
+          <div>
+            <h3>מה קורה עכשיו באמת</h3>
+            <p class="lead">${esc(simple.headline_he || "אין עדיין תקציר עבודה פשוט.")}</p>
+          </div>
+          <div class="chip-row">
+            ${boolPill(!!statusRow.ready_for_impl_phase1, "אפשר להתחיל", "עדיין בהכנה")}
+            ${pill(`משימות פנימיות: ${esc(String(((vm.summary || {}).total) || 0))}`)}
+          </div>
+        </div>
+        <div class="cards-grid two">
+          <article class="hub-card nested-card">
+            <h4>מה כבר ברור</h4>
+            ${renderListOrMuted(simple.what_is_clear_he || [], "אין עדיין תקציר.")}
+          </article>
+          <article class="hub-card nested-card">
+            <h4>הצעד הבא בפועל</h4>
+            <p>${esc(simple.next_step_he || "אין צעד הבא זמין כרגע.")}</p>
+            <p class="muted">${esc(simple.advanced_hint_he || "")}</p>
+          </article>
+        </div>
+        ${(simple.still_open_he || []).length ? `<section class="hub-card nested-card"><h4>מה עדיין פתוח</h4>${renderListOrMuted(simple.still_open_he, "אין חסמים כרגע.")}</section>` : ""}
+        ${(overview.pattern_cards || []).length ? `<section class="hub-card nested-card"><h4>הדגש הכי חשוב בפרופיל הזה</h4>${renderPatternCards((overview.pattern_cards || []).slice(0, 1))}</section>` : ""}
+      </section>
+    </div>
+  `;
+}
+
+function renderProfileCurrentWorkAdvanced(profileId) {
   const ctx = deriveTaskBoardContext(profileId);
   return `
     <div class="profile-sections">
       ${renderTaskBoardControls(profileId, ctx)}
       ${renderTaskBoardSummaryCards(ctx)}
       ${renderTaskBoardStageLayout(profileId, ctx)}
+    </div>
+  `;
+}
+
+function renderProfileCurrentWork(profileId) {
+  const mode = (taskBoardUiProfileState(profileId) || {}).surfaceMode || "simple";
+  return `
+    <div class="profile-sections">
+      <section class="hub-card">
+        <div class="profile-card-head">
+          <div>
+            <h3>מצב עבודה נוכחי</h3>
+            <p class="muted">ברירת המחדל כאן היא מצב פשוט. מצב מתקדם פותח את לוח השלבים והמשימות המלא.</p>
+          </div>
+          <div class="chip-row">
+            <button type="button" class="mini-btn ${mode === "simple" ? "active" : ""}" data-current-work-mode="${esc(profileId)}:simple">סקירה פשוטה</button>
+            <button type="button" class="mini-btn ${mode === "advanced" ? "active" : ""}" data-current-work-mode="${esc(profileId)}:advanced">מצב מתקדם</button>
+          </div>
+        </div>
+      </section>
+      ${mode === "advanced" ? renderProfileCurrentWorkAdvanced(profileId) : renderProfileCurrentWorkSimple(profileId)}
     </div>
   `;
 }
@@ -2446,13 +2851,14 @@ function renderProfileStatus(profileId) {
 function renderProfilePanel(profileId) {
   const root = document.getElementById(`hubProfile${profileId}Content`);
   if (!root) return;
-  const subtab = state.profileSubtabs[profileId] || "status";
+  const subtab = state.profileSubtabs[profileId] === "specs" ? "overview" : (state.profileSubtabs[profileId] || "overview");
   const spec = ((((DATA.group_b || {}).spec_research || {}).profiles) || {})[profileId] || {};
   const logic = ((((DATA.group_b || {}).logic_analysis || {})[profileId]) || {});
   const structure = ((((DATA.group_b || {}).structure_analysis || {})[profileId]) || {});
 
   let body = "";
-  if (subtab === "specs") body = renderProfileSpecsSimple(profileId);
+  if (subtab === "overview") body = renderProfileOverviewSimple(profileId);
+  else if (subtab === "specs") body = renderProfileOverviewSimple(profileId);
   else if (subtab === "logic") body = renderProfileLogicSimple(profileId);
   else if (subtab === "structure") body = renderProfileStructureSimple(profileId);
   else body = renderProfileCurrentWork(profileId);
@@ -2699,6 +3105,16 @@ function bindEvents() {
       return;
     }
 
+    const surfaceBtn = event.target.closest ? event.target.closest("[data-current-work-mode]") : null;
+    if (surfaceBtn) {
+      const raw = surfaceBtn.getAttribute("data-current-work-mode") || "";
+      const [profileId, mode] = raw.split(":");
+      if (!profileId || !mode) return;
+      setTaskBoardUiField(profileId, "surfaceMode", mode);
+      renderProfilePanel(profileId);
+      return;
+    }
+
     const chipBtn = event.target.closest ? event.target.closest("[data-task-chip]") : null;
     if (chipBtn) {
       const raw = chipBtn.getAttribute("data-task-chip") || "";
@@ -2793,6 +3209,18 @@ function bindEvents() {
     handleTaskFieldEvent(event);
   });
 
+  const handleTestNoteEvent = (event) => {
+    const el = event.target && event.target.closest ? event.target.closest("[data-test-note-field]") : null;
+    if (!el) return;
+    const profileId = el.getAttribute("data-profile-id") || "";
+    const officialRowId = el.getAttribute("data-official-row-id") || "";
+    if (!profileId || !officialRowId) return;
+    updateTestNote(profileId, officialRowId, "value" in el ? el.value : "");
+    scheduleTestNotesSave(`${profileId}:${officialRowId}`);
+  };
+  document.addEventListener("change", handleTestNoteEvent);
+  document.addEventListener("input", handleTestNoteEvent);
+
   if (hubSearchInput) {
     hubSearchInput.addEventListener("input", applySearch);
   }
@@ -2836,6 +3264,7 @@ async function bootstrap() {
   bindEvents();
   activateTopTab("BPS");
   await loadGroupBTasksState();
+  await loadGroupBTestNotesState();
   renderProfilePanel("BPS");
   renderProfilePanel("WSS");
   renderProfilePanel("SCPS");

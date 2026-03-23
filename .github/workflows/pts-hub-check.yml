@@ -13,6 +13,10 @@ on:
       - "docs/profiles/WSS/**"
       - "docs/profiles/SCPS/**"
       - "dashboards/pts_report_he/**"
+      - ".github/data/profiles-db.yaml"
+      - ".github/data/profile-patterns.md"
+      - ".github/data/sources-map.yaml"
+      - ".github/docs/system-journal.md"
       - ".github/workflows/pts-hub-check.yml"
   pull_request:
     paths:
@@ -26,6 +30,10 @@ on:
       - "docs/profiles/WSS/**"
       - "docs/profiles/SCPS/**"
       - "dashboards/pts_report_he/**"
+      - ".github/data/profiles-db.yaml"
+      - ".github/data/profile-patterns.md"
+      - ".github/data/sources-map.yaml"
+      - ".github/docs/system-journal.md"
       - ".github/workflows/pts-hub-check.yml"
   workflow_dispatch:
 

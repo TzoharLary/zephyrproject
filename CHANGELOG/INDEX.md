@@ -4,6 +4,7 @@
 
 | Date | Group | Title | Reason (Short) | Commit |
 |---|---|---|---|---|
+| 2026-03-23 | dashboard | Integrate `.github` metadata into Group B hub | חיבור metadata/patterns/governance מ-`.github` למסכי `סקירה`/`לוגיקה`/`מבנה`/`מצב עבודה` והוספת טבלת בדיקות + API להערות | pending (no commit in this task) |
 | 2026-03-23 | infra | Codify Copilot-Style `.github` Loading | קיבוע פרוטוקול טעינה ושימוש ב-`.github/` דרך `AGENTS.md` כך שהסוכן יחקה את מודל העבודה של Copilot ברמת הפרויקט | pending (no commit in this task) |
 | 2026-03-22 | dashboard | Improve task-board control visibility | חיזוק חזותי לשדות סינון/חיפוש בלוח העבודה + cache-busting לטעינת CSS עדכני לאחר build | pending (no commit in this task) |
 | 2026-03-22 | dashboard | Right-Size PTS Build Documentation | קיצור README של הדשבורד והעברת פירוט מצבי ה-build למסמך ייעודי עקבי עם המימוש בפועל | pending |

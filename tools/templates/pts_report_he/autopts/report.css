@@ -473,6 +473,29 @@ pre code {
   background: #fff;
 }
 
+.official-tests-table table {
+  min-width: 980px;
+}
+
+.official-tests-table textarea,
+.test-note-input {
+  width: 100%;
+  min-height: 64px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px 10px;
+  font: inherit;
+  color: var(--text);
+  resize: vertical;
+}
+
+.official-tests-table textarea:disabled,
+.test-note-input:disabled {
+  background: var(--bg-soft);
+  color: var(--muted);
+}
+
 table {
   width: 100%;
   border-collapse: separate;
@@ -536,6 +559,10 @@ tbody tr:hover {
 .profile-sections {
   display: grid;
   gap: 10px;
+}
+
+.tab-guide-card {
+  background: linear-gradient(180deg, #f8fcff 0%, #ffffff 100%);
 }
 
 .knowledge-layout {
