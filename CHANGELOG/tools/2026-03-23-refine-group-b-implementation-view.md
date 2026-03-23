@@ -22,7 +22,7 @@
 - Devs: תבנית ה-Hub תומכת כעת בהסבר implementation inline ובסינון confidence מהתצוגה, וה-build ממשיך להפיק assets תואמים מתוך `tools/templates`.
 
 ## References
-- Commit: pending (no commit in this task)
+- Commit: 53ca9b9
 - Files:
   - tools/templates/pts_report_he/autopts/report.js
   - tools/templates/pts_report_he/autopts/report.css
