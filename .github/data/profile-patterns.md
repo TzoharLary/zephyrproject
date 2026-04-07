@@ -1,20 +1,19 @@
 # Zephyr BLE GATT Profile Patterns
-# ===================================
-# Static knowledge base containing pre-researched, permanent knowledge
-# about Zephyr BLE GATT profile patterns. This does NOT need to be
-# re-researched at runtime — it is loaded once and used for all generation.
-#
-# Contents:
-# 1. Simple Profile Pattern (h + c + Kconfig)
-# 2. Complex Profile Pattern
-# 3. Characteristic Types Reference
-# 4. Kconfig Patterns
-# 5. CMakeLists.txt Integration
-# 6. UUID Definition Patterns
-# 7. Logging Patterns
-# 8. Pattern Selection Guide
-# 9. Common Mistakes to Avoid
-# 10. Phase 1 Discovered Patterns (added from spec analysis of docs/profiles/)
+
+Static knowledge base containing pre-researched, permanent knowledge about Zephyr BLE GATT profile patterns. This does **not** need to be re-researched at runtime — it is loaded once and used for all generation.
+
+## Contents
+
+1. [Simple Profile Pattern (h + c + Kconfig)](#1-simple-profile-pattern)
+2. [Complex Profile Pattern](#2-complex-profile-pattern)
+3. [Characteristic Types Reference](#3-characteristic-types-reference)
+4. [Kconfig Patterns](#4-kconfig-patterns)
+5. [CMakeLists.txt Integration](#5-cmakeliststxt-integration)
+6. [UUID Definition Patterns](#6-uuid-definition-patterns)
+7. [Logging Patterns](#7-logging-patterns)
+8. [Pattern Selection Guide](#8-pattern-selection-guide)
+9. [Common Mistakes to Avoid](#9-common-mistakes-to-avoid)
+10. [Phase 1 Discovered Patterns (added from spec analysis of data/raw/bluetooth_sig/profiles/)](#10-phase-1-discovered-patterns)
 
 ---
 
@@ -783,11 +782,11 @@ LOG_ERR("Error: initialization failed: %d", err);
 ## 10. Phase 1 Discovered Patterns
 
 > These patterns were discovered during Phase 1 validation (analysis of BT SIG spec docs
-> in `docs/profiles/` and cross-referencing with the Zephyr service implementations).
+> in `data/raw/bluetooth_sig/profiles/` and cross-referencing with the Zephyr service implementations).
 
 ### 10.1 Server-Requests-Client-Refresh Pattern (SCPS)
 
-Source: `docs/profiles/SCPS/Scan_Parameters_Service_1.0.pdf`, Section 2.5
+Source: `data/raw/bluetooth_sig/profiles/SCPS/Scan_Parameters_Service_1.0.pdf`, Section 2.5
 
 The Scan Parameters Service introduces a unique pattern where the **server notifies the
 client to re-send its scan parameters**. This is the inverse of normal notify usage:
@@ -838,8 +837,8 @@ the stored values represent the **last known worst-case** client scanning behavi
 
 ### 10.2 Indicate-Based Measurement Delivery Pattern (BPS, HTS, BCS, WSS)
 
-Source: `docs/profiles/BPS/Blood_Pressure_Service_1.1.1.pdf`, Section 3.1;
-`docs/profiles/WSS/Weight_Scale_Service_1.0.1.pdf`, Section 3.2
+Source: `data/raw/bluetooth_sig/profiles/BPS/Blood_Pressure_Service_1.1.1.pdf`, Section 3.1;
+`data/raw/bluetooth_sig/profiles/WSS/Weight_Scale_Service_1.0.1.pdf`, Section 3.2
 
 Medical measurement profiles (BPS, HTS, WSS, BCS) use **Indicate** (not Notify) for
 measurement delivery. This is intentional: measurements are clinically significant and
@@ -901,8 +900,8 @@ Use a `pending` flag or semaphore.
 
 ### 10.3 Conditional Feature Indication Pattern (WSS, BPS Feature Characteristics)
 
-Source: `docs/profiles/WSS/Weight_Scale_Service_1.0.1.pdf`, Table 3.1 footnote;
-`docs/profiles/BPS/Blood_Pressure_Service_1.1.1.pdf`, Note C.5
+Source: `data/raw/bluetooth_sig/profiles/WSS/Weight_Scale_Service_1.0.1.pdf`, Table 3.1 footnote;
+`data/raw/bluetooth_sig/profiles/BPS/Blood_Pressure_Service_1.1.1.pdf`, Note C.5
 
 Some "Feature" characteristics (e.g., Weight Scale Feature, Blood Pressure Feature)
 support a **conditional Indicate** property:

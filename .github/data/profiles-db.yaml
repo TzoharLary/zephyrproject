@@ -25,7 +25,7 @@ last_updated: "2026-02-26"
 #   - BCS/WSS: complexity Medium→Low (2 chars, no state: Low by classification rule)
 #   - PLXS: has_control_point false→true (RACP 0x2A52 present)
 #   - All profiles: pts_tracked, spec_version, spec_doc fields added where available
-# Coverage audit: BPS (0x1810) added — present in docs/profiles/BPS/ and tools/data/ but was missing
+# Coverage audit: BPS (0x1810) added — present in data/raw/bluetooth_sig/profiles/BPS/ and tools/data/ but was missing
 # Technical tags added: has_control_point, uses_indicate, per_connection_state_required
 # Tag invariant: EVERY profile MUST include either "simple" or "complex" in tags, matching the type: field.
 #   Valid:   type: Simple  → tags must contain "simple"
@@ -62,7 +62,7 @@ profiles:
     per_connection_state_required: false
     kconfig_symbol: BT_HRS
     spec_version: "1.0"
-    spec_doc: "docs/profiles/HRS/Heart_Rate_Service_1.0.pdf"
+    spec_doc: "data/raw/bluetooth_sig/profiles/HRS/Heart_Rate_Service_1.0.pdf"
     pts_tracked: true
     reference_files:
       header: "include/zephyr/bluetooth/services/hrs.h"
@@ -119,14 +119,14 @@ profiles:
     per_connection_state_required: false
     kconfig_symbol: BT_DIS
     spec_version: "1.2"
-    spec_doc: "docs/profiles/DIS/Device_Information_Service_1.2.pdf"
+    spec_doc: "data/raw/bluetooth_sig/profiles/DIS/Device_Information_Service_1.2.pdf"
     pts_tracked: true
     reference_files:
       header: "include/zephyr/bluetooth/services/dis.h"
       impl: "subsys/bluetooth/services/dis.c"
     similar_profiles: [BAS]
     tags: [device, info, read-only, complex, no-callback, static]
-    notes: "Pure read-only profile. Values configured via Kconfig. No callbacks needed. 8 optional characteristics (all optional per DIS v1.2 spec). UUID verified against docs/profiles/DIS/Device_Information_Service_1.2.pdf."
+    notes: "Pure read-only profile. Values configured via Kconfig. No callbacks needed. 8 optional characteristics (all optional per DIS v1.2 spec). UUID verified against data/raw/bluetooth_sig/profiles/DIS/Device_Information_Service_1.2.pdf."
 
   - name: "Battery Service"
     id: BAS
@@ -148,14 +148,14 @@ profiles:
     per_connection_state_required: false
     kconfig_symbol: BT_BAS
     spec_version: "1.1"
-    spec_doc: "docs/profiles/BAS/Battery_Service_1.1.pdf"
+    spec_doc: "data/raw/bluetooth_sig/profiles/BAS/Battery_Service_1.1.pdf"
     pts_tracked: true
     reference_files:
       header: "include/zephyr/bluetooth/services/bas.h"
       impl: "subsys/bluetooth/services/bas.c"
     similar_profiles: [HRS, DIS]
     tags: [power, battery, read, notify, simple, sensor]
-    notes: "Simple read/notify profile. Good reference for combined read+notify characteristics. BAS v1.1 added 11 optional characteristics (Battery Level Status, Estimated Service Date, etc.) — basic implementation covers v1.0 Battery Level only. UUID verified against docs/profiles/BAS/Battery_Service_1.1.pdf."
+    notes: "Simple read/notify profile. Good reference for combined read+notify characteristics. BAS v1.1 added 11 optional characteristics (Battery Level Status, Estimated Service Date, etc.) — basic implementation covers v1.0 Battery Level only. UUID verified against data/raw/bluetooth_sig/profiles/BAS/Battery_Service_1.1.pdf."
 
   - name: "Health Thermometer Service"
     id: HTS
@@ -482,14 +482,14 @@ profiles:
     per_connection_state_required: true
     kconfig_symbol: BT_HIDS
     spec_version: "1.1"
-    spec_doc: "docs/profiles/HID/HID_Over_GATT_Profile_1.1.pdf"
+    spec_doc: "data/raw/bluetooth_sig/profiles/HID/HID_Over_GATT_Profile_1.1.pdf"
     pts_tracked: true
     reference_files:
       header: "include/zephyr/bluetooth/services/hids.h"
       impl: "subsys/bluetooth/services/hids.c"
     similar_profiles: [OTS]
     tags: [hid, complex, mixed, keyboard, mouse, report, state-machine, boot-mode, has_control_point, per_connection_state_required]
-    notes: "Complex HID profile with boot and report modes. Full state machine with connection tracking. HID over GATT Profile v1.1 spec (docs/profiles/HID/). Protocol Mode (0x2A4E) enables boot mode for simpler keyboard/mouse report format. Report characteristic (0x2A4D) uses Report Reference descriptor to distinguish input/output/feature report types. HID Control Point (0x2A4C, Write Without Response) is a simple device control command (opcode 0x01 = Suspend, 0x02 = Exit Suspend) — see profile-patterns.md for control point patterns. UUID verified against docs/profiles/HID/HID_Over_GATT_Profile_1.1.pdf."
+    notes: "Complex HID profile with boot and report modes. Full state machine with connection tracking. HID over GATT Profile v1.1 spec (data/raw/bluetooth_sig/profiles/HID/). Protocol Mode (0x2A4E) enables boot mode for simpler keyboard/mouse report format. Report characteristic (0x2A4D) uses Report Reference descriptor to distinguish input/output/feature report types. HID Control Point (0x2A4C, Write Without Response) is a simple device control command (opcode 0x01 = Suspend, 0x02 = Exit Suspend) — see profile-patterns.md for control point patterns. UUID verified against data/raw/bluetooth_sig/profiles/HID/HID_Over_GATT_Profile_1.1.pdf."
 
   - name: "Scan Parameters Service"
     id: SPS
@@ -515,14 +515,14 @@ profiles:
     per_connection_state_required: false
     kconfig_symbol: BT_SPS
     spec_version: "1.0"
-    spec_doc: "docs/profiles/SCPS/Scan_Parameters_Service_1.0.pdf"
+    spec_doc: "data/raw/bluetooth_sig/profiles/SCPS/Scan_Parameters_Service_1.0.pdf"
     pts_tracked: true
     reference_files:
       header: "include/zephyr/bluetooth/services/sps.h"
       impl: "subsys/bluetooth/services/sps.c"
     similar_profiles: [IAS, LLS]
     tags: [generic, scan, write, notify, simple, server-requests-refresh]
-    notes: "Scan parameter negotiation between GAP Central (collector) and GAP Peripheral (sensor). Client writes scan interval/window; server may notify client to re-send (Scan Refresh 0x2A31). UUID verified against docs/profiles/SCPS/Scan_Parameters_Service_1.0.pdf. Unique server-requests-refresh pattern — see profile-patterns.md §10.1."
+    notes: "Scan parameter negotiation between GAP Central (collector) and GAP Peripheral (sensor). Client writes scan interval/window; server may notify client to re-send (Scan Refresh 0x2A31). UUID verified against data/raw/bluetooth_sig/profiles/SCPS/Scan_Parameters_Service_1.0.pdf. Unique server-requests-refresh pattern — see profile-patterns.md §10.1."
 
   - name: "Running Speed and Cadence Service"
     id: RSCS
@@ -833,14 +833,14 @@ profiles:
     per_connection_state_required: false
     kconfig_symbol: BT_WSS
     spec_version: "1.0.1"
-    spec_doc: "docs/profiles/WSS/Weight_Scale_Service_1.0.1.pdf"
+    spec_doc: "data/raw/bluetooth_sig/profiles/WSS/Weight_Scale_Service_1.0.1.pdf"
     pts_tracked: false
     reference_files:
       header: "include/zephyr/bluetooth/services/wss.h"
       impl: "subsys/bluetooth/services/wss.c"
     similar_profiles: [BCS, HTS]
     tags: [health, weight, indicate, fitness, measurement, uses_indicate, simple]
-    notes: "Weight scale profile. complexity: Low — 2 characteristics, no state, 1 CCC (Low = 1–2 chars, 0–1 CCC). Same topology as BCS. Weight Measurement (0x2A9D) mandatory Indicate; Weight Scale Feature (0x2A9E) mandatory Read. Feature supports conditional Indicate for bonding+dynamic case — see §10.3. UUID and structure verified against docs/profiles/WSS/Weight_Scale_Service_1.0.1.pdf."
+    notes: "Weight scale profile. complexity: Low — 2 characteristics, no state, 1 CCC (Low = 1–2 chars, 0–1 CCC). Same topology as BCS. Weight Measurement (0x2A9D) mandatory Indicate; Weight Scale Feature (0x2A9E) mandatory Read. Feature supports conditional Indicate for bonding+dynamic case — see §10.3. UUID and structure verified against data/raw/bluetooth_sig/profiles/WSS/Weight_Scale_Service_1.0.1.pdf."
 
   - name: "Continuous Glucose Monitoring Service"
     id: CGMS
@@ -1024,13 +1024,13 @@ profiles:
     similar_profiles: [HTS, BCS, WSS]
     tags: [health, medical, blood-pressure, indicate, notify, measurement, uses_indicate, simple]
     spec_version: "v1.1.1"
-    spec_doc: "docs/profiles/BPS/Blood_Pressure_Service_1.1.1.pdf"
+    spec_doc: "data/raw/bluetooth_sig/profiles/BPS/Blood_Pressure_Service_1.1.1.pdf"
     pts_tracked: true
     notes: >-
       Blood pressure measurement profile using Indicate for measurements (acknowledged delivery).
-      BPS v1.1.1 (docs/profiles/BPS/) adds optional RACP for stored records — making it Complex
+      BPS v1.1.1 (data/raw/bluetooth_sig/profiles/BPS/) adds optional RACP for stored records — making it Complex
       when RACP is implemented. Basic form (3 characteristics) is Simple/Medium. Blood Pressure
       Measurement (0x2A35, Indicate) mandatory; Intermediate Cuff Pressure (0x2A36, Notify)
       optional for live cuff readings during measurement; Blood Pressure Feature (0x2A49, Read)
-      mandatory. UUID verified against docs/profiles/BPS/Blood_Pressure_Service_1.1.1.pdf.
-      Errata Correction 23224 (docs/profiles/BPS/) clarifies conformance section.
+      mandatory. UUID verified against data/raw/bluetooth_sig/profiles/BPS/Blood_Pressure_Service_1.1.1.pdf.
+      Errata Correction 23224 (data/raw/bluetooth_sig/profiles/BPS/) clarifies conformance section.
