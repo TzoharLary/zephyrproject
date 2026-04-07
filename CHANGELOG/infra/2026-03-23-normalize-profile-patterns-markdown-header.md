@@ -25,7 +25,7 @@
 - Devs: תחזוקת מסמכי ה-seed פשוטה יותר, הכותרות אינן ״מזויפות״, ואין הפניות legacy ל-`docs/profiles/**`.
 
 ## References
-- Commit: pending (no commit in this task)
+- Commit: 8497a21
 - Files:
   - .github/data/profile-patterns.md
   - .github/data/profiles-db.yaml

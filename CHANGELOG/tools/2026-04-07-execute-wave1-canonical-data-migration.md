@@ -44,7 +44,7 @@
 - Devs: המקורות הקנוניים הפעילים מפוצלים עכשיו באופן ברור ל-`data/raw`, `data/catalog`, `data/curated` ו-`data/derived`. `docs/` נשארת שכבת docs בלבד, `tmp/` חזר להיות scratch ריק, ומקורות חקירת PTS הישנים כבר לא אמורים לשמש כיעדי צריכה ראשיים.
 
 ## References
-- Commit: pending (no commit in this task)
+- Commit: c779090
 - Files:
   - data/README.md
   - data/raw/bluetooth_sig/profiles/

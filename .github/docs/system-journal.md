@@ -4,6 +4,8 @@
 >
 > **Last updated:** 2026-03-01
 > **Current status:** Phase 1 complete. All 24 profiles validated. System ready for Phase 2.
+>
+> **Historical note (2026-04-07):** this journal documents the tracked `.github/` seed layer and the history of the original builder system. On this machine there may also be an untracked local-only `data/` knowledge root. When that local tree exists, treat it as the current local data home; use this journal mainly for rationale and history.
 
 ---
 

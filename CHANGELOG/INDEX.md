@@ -5,10 +5,10 @@
 | Date | Group | Title | Reason (Short) | Commit |
 |---|---|---|---|---|
 | 2026-04-07 | infra | Make `data/` Local-Only And Align Agent Loading | `data/` יוצא מה־remote, ההוראות לסוכנים מיושרות למבנה local-only, ו-CI מדלג כשעץ ה-data המקומי חסר | pending (no commit in this task) |
-| 2026-04-07 | tools | Extend Canonical Data Migration To Raw Specs And PTS Artifact Data | השלמת המיגרציה כך שגם artifacts רשמיים וגם datasets של PTS analysis חיים תחת `data/`, עם ניקוי `.gitignore`, `docs/` ו-`tmp` | pending (no commit in this task) |
-| 2026-03-23 | infra | Refresh Profile Builder Seed Docs And Spec Paths | תיקון פתיח `profile-patterns.md` ויישור הפניות ה-seed לנתיבי spec החדשים תחת `data/raw/bluetooth_sig/profiles` | pending (no commit in this task) |
+| 2026-04-07 | tools | Extend Canonical Data Migration To Raw Specs And PTS Artifact Data | השלמת המיגרציה כך שגם artifacts רשמיים וגם datasets של PTS analysis חיים תחת `data/`, עם ניקוי `.gitignore`, `docs/` ו-`tmp` | c779090 |
+| 2026-03-23 | infra | Refresh Profile Builder Seed Docs And Spec Paths | תיקון פתיח `profile-patterns.md` ויישור הפניות ה-seed לנתיבי spec החדשים תחת `data/raw/bluetooth_sig/profiles` | 8497a21 |
 | 2026-03-23 | tools | Refine Group B Implementation View | הסרת section כפול בלשונית `מימוש`, אכיפת LTR לקוד, הוספת הסבר עברי צמוד, והסתרת `confidence` מה-Hub | 53ca9b9 |
-| 2026-03-23 | tools | Make Group B Hub Execution-Ready | הפיכת מסכי Group B למסכי פעולה עם ניווט פנימי, copy לטסטים, לשונית `מימוש`, ו-schema/build חדשים ל-implementation | pending (no commit in this task) |
+| 2026-03-23 | tools | Make Group B Hub Execution-Ready | הפיכת מסכי Group B למסכי פעולה עם ניווט פנימי, copy לטסטים, לשונית `מימוש`, ו-schema/build חדשים ל-implementation | c779090 |
 | 2026-03-23 | dashboard | Integrate `.github` metadata into Group B hub | חיבור metadata/patterns/governance מ-`.github` למסכי `סקירה`/`לוגיקה`/`מבנה`/`מצב עבודה` והוספת טבלת בדיקות + API להערות | pending (no commit in this task) |
 | 2026-03-23 | infra | Codify Copilot-Style `.github` Loading | קיבוע פרוטוקול טעינה ושימוש ב-`.github/` דרך `AGENTS.md` כך שהסוכן יחקה את מודל העבודה של Copilot ברמת הפרויקט | pending (no commit in this task) |
 | 2026-03-22 | dashboard | Improve task-board control visibility | חיזוק חזותי לשדות סינון/חיפוש בלוח העבודה + cache-busting לטעינת CSS עדכני לאחר build | pending (no commit in this task) |

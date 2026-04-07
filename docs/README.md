@@ -1,7 +1,7 @@
 # 📚 מדריך לתיקיית `docs`
 
 התיקייה מכילה תיעוד כתוב בלבד.  
-דשבורדים ויזואליים (HTML) עברו אל `dashboards/`, סקריפטים לייצור נתונים עברו אל `tools/`.
+דשבורדים ויזואליים (HTML) עברו אל `dashboards/`, סקריפטים לייצור נתונים עברו אל `tools/`, ו-data קנוני מקומי חי תחת `data/` כעץ local-only שאינו אמור להיכנס לריפו המרוחק.
 
 ## מבנה התיקייה
 
@@ -12,7 +12,6 @@ docs/
 ├── plans/
 │   ├── README.md
 │   └── ble_pts_plan.md
-├── profiles/              ← פרופילי Bluetooth (BAS, DIS, HID, HRS) – PDF + TCRL
 └── reports/
     ├── README.md
     ├── TS_DATA_EXTRACTION_GUIDE.md
@@ -30,6 +29,13 @@ docs/
 > - `build_pts_report_bundle.py` — יוצר דוח PTS HTML
 > - `build_pts_dis_bas_hrs_hid_report.py` — דוח DIS/BAS/HRS/HID
 > - `export_runtime_active_tcids.py` — מייצא TCIDs פעילים
+>
+> **data קנוני מקומי** נמצא כעת ב-[`../data/`](../data/) כאשר העץ הזה קיים על המכונה:
+> - [`../data/raw/bluetooth_sig/profiles/`](../data/raw/bluetooth_sig/profiles/) — artifacts רשמיים של Bluetooth SIG
+> - [`../data/curated/`](../data/curated/) — ידע מעובד וקנוני
+> - [`../data/derived/`](../data/derived/) — datasets שנגזרו ל-UI, reports ו-analysis
+>
+> `data/` הוא local-only. אם clone מרוחק לא כולל אותו, זה צפוי.
 
 ## ניווט מהיר
 

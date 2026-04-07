@@ -6,6 +6,14 @@ applyTo: '**'
 
 This workspace contains a **pre-loaded knowledge system** for generating production-ready Bluetooth Low Energy GATT profiles for Zephyr RTOS.
 
+## Local Knowledge Root On This Machine
+
+On this machine, an expanded local-only knowledge root may exist under `data/`. It is intentionally not part of the remote repository.
+
+- Prefer `data/raw/`, `data/catalog/`, `data/curated/`, and `data/derived/` when they exist locally.
+- Treat `.github/data/*` as tracked seed/governance files that remain available in the repo even when the local-only `data/` tree is absent.
+- If `data/` is missing, fall back to `.github/data/*`, code, tracked docs, and other repository evidence.
+
 ## Mandatory Workspace Rule: CHANGELOG Updates
 
 For any task that modifies tracked repository files, update `CHANGELOG/` immediately in the same task.
@@ -18,26 +26,33 @@ For any task that modifies tracked repository files, update `CHANGELOG/` immedia
 
 `AGENTS.md` in repository root is the source of truth for the full changelog policy.
 
-## Core System Files
+## Tracked Seed And Governance Files
 
 - **`.github/data/profiles-db.yaml`** — Single source of truth: 24 validated BLE profiles with complete metadata, UUIDs, control point patterns, and implementation guidelines
 - **`.github/data/profile-patterns.md`** — §10.0 Implementation patterns: 7 sections covering Notify, Indicate, RACP, SC CP, and state management architectures
 - **`.github/instructions/zephyr-bt-profile-builder.instructions.md`** — Classification rules, output format, quality checklist
 - **`.github/prompts/zephyr-bt-profile-builder.prompt.md`** — 5-step agent workflow: IDENTIFY → CLASSIFY → RESEARCH → BUILD → EXPLAIN
 
+## Local Data Layers (When Present)
+
+- **`data/raw/`** — Local mirrors and nearly raw artifacts, including Bluetooth SIG profile files
+- **`data/catalog/`** — Local registries, manifests, source catalogs, and derivation methods
+- **`data/curated/`** — Local canonical authoring and reconciled knowledge
+- **`data/derived/`** — Generated local datasets used by dashboards, reports, and analysis
+
 ## System Purpose
 
 Generate Zephyr-native BLE profile implementations by:
 1. Identifying which of 24 validated profiles matches user requirements
 2. Classifying profile complexity and control point patterns
-3. Researching from profiles-db.yaml and pattern-patterns.md sources
+3. Researching from local `data/` when available, and from `profiles-db.yaml` plus `profile-patterns.md` as tracked seed context
 4. Building Zephyr code from pattern templates (§10.0–§10.7)
 5. Explaining payload structures and mandatory/optional characteristics
 
 ## To Use This System
 
 Open `.github/prompts/zephyr-bt-profile-builder.prompt.md` as a **Copilot Custom Agent** or **Mode** in GitHub Copilot Chat. The system will:
-- Auto-load profiles-db.yaml as context
+- Auto-load tracked seed files and prefer local `data/` context when available on this machine
 - Apply profile-patterns.md §10.0–§10.7 logic
 - Generate optimized Zephyr code matching your BLE requirements
 - Validate outputs against Phase 1 quality checklist

@@ -26,7 +26,7 @@
 - Devs: יש schema חדש ל-`implementation_presentation`, מסמכי תוכן ייעודיים ל-Implementation, ולידציות חדשות ל-copy fields, implementation files וקישור בינם לבין `מבנה`.
 
 ## References
-- Commit: pending (no commit in this task)
+- Commit: c779090
 - Files:
   - dashboards/pts_report_he/autopts/assets/report.css
   - dashboards/pts_report_he/autopts/assets/report.js

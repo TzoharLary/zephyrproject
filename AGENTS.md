@@ -7,6 +7,19 @@
 - הקובץ חל על כל הריפו.
 - אם בעתיד יתווסף `AGENTS.md` בתת-תיקייה, ההוראות המקומיות יגברו רק בתוך אותה תת-תיקייה.
 
+## Local Data Root
+
+מטרת הסעיף: ליישר את העבודה עם מבנה ה-data הנוכחי של הפרויקט.
+
+- `data/` הוא knowledge root מקומי למחשב זה בלבד. הוא אינו אמור להיות חלק מהריפו המרוחק.
+- כאשר `data/` קיים מקומית, יש להעדיף אותו כמקור הידע המקומי הראשי:
+  - `data/raw/` — mirrors ו-artifacts כמעט גולמיים
+  - `data/catalog/` — registries, manifests, methods ו-source catalogs
+  - `data/curated/` — ידע מעובד וקנוני לעבודה מקומית
+  - `data/derived/` — datasets ופלטים שנגזרו לצורכי UI, reports ו-analysis
+- כאשר `data/` לא קיים, יש ליפול חזרה ל-seed/governance tracked תחת `.github/data/`, לקוד, ל-`docs/` האנושי ול-evidence אחר שקיים בריפו.
+- אין להתייחס ל-`data/` כאל קבצים שאמורים להיכנס ל-remote; זהו store מקומי למשתמשים וסוכנים על המחשב הזה.
+
 ## GitHub Copilot Project Parity
 
 מטרת הסעיף: לגרום לסוכן שקורא את `AGENTS.md` להתייחס לנכסי `.github/` של הפרויקט באותו מודל עבודה שבו GitHub Copilot מתייחס אליהם ברמת הריפו.
@@ -41,7 +54,7 @@
 - `.github/data/profiles-db.yaml`
   - זהו metadata seed לידע על פרופילי BLE: `id`, `name`, `UUIDs`, `characteristics`, `type`, `complexity`, `pattern`, `similar_profiles`, `reference_files`, `notes`, `pts_tracked`.
   - משתמשים בו כדי לזהות פרופיל, לבחור reference profile, להבין mandatory/optional basics, ולהפיק summary ראשוני.
-  - אין להתייחס אליו כ-source of truth בלעדי. כל טענה שמוצגת למשתמש חייבת לעבור reconciliation מול קוד, `docs/`, `Group_B_data`, `auto-pts` או מקור מוסמך אחר בתוך הפרויקט.
+  - אין להתייחס אליו כ-source of truth בלעדי. כאשר `data/` קיים מקומית, יש לבצע reconciliation מול `data/raw/`, `data/curated/`, קוד, `auto-pts` או מקור מוסמך אחר בתוך הפרויקט.
 
 - `.github/data/profile-patterns.md`
   - זהו pattern library סטטי למבני מימוש ולהסברי behavior.
@@ -66,15 +79,15 @@
 ### Task-to-File Decision Rules
 
 - משימת ריפו כללית: לטעון `.github/copilot-instructions.md`.
-- משימת BLE GATT profile ב-Zephyr: לטעון גם את `.github/instructions/zephyr-bt-profile-builder.instructions.md`, את `.github/prompts/zephyr-bt-profile-builder.prompt.md`, ואת שלושת קבצי ה-data תחת `.github/data/`.
-- משימת מחקר/הסבר/סיווג על פרופיל BLE בלי שינוי קוד: לטעון לפחות `copilot-instructions.md`, `profiles-db.yaml`, `profile-patterns.md`, `sources-map.yaml`, ואת ה-prompt אם ה-flow שלו מועיל למשימה.
-- משימת Group B / PTS Hub שנשענת על metadata/patterns/governance: לטעון `copilot-instructions.md`, את קבצי ה-data תחת `.github/data/`, ואת `system-journal.md` אם יש צורך ב-rationale או ביישור schema.
+- משימת BLE GATT profile ב-Zephyr: לטעון גם את `.github/instructions/zephyr-bt-profile-builder.instructions.md`, את `.github/prompts/zephyr-bt-profile-builder.prompt.md`, ואת שלושת קבצי ה-data תחת `.github/data/`. אם `data/` קיים מקומית, לטעון גם את תתי-העצים הרלוונטיים תחת `data/raw/`, `data/catalog/` ו-`data/curated/`.
+- משימת מחקר/הסבר/סיווג על פרופיל BLE בלי שינוי קוד: לטעון לפחות `copilot-instructions.md`, `profiles-db.yaml`, `profile-patterns.md`, `sources-map.yaml`, ואת ה-prompt אם ה-flow שלו מועיל למשימה. כאשר `data/` קיים, להעדיף evidence מקומי תחת `data/` על פני seed בלבד.
+- משימת Group B / PTS Hub שנשענת על metadata/patterns/governance: לטעון `copilot-instructions.md`, את קבצי ה-data תחת `.github/data/`, ואת `system-journal.md` אם יש צורך ב-rationale או ביישור schema. כאשר `data/` קיים, להשתמש ב-`data/curated/group_b/**` וב-`data/raw/bluetooth_sig/profiles/**` כשכבת הידע המקומית הראשית.
 - משימת CI/checks/validation: לטעון `copilot-instructions.md`, את workflow הרלוונטי תחת `.github/workflows/`, ואת קבצי `.github/data/` אם ה-checks תלויים בהם.
 
 ### Conflict Rules
 
 - `AGENTS.md` מגדיר את התנהגות הסוכן בפרויקט; קבצי `.github` מגדירים context, workflow ו-governance בסגנון Copilot. כשיש התנגשות ישירה, לפעול לפי `AGENTS.md` ואז לשלב את `.github` במידה המרבית שאינה סותרת אותו.
-- `profiles-db.yaml` הוא seed בלבד. אם `docs/`, קוד, workspace, או runtime evidence סותרים אותו, יש להציג למשתמש את המידע reconciled, לא את ערך ה-DB הגולמי.
+- `profiles-db.yaml` הוא seed בלבד. אם `data/raw/`, `data/curated/`, קוד, workspace, או runtime evidence סותרים אותו, יש להציג למשתמש את המידע reconciled, לא את ערך ה-DB הגולמי.
 - `sources-map.yaml` אינו עוקף evidence ישיר; הוא רק מסדיר סדר ומותר/אסור.
 - prompt files אינם נטענים אוטומטית רק כי הם קיימים. יש להשתמש בהם כאשר המשימה תואמת למטרה שלהם.
 

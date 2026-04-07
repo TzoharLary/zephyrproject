@@ -9,9 +9,6 @@ on:
       - "tools/check_group_b_hub.py"
       - "tools/templates/pts_report_he/**"
       - "tools/data/group_b_*.json"
-      - "docs/profiles/BPS/**"
-      - "docs/profiles/WSS/**"
-      - "docs/profiles/SCPS/**"
       - "dashboards/pts_report_he/**"
       - ".github/data/profiles-db.yaml"
       - ".github/data/profile-patterns.md"
@@ -26,9 +23,6 @@ on:
       - "tools/check_group_b_hub.py"
       - "tools/templates/pts_report_he/**"
       - "tools/data/group_b_*.json"
-      - "docs/profiles/BPS/**"
-      - "docs/profiles/WSS/**"
-      - "docs/profiles/SCPS/**"
       - "dashboards/pts_report_he/**"
       - ".github/data/profiles-db.yaml"
       - ".github/data/profile-patterns.md"
@@ -71,14 +65,32 @@ jobs:
           node --check tools/templates/pts_report_he/autopts/report.js
           node --check tools/templates/pts_report_he/report.js
 
+      - name: Detect local-only data availability
+        id: local_data
+        run: |
+          if [ -d data/raw/bluetooth_sig/profiles ] && [ -f data/curated/group_b/profiles/BPS/logic.md ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Explain skipped local-data validation
+        if: steps.local_data.outputs.available != 'true'
+        run: |
+          echo "Local-only data/ tree is not available in this checkout."
+          echo "Skipping Group B content validation and bundle generation."
+
       - name: Group B Hub schema/content checks
+        if: steps.local_data.outputs.available == 'true'
         run: |
           python tools/check_group_b_hub.py
 
       - name: Build dashboard + hub bundles
+        if: steps.local_data.outputs.available == 'true'
         run: |
           python tools/build_pts_report_bundle.py
 
       - name: Verify generated bundle snapshots remain valid
+        if: steps.local_data.outputs.available == 'true'
         run: |
           python tools/check_group_b_hub.py --allow-threshold-fail
