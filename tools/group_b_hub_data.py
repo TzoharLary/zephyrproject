@@ -25,7 +25,7 @@ REQUIRED_HUB_KEYS = [
 ]
 
 PROFILE_IDS = ("BPS", "WSS", "SCPS")
-DOC_KINDS = ("logic", "structure")
+DOC_KINDS = ("logic", "structure", "implementation")
 BLOCK_TYPES = {
     "groupb_finding",
     "groupb_source_observation",
@@ -33,6 +33,8 @@ BLOCK_TYPES = {
     "groupb_open_question",
     "groupb_decision",
     "groupb_impl_contract",
+    "groupb_impl_file",
+    "groupb_impl_decision",
     "groupb_test_target",
     "groupb_review_signoff",
 }
@@ -64,6 +66,12 @@ REQUIRED_SECTIONS_BY_KIND = {
         "חתימת Review / מוכנות",
         "מקורות",
     ],
+    "implementation": [
+        "סיכום",
+        "קבצים למימוש",
+        "החלטות מימוש",
+        "מקורות",
+    ],
 }
 
 
@@ -74,11 +82,15 @@ class Paths:
     github_root: Path
     github_data_dir: Path
     templates_root: Path
-    group_b_root: Path
-    group_b_logic_dir: Path
-    group_b_structure_dir: Path
+    data_root: Path
+    group_b_profiles_root: Path
+    group_b_profile_map_json: Path
+    group_b_official_sources_json: Path
+    group_b_sdk_sources_json: Path
+    group_b_derivation_methods_json: Path
+    group_b_spec_sync_manifest_json: Path
+    group_b_qa_meta_json: Path
     docs_profiles_root: Path
-    data_dir: Path
     builder_script: Path
     github_profiles_db: Path
     github_profile_patterns: Path
@@ -95,8 +107,10 @@ def _paths(repo_root: Path | str = ".") -> Paths:
     repo = Path(repo_root).resolve()
     tools = repo / "tools"
     github_root = repo / ".github"
+    data_root = repo / "data"
     templates_root = tools / "templates" / "pts_report_he"
-    group_b_root = templates_root / "Group_B_data"
+    group_b_profiles_root = data_root / "curated" / "group_b" / "profiles"
+    group_b_catalog_root = data_root / "catalog" / "group_b"
     docs_profiles_root = repo / "docs" / "Profiles"
     if not docs_profiles_root.exists():
         alt = repo / "docs" / "profiles"
@@ -108,11 +122,15 @@ def _paths(repo_root: Path | str = ".") -> Paths:
         github_root=github_root,
         github_data_dir=github_root / "data",
         templates_root=templates_root,
-        group_b_root=group_b_root,
-        group_b_logic_dir=group_b_root / "Logic",
-        group_b_structure_dir=group_b_root / "Structure",
+        data_root=data_root,
+        group_b_profiles_root=group_b_profiles_root,
+        group_b_profile_map_json=group_b_catalog_root / "registries" / "group_b_profile_map.json",
+        group_b_official_sources_json=group_b_catalog_root / "sources" / "group_b_official_sources.json",
+        group_b_sdk_sources_json=group_b_catalog_root / "sources" / "group_b_sdk_sources.json",
+        group_b_derivation_methods_json=group_b_catalog_root / "methods" / "group_b_derivation_methods.json",
+        group_b_spec_sync_manifest_json=group_b_catalog_root / "sync" / "group_b_spec_sync_manifest.json",
+        group_b_qa_meta_json=group_b_catalog_root / "methods" / "group_b_qa_meta.json",
         docs_profiles_root=docs_profiles_root,
-        data_dir=tools / "data",
         builder_script=tools / "build_pts_report_bundle.py",
         github_profiles_db=github_root / "data" / "profiles-db.yaml",
         github_profile_patterns=github_root / "data" / "profile-patterns.md",
@@ -516,8 +534,68 @@ def load_group_b_markdown_doc(paths: Paths, path: Path, expected_kind: str) -> D
     }
 
 
+IMPLEMENTATION_FILE_BLOCK_RE = re.compile(
+    r"```groupb_impl_file\s*\n(.*?)\n```\s*\n```([A-Za-z0-9_+-]*)\n(.*?)\n```",
+    re.DOTALL,
+)
+
+
+def parse_implementation_file_blocks(markdown_body: str) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    for i, match in enumerate(IMPLEMENTATION_FILE_BLOCK_RE.finditer(markdown_body), start=1):
+        payload_text = match.group(1).strip()
+        block_line = markdown_body.count("\n", 0, match.start()) + 1
+        try:
+            parsed = json.loads(payload_text)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid JSON in groupb_impl_file block #{i} (line {block_line}): {exc}") from exc
+        if not isinstance(parsed, dict):
+            raise ValueError(f"Structured block groupb_impl_file #{i} (line {block_line}) must contain a JSON object")
+        parsed["_block_type"] = "groupb_impl_file"
+        parsed["_ordinal"] = i
+        parsed["_line"] = block_line
+        parsed["language"] = str(match.group(2).strip() or parsed.get("language") or "c")
+        parsed["code"] = match.group(3).rstrip()
+        out.append(parsed)
+    return out
+
+
+def load_group_b_implementation_doc(paths: Paths, path: Path) -> Dict[str, Any]:
+    doc = load_group_b_markdown_doc(paths, path, "implementation")
+    body = str(doc.get("body") or "")
+    impl_blocks = parse_implementation_file_blocks(body) if body else []
+    blocks = doc.get("blocks", []) if isinstance(doc.get("blocks"), list) else []
+    file_by_id = {
+        str(block.get("id") or block.get("file_id") or f"impl_file_{idx}"): block
+        for idx, block in enumerate(impl_blocks, start=1)
+        if isinstance(block, dict)
+    }
+    merged_blocks: List[Dict[str, Any]] = []
+    seen_impl_file_ids: Set[str] = set()
+    for block in blocks:
+        if not isinstance(block, dict):
+            continue
+        if block.get("_block_type") == "groupb_impl_file":
+            block_id = str(block.get("id") or block.get("file_id") or "")
+            impl_file = file_by_id.get(block_id)
+            if impl_file:
+                merged = dict(block)
+                merged["language"] = impl_file.get("language")
+                merged["code"] = impl_file.get("code")
+                merged_blocks.append(merged)
+                seen_impl_file_ids.add(block_id)
+                continue
+        merged_blocks.append(block)
+    for block_id, impl_file in file_by_id.items():
+        if block_id in seen_impl_file_ids:
+            continue
+        merged_blocks.append(dict(impl_file))
+    doc["blocks"] = merged_blocks
+    return doc
+
+
 def load_profile_map(paths: Paths) -> Dict[str, Any]:
-    path = paths.data_dir / "group_b_profile_map.json"
+    path = paths.group_b_profile_map_json
     parsed = read_json(path)
     rows = parsed.get("profiles") if isinstance(parsed, dict) else []
     if not isinstance(rows, list):
@@ -535,10 +613,10 @@ def load_profile_map(paths: Paths) -> Dict[str, Any]:
 
 
 def load_group_b_manifests(paths: Paths) -> Dict[str, Any]:
-    official_path = paths.data_dir / "group_b_official_sources.json"
-    sdk_path = paths.data_dir / "group_b_sdk_sources.json"
-    methods_path = paths.data_dir / "group_b_derivation_methods.json"
-    sync_manifest_path = paths.data_dir / "group_b_spec_sync_manifest.json"
+    official_path = paths.group_b_official_sources_json
+    sdk_path = paths.group_b_sdk_sources_json
+    methods_path = paths.group_b_derivation_methods_json
+    sync_manifest_path = paths.group_b_spec_sync_manifest_json
 
     official = read_json(official_path) if official_path.exists() else {"entries": [], "whitelists": {}}
     sdk = read_json(sdk_path) if sdk_path.exists() else {"entries": [], "whitelists": {}}
@@ -645,6 +723,45 @@ PROFILE_PATTERN_HE = {
             "החלטה כזו צריכה להיות מפורשת במבנה ובמימוש, ולא להופיע במקרה.",
         ],
         "tags": ["feature", "conditional-indicate", "bonding"],
+    },
+}
+
+PROFILE_PATTERN_CARD_OVERRIDES = {
+    "BPS": {
+        "10.2": {
+            "learned_from_he": ["BCS", "WSS"],
+            "rule_he": "לא שולחים מדידה חדשה לפני ACK.",
+            "relevant_he": "BPS שולח את המדידה הראשית ב-Indication, ולכן חייב לעצור בין מדידה למדידה עד אישור הלקוח.",
+            "tags": ["indication-flow", "measurement-delivery", "ack-gating"],
+        },
+        "10.3": {
+            "learned_from_he": ["BCS", "WSS"],
+            "rule_he": "Feature נשאר Read, אלא אם יש צורך אמיתי לעדכן לקוח מזווג.",
+            "relevant_he": "BPS כולל Feature קבוע יחסית, ולכן צריך להחליט במפורש אם מוסיפים לו מסלול Indication.",
+            "tags": ["feature-policy", "conditional-indication", "bonding-aware"],
+        },
+    },
+    "WSS": {
+        "10.2": {
+            "learned_from_he": ["BCS", "BPS"],
+            "rule_he": "שומרים על מסלול מדידה אחד בכל רגע.",
+            "relevant_he": "WSS שולח Weight Measurement ב-Indication, ולכן צריך gating ברור לפי ACK ו-CCCD.",
+            "tags": ["indication-flow", "measurement-delivery", "ack-gating"],
+        },
+        "10.3": {
+            "learned_from_he": ["BCS", "BPS"],
+            "rule_he": "Feature נשאר פשוט עד שיש צורך מוכח לעדכן אותו דינמית.",
+            "relevant_he": "ב-WSS ה-Feature לרוב מתאר יכולות סטטיות, ולכן לא נכון להוסיף לו מורכבות סתם.",
+            "tags": ["feature-policy", "conditional-indication", "bonding-aware"],
+        },
+    },
+    "SCPS": {
+        "10.1": {
+            "learned_from_he": ["SPS", "SCPS"],
+            "rule_he": "השרת מבקש מהלקוח לשלוח שוב את פרמטרי הסריקה.",
+            "relevant_he": "SCPS אינו שירות מדידה; הערך המרכזי שלו הוא מסלול write של Scan Interval Window ו-refresh מפורש.",
+            "tags": ["refresh-flow", "scan-parameter-write", "server-request"],
+        },
     },
 }
 
@@ -756,7 +873,19 @@ def load_github_profile_patterns(paths: Paths) -> Dict[str, Any]:
 
     profiles: Dict[str, List[Dict[str, Any]]] = {}
     for pid, section_ids in PROFILE_PATTERN_SECTIONS.items():
-        profiles[pid] = [dict(by_id[sid]) for sid in section_ids if sid in by_id]
+        cards: List[Dict[str, Any]] = []
+        for sid in section_ids:
+            if sid not in by_id:
+                continue
+            card = dict(by_id[sid])
+            overrides = ((PROFILE_PATTERN_CARD_OVERRIDES.get(pid) or {}).get(sid) or {})
+            card["learned_from_he"] = list(overrides.get("learned_from_he") or [])
+            card["rule_he"] = str(overrides.get("rule_he") or card.get("summary_he") or "")
+            card["relevant_he"] = str(overrides.get("relevant_he") or "")
+            if overrides.get("tags"):
+                card["tags"] = list(overrides.get("tags") or [])
+            cards.append(card)
+        profiles[pid] = cards
     return {
         "by_section_id": by_id,
         "profiles": profiles,
@@ -832,7 +961,7 @@ def build_github_workflow_context(paths: Paths) -> Dict[str, Any]:
 
 
 def load_group_b_qa_meta(paths: Paths) -> Dict[str, Any]:
-    qa_path = paths.data_dir / "group_b_qa_meta.json"
+    qa_path = paths.group_b_qa_meta_json
     default = {
         "last_smoke_test_at": None,
         "smoke_test_mode": "manual",
@@ -1049,6 +1178,56 @@ def _normalize_impl_contract_block(
     }
 
 
+def _normalize_impl_file_block(
+    raw: Dict[str, Any],
+    profile_id: str,
+    source_catalog: Dict[str, Dict[str, Any]],
+    file_source: Dict[str, Any],
+) -> Dict[str, Any]:
+    source_ids = [str(x) for x in _coerce_list(raw.get("source_ids")) if str(x)]
+    derived_from = raw.get("derived_from") if isinstance(raw.get("derived_from"), dict) else {}
+    return {
+        "file_id": str(raw.get("file_id") or raw.get("id") or f"{profile_id.lower()}_impl_file_{raw.get('_ordinal', 0):03d}"),
+        "profile_id": profile_id,
+        "filename": str(raw.get("filename") or ""),
+        "relative_path": str(raw.get("relative_path") or ""),
+        "language": str(raw.get("language") or "c"),
+        "purpose_he": str(raw.get("purpose_he") or ""),
+        "confidence": str(raw.get("confidence") or "medium"),
+        "code": str(raw.get("code") or ""),
+        "derived_from": {
+            "logic_ids": [str(x) for x in _coerce_list(derived_from.get("logic_ids")) if str(x)],
+            "structure_ids": [str(x) for x in _coerce_list(derived_from.get("structure_ids")) if str(x)],
+            "pattern_ids": [str(x) for x in _coerce_list(derived_from.get("pattern_ids")) if str(x)],
+        },
+        "decision_notes_he": [str(x) for x in _coerce_list(raw.get("decision_notes_he")) if str(x)],
+        "source_ids": source_ids,
+        "sources": _resolve_source_refs(source_ids, source_catalog, [file_source]),
+    }
+
+
+def _normalize_impl_decision_block(
+    raw: Dict[str, Any],
+    profile_id: str,
+    source_catalog: Dict[str, Dict[str, Any]],
+    file_source: Dict[str, Any],
+) -> Dict[str, Any]:
+    source_ids = [str(x) for x in _coerce_list(raw.get("source_ids")) if str(x)]
+    return {
+        "id": str(raw.get("id") or f"{profile_id.lower()}_impl_decision_{raw.get('_ordinal', 0):03d}"),
+        "profile_id": profile_id,
+        "title_he": str(raw.get("title_he") or "החלטת מימוש"),
+        "decision_he": str(raw.get("decision_he") or ""),
+        "why_needed_he": str(raw.get("why_needed_he") or ""),
+        "pattern_he": str(raw.get("pattern_he") or ""),
+        "applies_to_files": [str(x) for x in _coerce_list(raw.get("applies_to_files")) if str(x)],
+        "tags": [str(x) for x in _coerce_list(raw.get("tags")) if str(x)],
+        "confidence": str(raw.get("confidence") or "medium"),
+        "source_ids": source_ids,
+        "sources": _resolve_source_refs(source_ids, source_catalog, [file_source]),
+    }
+
+
 def _normalize_test_target_block(
     raw: Dict[str, Any],
     profile_id: str,
@@ -1117,6 +1296,10 @@ def _merge_source_lists(*groups: Any) -> List[Dict[str, Any]]:
 
 def _official_prefix_for_profile(profile_id: str) -> str:
     return str((PROFILE_TCRL_CONFIG.get(profile_id) or {}).get("official_prefix") or profile_id)
+
+
+def _tcid_cli_value(tcid: str) -> str:
+    return re.sub(r"_+", "_", re.sub(r"[^A-Za-z0-9]+", "_", str(tcid or "").strip())).strip("_").upper()
 
 
 def _ui_label(profile_id: str) -> str:
@@ -1332,6 +1515,7 @@ def _build_official_tests(paths: Paths, profile_id: str, spec_row: Dict[str, Any
     normalized_rows: List[Dict[str, Any]] = []
     for row in rows:
         tcid = str(row.get("tcid") or "")
+        tcid_cli = _tcid_cli_value(tcid)
         ts_title = str(row.get("ts_title") or "").strip()
         raw_desc = str(row.get("desc") or "").strip()
         desc = ts_title
@@ -1347,6 +1531,8 @@ def _build_official_tests(paths: Paths, profile_id: str, spec_row: Dict[str, Any
                 "official_row_id": f"{profile_id}:{row.get('suite_family')}:{tcid}",
                 "suite_family": row.get("suite_family"),
                 "tcid": tcid,
+                "tcid_cli": tcid_cli,
+                "copy_value": tcid_cli,
                 "title_he": desc,
                 "category": row.get("category"),
                 "active_date": row.get("active_date"),
@@ -1446,6 +1632,161 @@ def _build_logic_capabilities(
     if bool(profile_seed.get("has_control_point")) and not deferred:
         deferred.append("אם נרצה Control Point או RACP בעתיד, נצטרך state machine מלא ולא רק subset בסיסי.")
     return capabilities[:8], required[:6], deferred[:6]
+
+
+LOGIC_ACTION_TEMPLATES = {
+    "BPS": [
+        {
+            "id": "bps_primary_measurement_indication",
+            "action_he": "השרת שולח Indication ללקוח עבור מדידת לחץ דם.",
+            "condition_he": "רק אם CCCD פעיל ואין מדידה קודמת שמחכה ל-ACK.",
+            "finding_ids": [
+                "bps_logic_ccc_and_notify_gate_pattern_from_zephyr_hrs",
+                "bps_logic_phase1_subset_publish_measurement_first",
+            ],
+        },
+        {
+            "id": "bps_ordered_init_and_publish",
+            "action_he": "המערכת מאתחלת את השירות, רושמת callbacks ומתחילה לפרסם רק אחרי שכל שכבות ה-Bluetooth מוכנות.",
+            "condition_he": "אחרי bt_enable, settings_load, service init ותחילת advertising.",
+            "finding_ids": [
+                "bps_logic_app_init_sequence_pattern_from_nus",
+                "bps_logic_phase1_subset_publish_measurement_first",
+            ],
+        },
+        {
+            "id": "bps_logic_prepares_then_service_sends",
+            "action_he": "שכבת הלוגיקה מכינה את ה-payload, ושכבת השירות אחראית רק על השליחה עצמה.",
+            "condition_he": "כשה-adapter מספק מדידה חדשה או trigger לפרסום.",
+            "finding_ids": [
+                "bps_logic_health_session_and_measurement_pipeline_pattern",
+                "bps_logic_ccc_and_notify_gate_pattern_from_zephyr_hrs",
+            ],
+        },
+    ],
+    "WSS": [
+        {
+            "id": "wss_single_measurement_indication",
+            "action_he": "השרת שולח Indication של Weight Measurement ללקוח.",
+            "condition_he": "רק אם הלקוח נרשם ב-CCCD והמדידה מוכנה לשליחה.",
+            "finding_ids": [
+                "wss_logic_ccc_notify_and_update_api_pattern",
+                "wss_logic_phase1_subset_single_measurement_publish_flow",
+            ],
+        },
+        {
+            "id": "wss_triggered_publish_flow",
+            "action_he": "הלוגיקה מחליטה מתי לפרסם מדידה, ולא דוחפת כל שינוי קטן ישר ל-GATT.",
+            "condition_he": "לפי trigger של work handler או אירוע מדידה יציבה.",
+            "finding_ids": [
+                "wss_logic_periodic_measurement_simulation_pattern",
+                "wss_logic_phase1_subset_single_measurement_publish_flow",
+            ],
+        },
+        {
+            "id": "wss_service_logic_boundary",
+            "action_he": "השירות שומר CCC ו-GATT plumbing, והלוגיקה מחליטה מה לפרסם ומתי.",
+            "condition_he": "בכל publish path של Phase 1.",
+            "finding_ids": [
+                "wss_logic_ti_weight_service_implies_service_callback_flow",
+                "wss_logic_ccc_notify_and_update_api_pattern",
+            ],
+        },
+    ],
+    "SCPS": [
+        {
+            "id": "scps_write_scan_interval_window",
+            "action_he": "הלקוח כותב לשרת את Scan Interval Window, והשרת בודק ושומר את הערכים.",
+            "condition_he": "במסלול write של השירות, לפני שמפעילים runtime policy.",
+            "finding_ids": [
+                "scps_logic_scan_parameter_runtime_pattern_from_shorter_conn_intervals",
+                "scps_logic_ti_scanparamservice_two_path_flow",
+            ],
+        },
+        {
+            "id": "scps_explicit_refresh_request",
+            "action_he": "השרת שולח Scan Refresh ללקוח כדי לבקש ממנו לשלוח שוב את פרמטרי הסריקה.",
+            "condition_he": "רק אם יש trigger מפורש ואם מסלול ה-refresh פעיל עבור החיבור.",
+            "finding_ids": [
+                "scps_logic_ti_scanparamservice_two_path_flow",
+                "scps_logic_phase1_subset_write_and_refresh_split",
+            ],
+        },
+        {
+            "id": "scps_split_gatt_from_scan_policy",
+            "action_he": "שכבת השירות מטפלת ב-GATT, ושכבת scan policy מחליטה איך לתרגם את הערכים לפעולת סריקה בפועל.",
+            "condition_he": "ההפעלה בפועל נעשית דרך adapter/work ולא מתוך write callback.",
+            "finding_ids": [
+                "scps_logic_scan_parameter_runtime_pattern_from_shorter_conn_intervals",
+                "scps_logic_phase1_subset_write_and_refresh_split",
+            ],
+        },
+    ],
+}
+
+
+def _index_rows_by_id(rows: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    return {
+        str(row.get("id") or ""): row
+        for row in rows
+        if isinstance(row, dict) and str(row.get("id") or "").strip()
+    }
+
+
+def _build_logic_execution_actions(
+    profile_id: str,
+    analysis: Dict[str, Any],
+    source_catalog: Dict[str, Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    findings = analysis.get("core_findings", []) if isinstance(analysis.get("core_findings"), list) else []
+    finding_index = _index_rows_by_id(findings)
+    actions: List[Dict[str, Any]] = []
+    for template in LOGIC_ACTION_TEMPLATES.get(profile_id, []):
+        refs = [finding_index.get(fid) for fid in template.get("finding_ids", []) if finding_index.get(fid)]
+        merged_sources = _merge_source_lists(*[(row.get("sources") or []) for row in refs if isinstance(row, dict)])
+        merged_source_ids: List[str] = []
+        for row in refs:
+            if not isinstance(row, dict):
+                continue
+            merged_source_ids.extend([str(x) for x in (row.get("source_ids") or []) if str(x)])
+        actions.append(
+            {
+                "id": str(template.get("id") or ""),
+                "action_he": str(template.get("action_he") or ""),
+                "condition_he": str(template.get("condition_he") or ""),
+                "finding_ids": list(template.get("finding_ids") or []),
+                "source_ids": list(dict.fromkeys(merged_source_ids)),
+                "source_badges": _build_source_badges(merged_source_ids, source_catalog),
+                "sources": merged_sources,
+            }
+        )
+    return actions
+
+
+def _build_logic_capability_evidence(
+    analysis: Dict[str, Any],
+    source_catalog: Dict[str, Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    findings = analysis.get("core_findings", []) if isinstance(analysis.get("core_findings"), list) else []
+    cards: List[Dict[str, Any]] = []
+    for finding in findings[:8]:
+        if not isinstance(finding, dict):
+            continue
+        source_ids = [str(x) for x in (finding.get("source_ids") or []) if str(x)]
+        cards.append(
+            {
+                "id": str(finding.get("id") or ""),
+                "title_he": str(finding.get("title_he") or "ראיית יכולת"),
+                "evidence_he": str(finding.get("statement_he") or ""),
+                "reasoning_he": str(finding.get("why_it_matters_he") or ""),
+                "confidence": str(finding.get("confidence") or "medium"),
+                "status": str(finding.get("status") or "needs_validation"),
+                "source_ids": source_ids,
+                "source_badges": _build_source_badges(source_ids, source_catalog),
+                "sources": finding.get("sources", []),
+            }
+        )
+    return cards
 
 
 def _build_structure_reference_card(paths: Paths, profile_seed: Dict[str, Any]) -> Dict[str, Any]:
@@ -1766,10 +2107,16 @@ def build_spec_research(
             continue
         prof_dir = paths.repo / str(row.get("spec_dir") or "")
         if not prof_dir.exists():
-            alt_rel = str(row.get("spec_dir") or "").replace("docs/Profiles/", "docs/profiles/")
-            alt_dir = paths.repo / alt_rel
-            if alt_dir.exists():
-                prof_dir = alt_dir
+            spec_dir = str(row.get("spec_dir") or "")
+            legacy_candidates = [
+                spec_dir.replace("data/raw/bluetooth_sig/profiles/", "docs/profiles/"),
+                spec_dir.replace("data/raw/bluetooth_sig/profiles/", "docs/Profiles/"),
+            ]
+            for alt_rel in legacy_candidates:
+                alt_dir = paths.repo / alt_rel
+                if alt_dir.exists():
+                    prof_dir = alt_dir
+                    break
         artifacts: List[Dict[str, Any]] = []
         if prof_dir.exists():
             for item in sorted(prof_dir.iterdir(), key=lambda p: p.name.lower()):
@@ -1862,8 +2209,8 @@ def build_md_file_inventory(
     by_id = profile_map.get("by_id", {})
     for pid in PROFILE_IDS:
         row = by_id.get(pid, {})
-        logic_path = paths.repo / str(row.get("group_b_logic_md") or paths.group_b_logic_dir / f"{pid}.md")
-        structure_path = paths.repo / str(row.get("group_b_structure_md") or paths.group_b_structure_dir / f"{pid}.md")
+        logic_path = paths.repo / str(row.get("group_b_logic_md") or paths.group_b_profiles_root / pid / "logic.md")
+        structure_path = paths.repo / str(row.get("group_b_structure_md") or paths.group_b_profiles_root / pid / "structure.md")
 
         logic_doc = load_group_b_markdown_doc(paths, logic_path, "logic")
         structure_doc = load_group_b_markdown_doc(paths, structure_path, "structure")
@@ -1897,6 +2244,64 @@ def build_md_file_inventory(
         structure_analysis[pid] = build_knowledge_analysis(paths, pid, "structure", structure_doc, source_catalog, derivation_catalog)
 
     return logic_files, structure_files, logic_analysis, structure_analysis
+
+
+def load_group_b_implementation_inventory(
+    paths: Paths,
+    profile_map: Dict[str, Any],
+    manifests: Dict[str, Any],
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    source_catalog = manifests.get("source_catalog", {}) if isinstance(manifests, dict) else {}
+    implementation_files: Dict[str, Any] = {}
+    implementation_docs: Dict[str, Any] = {}
+    by_id = profile_map.get("by_id", {})
+    for pid in PROFILE_IDS:
+        row = by_id.get(pid, {})
+        impl_path = paths.repo / str(row.get("group_b_implementation_md") or paths.group_b_profiles_root / pid / "implementation.md")
+        impl_doc = load_group_b_implementation_doc(paths, impl_path)
+        file_source = impl_doc.get("sources", [{}])[0] if impl_doc.get("sources") else {"file": impl_doc.get("path")}
+        blocks = impl_doc.get("blocks", []) if isinstance(impl_doc.get("blocks"), list) else []
+        files = [
+            _normalize_impl_file_block(block, pid, source_catalog, file_source)
+            for block in blocks
+            if isinstance(block, dict) and block.get("_block_type") == "groupb_impl_file"
+        ]
+        decisions = [
+            _normalize_impl_decision_block(block, pid, source_catalog, file_source)
+            for block in blocks
+            if isinstance(block, dict) and block.get("_block_type") == "groupb_impl_decision"
+        ]
+        implementation_files[pid] = {
+            "profile_id": pid,
+            "ui_label": _ui_label(pid),
+            "doc_kind": "implementation",
+            "path": impl_doc.get("path"),
+            "exists": impl_doc.get("exists"),
+            "front_matter": impl_doc.get("front_matter"),
+            "missing_sections": impl_doc.get("missing_sections"),
+            "section_titles": impl_doc.get("section_titles"),
+            "raw_markdown": impl_doc.get("raw_markdown"),
+            "sources": impl_doc.get("sources", []),
+        }
+        implementation_docs[pid] = {
+            "profile_id": pid,
+            "ui_label": _ui_label(pid),
+            "status": str((impl_doc.get("front_matter") or {}).get("status") or ("missing" if not impl_doc.get("exists") else "draft")),
+            "summary_he": extract_first_paragraph(str(next((sec.get("body") or "" for sec in (impl_doc.get("sections") or []) if sec.get("title") == "סיכום"), ""))),
+            "files": files,
+            "decisions": decisions,
+            "doc_meta": {
+                "path": impl_doc.get("path"),
+                "exists": bool(impl_doc.get("exists")),
+                "missing_sections": impl_doc.get("missing_sections", []),
+            },
+            "sources": _merge_source_lists(
+                impl_doc.get("sources", []),
+                *[item.get("sources", []) for item in files],
+                *[item.get("sources", []) for item in decisions],
+            ),
+        }
+    return implementation_files, implementation_docs
 
 
 def summarize_autopts_for_hub(paths: Paths, autopts_guide: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -2349,7 +2754,7 @@ def build_status_tracker(
             "gaps_he": [],
         }
         if (spec.get("summary") or {}).get("artifact_count", 0) == 0:
-            row["gaps_he"].append("אין artifacts מסונכרנים ב-docs/Profiles")
+            row["gaps_he"].append("אין artifacts מסונכרנים ב-data/raw/bluetooth_sig/profiles")
         if row["logic_doc_status"] in ("missing", ""):
             row["gaps_he"].append("קובץ Logic חסר")
         if row["structure_doc_status"] in ("missing", ""):
@@ -2922,7 +3327,13 @@ def build_logic_presentation(
         findings = analysis.get("core_findings", []) if isinstance(analysis.get("core_findings"), list) else []
         observations = analysis.get("source_observations", []) if isinstance(analysis.get("source_observations"), list) else []
         researched_sources = _group_source_observations_for_presentation(observations, findings, source_catalog, "logic")
-        logic_capabilities, must_do, deferred = _build_logic_capabilities(analysis, contract, profile_seed, source_catalog)
+        execution_actions = _build_logic_execution_actions(pid, analysis, source_catalog)
+        capability_evidence = _build_logic_capability_evidence(analysis, source_catalog)
+        behaviors_required = [
+            f"{row.get('action_he')} {row.get('condition_he')}".strip()
+            for row in execution_actions
+            if isinstance(row, dict) and (row.get("action_he") or row.get("condition_he"))
+        ]
         vm = {
             "profile_id": pid,
             "ui_label": p_row.get("ui_label") or _ui_label(pid),
@@ -2931,9 +3342,7 @@ def build_logic_presentation(
             "pattern_cards": pattern_profiles.get(pid, []),
             "logic_summary": {
                 "summary_he": str(analysis.get("summary_he") or ""),
-                "behaviors_required_he": _logic_behaviors_from_analysis(analysis, contract),
-                "must_do_he": must_do,
-                "deferred_he": deferred,
+                "behaviors_required_he": behaviors_required or _logic_behaviors_from_analysis(analysis, contract),
                 "important_conditions_he": [
                     str(q.get("detail_he"))
                     for q in (analysis.get("open_questions", []) if isinstance(analysis.get("open_questions"), list) else [])
@@ -2942,7 +3351,8 @@ def build_logic_presentation(
                 "phase1_focus_he": [str(x) for x in (contract.get("scope_in") if isinstance(contract.get("scope_in"), list) else [])][:6],
                 "sources": _merge_source_lists(analysis.get("sources", []), contract.get("sources", [])),
             },
-            "logic_capabilities": logic_capabilities,
+            "execution_actions": execution_actions,
+            "capability_evidence": capability_evidence,
             "sources": _merge_source_lists(analysis.get("sources", []), contract.get("sources", [])),
         }
         profiles[pid] = vm
@@ -3014,6 +3424,44 @@ def _derive_similar_profiles(structure_analysis: Dict[str, Any]) -> List[Dict[st
     return candidates[:4]
 
 
+def _module_paths_for_profile(pid: str, base: str) -> Tuple[str, str]:
+    pid_l = str(pid).lower()
+    if "service" in base:
+        return (
+            f"zephyr/subsys/bluetooth/services/{base}.c",
+            f"zephyr/include/zephyr/bluetooth/services/{base}.h",
+        )
+    return (
+        f"samples/bluetooth/group_b/{pid_l}/src/{base}.c",
+        f"samples/bluetooth/group_b/{pid_l}/src/{base}.h",
+    )
+
+
+def _module_purpose_he(base: str) -> str:
+    if "service" in base:
+        return "מודול שירות GATT: UUIDs, attributes, CCC, read/write handlers ו-publish APIs."
+    if "scan_policy" in base:
+        return "שכבת scan policy: אימות ערכים, שמירת state, ותרגום ל-runtime actions."
+    if "logic" in base:
+        return "שכבת לוגיקה: קבלת trigger, gating, והרכבת payload לפני שליחה."
+    if "app_adapter" in base:
+        return "שכבת אינטגרציה לאפליקציה: hooks, work queue, וקישור לאירועי runtime."
+    return "מודול פנימי של הפרופיל."
+
+
+def _structure_choice_he(pid: str, contract: Dict[str, Any]) -> str:
+    modules = ((contract.get("module_boundaries") or {}).get("modules_he") or []) if isinstance(contract, dict) else []
+    if pid == "SCPS":
+        return "בחרנו לפצל בין `scps_service` שמטפל ב-GATT לבין `scps_scan_policy` שמטפל ב-scan runtime, כדי לא לערבב write handlers עם מדיניות סריקה."
+    if pid == "WSS":
+        return "בחרנו ב-`wss_service` + `wss_logic` + `wss_app_adapter`, כדי לשמור את המדידה, ה-gating והחיבור לאפליקציה מופרדים אבל פשוטים."
+    if pid == "BPS":
+        return "בחרנו ב-`bps_service` + `bps_logic` + `bps_app_adapter`, כדי לבודד את מסלול ה-Indication ואת הכנת ה-payload מה-GATT plumbing עצמו."
+    if modules:
+        return f"המבנה מבוסס על המודולים: {', '.join(str(x) for x in modules)}."
+    return "לא נבחר עדיין מבנה מפורש."
+
+
 def _build_file_plan_and_blueprints(pid: str, contract: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     modules = ((contract.get("module_boundaries") or {}).get("modules_he") or []) if isinstance(contract, dict) else []
     boundaries = ((contract.get("module_boundaries") or {}).get("boundaries_he") or []) if isinstance(contract, dict) else []
@@ -3032,9 +3480,8 @@ def _build_file_plan_and_blueprints(pid: str, contract: Dict[str, Any]) -> Tuple
         base = mod
         if base.endswith(".c") or base.endswith(".h"):
             base = base.rsplit(".", 1)[0]
-        c_path = f"zephyr/subsys/bluetooth/services/{base}.c" if "service" in base else f"zephyr/subsys/bluetooth/services/{base}.c"
-        h_path = f"zephyr/include/zephyr/bluetooth/services/{base}.h"
-        purpose = "מודול שירות GATT (plumbing / attributes / CCC)" if "service" in base else ("שכבת לוגיקה/policy של הפרופיל" if "logic" in base or "policy" in base else "שכבת adapter/app integration של הפרופיל")
+        c_path, h_path = _module_paths_for_profile(pid, base)
+        purpose = _module_purpose_he(base)
         file_plan.append(
             {
                 "path": c_path,
@@ -3133,6 +3580,7 @@ def build_structure_presentation(
             "similar_profiles": _derive_similar_profiles(analysis),
             "structure_summary": {
                 "summary_he": str(analysis.get("summary_he") or ""),
+                "structure_choice_he": _structure_choice_he(pid, contract),
                 "base_profile_structure_ref": {
                     "status": reference_card.get("complexity", "placeholder"),
                     "label_he": "מבנה בסיסי שנגזר מסוג הפרופיל",
@@ -3143,7 +3591,9 @@ def build_structure_presentation(
                 },
                 "pattern_basis": pattern_profiles.get(pid, []),
                 "zephyr_reference_files": reference_card.get("reference_files", []),
-                "vendor_reference_role": {
+                "file_inventory": file_plan,
+                "internal_blueprints": blueprints,
+                "source_roles": {
                     "zephyr_he": "Zephyr משמש כ-reference pattern למבנה קבצים ו-GATT plumbing.",
                     "ti_he": "TI משמש רק להבנת structure patterns כשיש ערך נוסף מעבר ל-Zephyr.",
                     "nordic_he": "Nordic נשמר ללוגיקה ולהבנת flow, לא להעתקת מבנה מימוש.",
@@ -3154,9 +3604,70 @@ def build_structure_presentation(
                 },
                 "file_plan": file_plan,
                 "file_internal_blueprints": blueprints,
+                "vendor_reference_role": {
+                    "zephyr_he": "Zephyr משמש כ-reference pattern למבנה קבצים ו-GATT plumbing.",
+                    "ti_he": "TI משמש רק להבנת structure patterns כשיש ערך נוסף מעבר ל-Zephyr.",
+                    "nordic_he": "Nordic נשמר ללוגיקה ולהבנת flow, לא להעתקת מבנה מימוש.",
+                    "sources": _merge_source_lists(
+                        reference_card.get("sources", []),
+                        *[(card.get("sources") or []) for card in (pattern_profiles.get(pid, []) or []) if isinstance(card, dict)],
+                    ),
+                },
                 "sources": _merge_source_lists(analysis.get("sources", []), contract.get("sources", [])),
             },
             "sources": _merge_source_lists(analysis.get("sources", []), contract.get("sources", [])),
+        }
+        profiles[pid] = vm
+        rows.append(vm)
+    return {"profiles": profiles, "rows": rows, "sources": []}
+
+
+def build_implementation_presentation(
+    profile_map: Dict[str, Any],
+    implementation_docs: Dict[str, Any],
+    logic_presentation: Dict[str, Any],
+    structure_presentation: Dict[str, Any],
+    github_patterns: Dict[str, Any],
+) -> Dict[str, Any]:
+    profiles: Dict[str, Any] = {}
+    rows: List[Dict[str, Any]] = []
+    pattern_profiles = (github_patterns.get("profiles") or {}) if isinstance(github_patterns, dict) else {}
+    for p_row in profile_map.get("profiles", []) if isinstance(profile_map.get("profiles"), list) else []:
+        if not isinstance(p_row, dict):
+            continue
+        pid = str(p_row.get("profile_id") or "").upper()
+        if pid not in PROFILE_IDS:
+            continue
+        impl_doc = implementation_docs.get(pid, {}) if isinstance(implementation_docs, dict) else {}
+        structure_row = ((structure_presentation.get("profiles") or {}).get(pid) or {}) if isinstance(structure_presentation, dict) else {}
+        logic_row = ((logic_presentation.get("profiles") or {}).get(pid) or {}) if isinstance(logic_presentation, dict) else {}
+        structure_inventory = ((structure_row.get("structure_summary") or {}).get("file_inventory") or []) if isinstance(structure_row, dict) else []
+        inventory_paths = {str(item.get("path") or "") for item in structure_inventory if isinstance(item, dict)}
+        files: List[Dict[str, Any]] = []
+        for item in impl_doc.get("files", []) if isinstance(impl_doc.get("files"), list) else []:
+            if not isinstance(item, dict):
+                continue
+            files.append(
+                {
+                    **item,
+                    "is_in_structure_inventory": str(item.get("relative_path") or "") in inventory_paths,
+                }
+            )
+        vm = {
+            "profile_id": pid,
+            "ui_label": p_row.get("ui_label") or _ui_label(pid),
+            "display_name_he": p_row.get("display_name_he") or _ui_label(pid),
+            "summary_he": str(impl_doc.get("summary_he") or ""),
+            "files": files,
+            "decision_summary": impl_doc.get("decisions", []),
+            "pattern_cards": pattern_profiles.get(pid, []),
+            "logic_summary_he": str(((logic_row.get("logic_summary") or {}).get("summary_he")) or ""),
+            "structure_choice_he": str(((structure_row.get("structure_summary") or {}).get("structure_choice_he")) or ""),
+            "sources": _merge_source_lists(
+                impl_doc.get("sources", []),
+                logic_row.get("sources", []),
+                structure_row.get("sources", []),
+            ),
         }
         profiles[pid] = vm
         rows.append(vm)
@@ -3819,6 +4330,7 @@ def build_group_b_hub_data(repo_root: Path | str = ".", autopts_guide: Optional[
     qa_meta = load_group_b_qa_meta(paths)
     spec_research = build_spec_research(paths, profile_map, manifests)
     logic_files, structure_files, logic_analysis, structure_analysis = build_md_file_inventory(paths, profile_map, manifests)
+    implementation_files, implementation_docs = load_group_b_implementation_inventory(paths, profile_map, manifests)
     autopts_summary = summarize_autopts_for_hub(paths, autopts_guide=autopts_guide)
     phase1_artifacts = build_phase1_profile_artifacts(profile_map, logic_analysis, structure_analysis)
     implementation_contracts = phase1_artifacts.get("implementation_contracts", {})
@@ -3874,6 +4386,13 @@ def build_group_b_hub_data(repo_root: Path | str = ".", autopts_guide: Optional[
         github_profile_db,
         github_patterns,
     )
+    implementation_presentation = build_implementation_presentation(
+        profile_map,
+        implementation_docs,
+        logic_presentation,
+        structure_presentation,
+        github_patterns,
+    )
     current_work = build_current_work_templates(
         profile_map,
         status_tracker,
@@ -3927,7 +4446,7 @@ def build_group_b_hub_data(repo_root: Path | str = ".", autopts_guide: Optional[
             "כל finding חייב confidence + source_ids + derivation_method_ids (אם קיים).",
             "כל URL חיצוני חייב להיות domain מאושר לפי הקטגוריה המתאימה.",
             "תצוגת פרופיל דורשת summary_he גם אם אין עדיין findings.",
-            "profiles-db.yaml הוא seed בלבד; אם הוא סותר docs/profiles או auto-pts, ההצגה הסופית חייבת להיות reconciled.",
+            "profiles-db.yaml הוא seed בלבד; אם הוא סותר data/raw/bluetooth_sig/profiles או auto-pts, ההצגה הסופית חייבת להיות reconciled.",
         ],
         "sources": manifests.get("official", {}).get("sources", []) + manifests.get("sdk", {}).get("sources", []) + github_sources_map.get("file_sources", []),
     }
@@ -3937,6 +4456,7 @@ def build_group_b_hub_data(repo_root: Path | str = ".", autopts_guide: Optional[
         "spec_research": spec_research,
         "logic_files": logic_files,
         "structure_files": structure_files,
+        "implementation_files": implementation_files,
         "logic_analysis": logic_analysis,
         "structure_analysis": structure_analysis,
         "phase1_decisions": phase1_artifacts.get("phase1_decisions", {}),
@@ -3947,6 +4467,7 @@ def build_group_b_hub_data(repo_root: Path | str = ".", autopts_guide: Optional[
         "specs_presentation": specs_presentation,
         "logic_presentation": logic_presentation,
         "structure_presentation": structure_presentation,
+        "implementation_presentation": implementation_presentation,
         "current_work": current_work,
         "knowledge_center": knowledge_center,
         "base_profile_structure_catalog": base_profile_structure_catalog,
@@ -4010,6 +4531,7 @@ def build_group_b_hub_data(repo_root: Path | str = ".", autopts_guide: Optional[
             {"id": "overview", "label": "סקירה", "aliases": ["specs"]},
             {"id": "logic", "label": "לוגיקה"},
             {"id": "structure", "label": "מבנה"},
+            {"id": "implementation", "label": "מימוש"},
             {"id": "status", "label": "מצב עבודה נוכחי"},
         ],
     }
@@ -4089,6 +4611,7 @@ def enforce_group_b_hub_source_policy(data: Dict[str, Any]) -> None:
         "specs_presentation",
         "logic_presentation",
         "structure_presentation",
+        "implementation_presentation",
         "current_work",
         "knowledge_center",
         "base_profile_structure_catalog",
@@ -4159,7 +4682,7 @@ def enforce_group_b_hub_source_policy(data: Dict[str, Any]) -> None:
                 if not str(obs.get("how_identified_he") or "").strip():
                     raise ValueError(f"{analysis_key}.{pid} source observation missing how_identified_he")
 
-    for presentation_key in ("overview_presentation", "specs_presentation", "logic_presentation", "structure_presentation", "current_work"):
+    for presentation_key in ("overview_presentation", "specs_presentation", "logic_presentation", "structure_presentation", "implementation_presentation", "current_work"):
         vm = group_b.get(presentation_key, {})
         profiles = vm.get("profiles", {}) if isinstance(vm, dict) else {}
         if not isinstance(profiles, dict):
@@ -4184,9 +4707,28 @@ def enforce_group_b_hub_source_policy(data: Dict[str, Any]) -> None:
         for test_row in official_tests.get("rows", []):
             if not isinstance(test_row, dict):
                 raise ValueError(f"group_b.overview_presentation.profiles.{pid}.official_tests.rows contains non-dict")
-            for key in ("official_row_id", "tcid", "title_he", "pts_status", "autopts_status"):
+            for key in ("official_row_id", "tcid", "tcid_cli", "copy_value", "title_he", "pts_status", "autopts_status"):
                 if not str(test_row.get(key) or "").strip():
                     raise ValueError(f"group_b.overview_presentation.profiles.{pid}.official_tests row missing {key}")
+
+    implementation_presentation = group_b.get("implementation_presentation", {})
+    for pid in PROFILE_IDS:
+        irow = ((implementation_presentation.get("profiles") or {}).get(pid) or {})
+        files = irow.get("files")
+        if not isinstance(files, list) or not files:
+            raise ValueError(f"group_b.implementation_presentation.profiles.{pid}.files must be a non-empty list")
+        for file_row in files:
+            if not isinstance(file_row, dict):
+                raise ValueError(f"group_b.implementation_presentation.profiles.{pid}.files contains non-dict")
+            for key in ("file_id", "filename", "relative_path", "language", "purpose_he", "code", "confidence"):
+                if not str(file_row.get(key) or "").strip():
+                    raise ValueError(f"group_b.implementation_presentation.profiles.{pid}.files row missing {key}")
+            derived_from = file_row.get("derived_from", {})
+            if not isinstance(derived_from, dict):
+                raise ValueError(f"group_b.implementation_presentation.profiles.{pid}.files[].derived_from must be a dict")
+            for key in ("logic_ids", "structure_ids", "pattern_ids"):
+                if not isinstance(derived_from.get(key), list):
+                    raise ValueError(f"group_b.implementation_presentation.profiles.{pid}.files[].derived_from.{key} must be a list")
 
     specs_presentation = group_b.get("specs_presentation", {})
     for pid in PROFILE_IDS:

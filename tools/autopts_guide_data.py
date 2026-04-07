@@ -91,7 +91,7 @@ def _paths(repo_root: Path | str = ".") -> Paths:
         autopts_docs_dir=autopts_repo / "doc",
         autopts_workspaces_dir=autopts_repo / "autopts" / "workspaces",
         templates_dir=tools / "templates" / "pts_report_he",
-        official_sources_json=tools / "data" / "autopts_official_sources.json",
+        official_sources_json=repo / "data" / "catalog" / "autopts" / "sources" / "autopts_official_sources.json",
         builder_script=tools / "build_pts_report_bundle.py",
     )
 

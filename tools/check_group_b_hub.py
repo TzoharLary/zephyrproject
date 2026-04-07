@@ -14,7 +14,7 @@ except Exception:
 
 def _scan_utf8_markdown(repo_root: Path) -> list[str]:
     issues: list[str] = []
-    root = repo_root / "tools" / "templates" / "pts_report_he" / "Group_B_data"
+    root = repo_root / "data" / "curated" / "group_b" / "profiles"
     for path in sorted(root.rglob("*.md")):
         try:
             path.read_text(encoding="utf-8")
@@ -120,6 +120,47 @@ def _check_github_seed_consistency(repo_root: Path, data: dict) -> tuple[list[st
     return failures, warnings
 
 
+def _normalize_tcid_cli(tcid: str) -> str:
+    import re
+
+    return re.sub(r"_+", "_", re.sub(r"[^A-Za-z0-9]+", "_", str(tcid or "").strip())).strip("_").upper()
+
+
+def _check_implementation_and_copy_fields(data: dict) -> tuple[list[str], list[str]]:
+    failures: list[str] = []
+    warnings: list[str] = []
+    group_b = data.get("group_b", {}) if isinstance(data, dict) else {}
+    overview = (group_b.get("overview_presentation") or {}).get("profiles", {}) if isinstance(group_b, dict) else {}
+    structure = (group_b.get("structure_presentation") or {}).get("profiles", {}) if isinstance(group_b, dict) else {}
+    implementation = (group_b.get("implementation_presentation") or {}).get("profiles", {}) if isinstance(group_b, dict) else {}
+
+    for pid in PROFILE_IDS:
+        orow = overview.get(pid, {}) if isinstance(overview, dict) else {}
+        tests = ((orow.get("official_tests") or {}).get("rows") or []) if isinstance(orow, dict) else []
+        for row in tests:
+            if not isinstance(row, dict):
+                continue
+            expected = _normalize_tcid_cli(str(row.get("tcid") or ""))
+            if str(row.get("copy_value") or "") != expected:
+                failures.append(f"overview_presentation.{pid}.official_tests copy_value mismatch for {row.get('tcid')}")
+        irow = implementation.get(pid, {}) if isinstance(implementation, dict) else {}
+        files = irow.get("files") or []
+        if not isinstance(files, list) or not files:
+            failures.append(f"implementation_presentation.{pid}: missing files")
+            continue
+        structure_inventory = (((structure.get(pid) or {}).get("structure_summary") or {}).get("file_inventory") or []) if isinstance(structure, dict) else []
+        inventory_paths = {str(item.get("path") or "") for item in structure_inventory if isinstance(item, dict)}
+        for file_row in files:
+            if not isinstance(file_row, dict):
+                continue
+            if not str(file_row.get("code") or "").strip():
+                failures.append(f"implementation_presentation.{pid}.{file_row.get('file_id')}: empty code")
+            rel_path = str(file_row.get("relative_path") or "")
+            if rel_path not in inventory_paths and not (file_row.get("decision_notes_he") or []):
+                warnings.append(f"implementation_presentation.{pid}.{file_row.get('file_id')}: path not present in structure inventory and no decision notes")
+    return failures, warnings
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate Group B Hub data/schema/readiness thresholds.")
     parser.add_argument("--repo-root", default=".", help="Repository root (default: current directory)")
@@ -152,6 +193,9 @@ def main() -> int:
     github_failures, github_warnings = _check_github_seed_consistency(repo_root, data)
     warnings.extend(github_warnings)
     failures.extend(github_failures)
+    impl_failures, impl_warnings = _check_implementation_and_copy_fields(data)
+    warnings.extend(impl_warnings)
+    failures.extend(impl_failures)
     if not args.allow_threshold_fail:
         failures.extend(threshold_failures)
 

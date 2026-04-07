@@ -1,21 +1,18 @@
-# Group B Data (Source of Truth)
+# Group B Data (Legacy Location)
 
-קבצים אלה הם שכבת האחסון (authoring) עבור הידע של Group B:
-- `Logic/*.md`
-- `Structure/*.md`
+קבצי ה-authoring הקנוניים של Group B כבר לא נשמרים כאן.
 
-האתר **לא מציג אותם כ-Markdown ישיר**.
-במקום זאת, ה-builder מחלץ מהם בלוקים מובנים ומציג UI מסונתז.
+החל מ-Wave 1 של ארגון ה-data, מקור האמת המקומי עבר ל:
+- `data/curated/group_b/profiles/<PROFILE>/logic.md`
+- `data/curated/group_b/profiles/<PROFILE>/structure.md`
+- `data/curated/group_b/profiles/<PROFILE>/implementation.md`
 
-## מבנה כל קובץ
+ה-builder לא אמור יותר לקרוא את `Logic/*.md`, `Structure/*.md` או `Implementation/*.md` מהנתיב הישן הזה כאשר עץ `data/` המקומי זמין.
 
-1. YAML front matter
-2. סעיפים קבועים (`##`)
-3. fenced blocks מובנים:
-- `groupb_finding`
-- `groupb_source_observation`
-- `groupb_method`
-- `groupb_open_question`
+## למה התיקייה עדיין קיימת
+
+- כדי להשאיר README redirect במקום המוכר הישן
+- כדי לאפשר migration הדרגתי של מסמכים/הפניות היסטוריות
 
 ## הערות
 

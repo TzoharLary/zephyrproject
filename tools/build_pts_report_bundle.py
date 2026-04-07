@@ -27,7 +27,7 @@ WORKSPACE_PQW6 = Path("auto-pts/autopts/workspaces/zephyr/zephyr-master/zephyr-m
 PTSCONTROL_PY = Path("auto-pts/autopts/ptscontrol.py")
 ICS_RST_SCRIPT = Path("auto-pts/tools/ics_rst_from_html.py")
 
-PROFILES_DIR = Path("docs/profiles")
+PROFILES_DIR = Path("data/raw/bluetooth_sig/profiles")
 PROFILE_DOCS = {
     "BAS": {
         "dir": PROFILES_DIR / "BAS",
@@ -94,7 +94,7 @@ HUB_TEMPLATE_DIR = TEMPLATE_DIR / "autopts"
 HUB_TEMPLATE_HTML = HUB_TEMPLATE_DIR / "index.html"
 HUB_TEMPLATE_CSS = HUB_TEMPLATE_DIR / "report.css"
 HUB_TEMPLATE_JS = HUB_TEMPLATE_DIR / "report.js"
-BUILD_PLAN_MANIFEST = Path("tools/data/pts_profile_build_plans.json")
+BUILD_PLAN_MANIFEST = Path("data/curated/pts/build_plans/pts_profile_build_plans.json")
 RUNTIME_ACTIVE_EXPORT_DEFAULT = Path("tools/runtime_active_tcids.json")
 RUNTIME_ACTIVE_HISTORY_DIR_DEFAULT = Path("tools/runtime_history")
 CACHE_ROOT = Path(".cache/pts_report_bundle")
@@ -2880,7 +2880,7 @@ def build_comparison(data: Dict, official_sources: Dict[str, Dict]) -> Dict[str,
             ),
         )
 
-    # 4) Source-path alignment with docs/Profiles baseline
+    # 4) Source-path alignment with data/raw/bluetooth_sig/profiles baseline
     for profile in profiles:
         files: Set[str] = set()
         summary_entry = next((s for s in data.get("summary", []) if s.get("profile") == profile), None)
@@ -2906,14 +2906,14 @@ def build_comparison(data: Dict, official_sources: Dict[str, Dict]) -> Dict[str,
         bad = [
             f
             for f in files
-            if (f.lower().endswith(".pdf") or f.lower().endswith(".xlsx")) and not f.startswith("docs/profiles/")
+            if (f.lower().endswith(".pdf") or f.lower().endswith(".xlsx")) and not f.startswith("data/raw/bluetooth_sig/profiles/")
         ]
         add_finding(
             profile=profile,
             topic="source_path",
             status="conflict" if bad else "match",
             site_claim=f"נבדקו {len(files)} נתיבי מקור רלוונטיים לפרופיל.",
-            official_evidence="קו הבסיס הרשמי מחייב שימוש בקבצים מתוך docs/profiles בלבד.",
+            official_evidence="קו הבסיס הרשמי מחייב שימוש בקבצים מתוך data/raw/bluetooth_sig/profiles בלבד.",
             impact_meaning=(
                 "מקורות מחוץ לתיקיית Profiles עלולים לגרום לפער בין הדוח לבין המקור הרשמי."
                 if bad
@@ -2929,9 +2929,9 @@ def build_comparison(data: Dict, official_sources: Dict[str, Dict]) -> Dict[str,
                 "note": "תיקיית baseline הרשמית",
             },
             recommended_action=(
-                "להחליף מקורות חיצוניים בנתיבים מתוך docs/profiles."
+                "להחליף מקורות חיצוניים בנתיבים מתוך data/raw/bluetooth_sig/profiles."
                 if bad
-                else "להמשיך לאכוף docs/profiles כמקור הרשמי."
+                else "להמשיך לאכוף data/raw/bluetooth_sig/profiles כמקור הרשמי."
             ),
         )
 
@@ -3729,7 +3729,7 @@ def build_report_bundle_payload(
                 "project_lines": pqw6["_project_lines"],
             },
             "baseline": {
-                "source": "docs/profiles",
+                "source": "data/raw/bluetooth_sig/profiles",
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "comparison_engine_version": "v1.0",
             },
@@ -4182,7 +4182,7 @@ def ensure_autopts_guide_unit(ctx: BuildRunContext, force: bool = False) -> Dict
     paths = [
         Path(__file__),
         Path("tools/autopts_guide_data.py"),
-        Path("tools/data/autopts_official_sources.json"),
+        Path("data/catalog/autopts/sources/autopts_official_sources.json"),
         Path("auto-pts"),
     ]
     fingerprint = fingerprint_paths(paths, {"unit": "shared.autopts_guide"})
@@ -4248,9 +4248,9 @@ def ensure_hub_group_b_unit(ctx: BuildRunContext, autopts_guide: Dict[str, Any],
         Path("tools/autopts_guide_data.py"),
         Path("tools/templates/pts_report_he/Group_B_data"),
         Path("tools/data"),
-        Path("docs/profiles/BPS"),
-        Path("docs/profiles/WSS"),
-        Path("docs/profiles/SCPS"),
+        Path("data/raw/bluetooth_sig/profiles/BPS"),
+        Path("data/raw/bluetooth_sig/profiles/WSS"),
+        Path("data/raw/bluetooth_sig/profiles/SCPS"),
     ]
     fingerprint = fingerprint_paths(
         paths,
@@ -5209,7 +5209,7 @@ def legacy_full_build() -> None:
                 "project_lines": pqw6["_project_lines"],
             },
             "baseline": {
-                "source": "docs/profiles",
+                "source": "data/raw/bluetooth_sig/profiles",
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "comparison_engine_version": "v1.0",
             },

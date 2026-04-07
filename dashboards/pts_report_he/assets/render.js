@@ -2735,7 +2735,7 @@ function renderComparisonPanel() {
     <div class="grid">
       <div class="card span-12">
         <h2 class="section-title">אימות מול מקורות רשמיים</h2>
-        <p class="section-intro">השוואה שיטתית בין הטענות המוצגות באתר לבין מסמכי הבסיס הרשמיים בתיקיות <code>docs/Profiles</code>.</p>
+        <p class="section-intro">השוואה שיטתית בין הטענות המוצגות באתר לבין מסמכי הבסיס הרשמיים בתיקיות <code>data/raw/bluetooth_sig/profiles</code>.</p>
         <p class="small muted">ברירת מחדל: סינון על סתירות בלבד.</p>
       </div>
 
