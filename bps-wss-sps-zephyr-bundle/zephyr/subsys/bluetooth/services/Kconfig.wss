@@ -1,0 +1,22 @@
+# Bluetooth GATT Weight Scale service
+
+# Copyright (c) 2026 The Zephyr Project
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig BT_WSS
+	bool "GATT Weight Scale service"
+	depends on BT_PERIPHERAL
+	help
+	  Enable support for the Bluetooth Weight Scale Service (WSS).
+
+if BT_WSS
+
+config BT_WSS_MEAS_MAX_LEN
+	int "Maximum weight measurement payload length"
+	default 20
+	range 1 255
+	help
+	  Maximum encoded Weight Measurement payload length accepted by
+	  bt_wss_indicate().
+
+endif # BT_WSS

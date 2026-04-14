@@ -1,0 +1,38 @@
+# Bluetooth GATT Blood Pressure service
+
+# Copyright (c) 2026 The Zephyr Project
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig BT_BPS
+	bool "GATT Blood Pressure service"
+	depends on BT_PERIPHERAL
+	help
+	  Enable support for the Bluetooth Blood Pressure Service (BPS).
+
+if BT_BPS
+
+config BT_BPS_MEAS_MAX_LEN
+	int "Maximum blood pressure measurement payload length"
+	default 20
+	range 1 255
+	help
+	  Maximum encoded Blood Pressure Measurement payload length accepted
+	  by bt_bps_indicate().
+
+config BT_BPS_INTERMEDIATE_CUFF_PRESSURE
+	bool "Enable Intermediate Cuff Pressure characteristic"
+	default y
+	help
+	  Enable the optional Intermediate Cuff Pressure characteristic
+	  (UUID 0x2A36) with Notify property.
+
+config BT_BPS_ICP_MAX_LEN
+	int "Maximum intermediate cuff pressure payload length"
+	depends on BT_BPS_INTERMEDIATE_CUFF_PRESSURE
+	default 20
+	range 1 255
+	help
+	  Maximum encoded Intermediate Cuff Pressure payload length accepted
+	  by bt_bps_notify_intermediate_cuff().
+
+endif # BT_BPS
