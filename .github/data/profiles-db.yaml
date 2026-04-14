@@ -25,7 +25,7 @@ last_updated: "2026-02-26"
 #   - BCS/WSS: complexity Medium→Low (2 chars, no state: Low by classification rule)
 #   - PLXS: has_control_point false→true (RACP 0x2A52 present)
 #   - All profiles: pts_tracked, spec_version, spec_doc fields added where available
-# Coverage audit: BPS (0x1810) added — present in data/raw/bluetooth_sig/profiles/BPS/ and tools/data/ but was missing
+# Coverage audit: BPS (0x1810) added — present in data/raw/bluetooth_sig/profiles/BPS/ but was missing
 # Technical tags added: has_control_point, uses_indicate, per_connection_state_required
 # Tag invariant: EVERY profile MUST include either "simple" or "complex" in tags, matching the type: field.
 #   Valid:   type: Simple  → tags must contain "simple"

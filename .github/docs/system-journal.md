@@ -141,7 +141,7 @@ This issue defined the entire system from scratch. Key decisions made here:
 **Fixes:** Issue #1
 **Added:** 2831 lines across 5 new files
 
-This PR created all five system files. However, it explicitly acknowledged that Phase 1 was only a **spot-check on 6 profiles** (HRS, BAS, DIS, HTS, ESS, OTS), with the remaining 18+ profiles unvalidated. BPS was also discovered during this PR (present in `docs/profiles/BPS/` but missing from the DB) and added.
+This PR created all five system files. However, it explicitly acknowledged that Phase 1 was only a **spot-check on 6 profiles** (HRS, BAS, DIS, HTS, ESS, OTS), with the remaining 18+ profiles unvalidated. BPS was also discovered during this PR (historically under `docs/profiles/BPS/`; current local path is `data/raw/bluetooth_sig/profiles/BPS/`) and added.
 
 PR #2 introduced 3 new technical classification fields to the DB schema:
 - `has_control_point` — true for profiles with RACP, HID CP, or OTS OACP
@@ -326,7 +326,7 @@ Each field in `profiles-db.yaml` drives a specific agent decision:
   per_connection_state_required: true  # → generate bt_conn_cb + per-conn struct
   kconfig_symbol: BT_HRS         # → used in Kconfig entry: config BT_HRS
   spec_version: "1.0"            # → informational; reference for UUID verification
-  spec_doc: "docs/profiles/..."  # → local PDF path for UUID cross-check
+  spec_doc: "data/raw/bluetooth_sig/profiles/<PROFILE>/..."  # → local PDF path for UUID cross-check
   pts_tracked: true              # → informational; whether Auto-PTS has test cases for this profile
   reference_files:
     header: "include/..."        # → the closest existing Zephyr .h to study for BUILD

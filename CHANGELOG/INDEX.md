@@ -4,6 +4,7 @@
 
 | Date | Group | Title | Reason (Short) | Commit |
 |---|---|---|---|---|
+| 2026-04-14 | infra | Align Copilot Ecosystem Data Path References | הסרת הפניות legacy ב-workflow ובמסמכי seed/history כדי ליישר למבנה `data/` המקומי הנוכחי | pending (no commit in this task) |
 | 2026-04-07 | infra | Make `data/` Local-Only And Align Agent Loading | `data/` יוצא מה־remote, ההוראות לסוכנים מיושרות למבנה local-only, ו-CI מדלג כשעץ ה-data המקומי חסר | pending (no commit in this task) |
 | 2026-04-07 | tools | Extend Canonical Data Migration To Raw Specs And PTS Artifact Data | השלמת המיגרציה כך שגם artifacts רשמיים וגם datasets של PTS analysis חיים תחת `data/`, עם ניקוי `.gitignore`, `docs/` ו-`tmp` | c779090 |
 | 2026-03-23 | infra | Refresh Profile Builder Seed Docs And Spec Paths | תיקון פתיח `profile-patterns.md` ויישור הפניות ה-seed לנתיבי spec החדשים תחת `data/raw/bluetooth_sig/profiles` | 8497a21 |
