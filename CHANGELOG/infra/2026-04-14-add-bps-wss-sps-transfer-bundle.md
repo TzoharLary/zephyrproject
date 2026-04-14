@@ -24,7 +24,7 @@
 - Devs: אפשר לעקוב אחרי המימושים ולשנע אותם לפרויקט Zephyr אחר תוך שמירה על מיפוי נתיבים מדויק, הנחיות בעברית, והבדלה בין full copy ל-manual merge.
 
 ## References
-- Commit: pending (no commit in this task)
+- Commit: b9292c8
 - Files:
   - bps-wss-sps-zephyr-bundle/README.md
   - bps-wss-sps-zephyr-bundle/zephyr/include/zephyr/bluetooth/services/bps.h

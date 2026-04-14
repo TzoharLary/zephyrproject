@@ -38,7 +38,7 @@
 - Devs: יש API ציבורי, Kconfig, CMake ולוגינג משולבים; יש README העברה ו-worklog מפורט להפחתת friction בהמשך פיתוח.
 
 ## References
-- Commit: pending (no commit in this task)
+- Commit: b9292c8
 - Files:
   - zephyr/include/zephyr/bluetooth/services/bps.h
   - zephyr/include/zephyr/bluetooth/services/wss.h

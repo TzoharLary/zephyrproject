@@ -21,7 +21,7 @@
 - Devs: יש source-of-truth ברור תחת `.github/prompts/`, כולל דרישות תיעוד והעברה שמפחיתות איבוד הקשר בין סשנים.
 
 ## References
-- Commit: pending (no commit in this task)
+- Commit: b9292c8
 - Files:
   - .github/prompts/zephyr-bps-wss-sps-implementation.prompt.md
   - CHANGELOG/infra/2026-04-14-add-bps-wss-sps-implementation-prompt.md

@@ -4,9 +4,9 @@
 
 | Date | Group | Title | Reason (Short) | Commit |
 |---|---|---|---|---|
-| 2026-04-14 | infra | Add BPS/WSS/SPS Transfer Bundle | יצירת bundle בשורש הריפו עם עותקים מדויקים של מימושי BPS/WSS/SPS, מדריך עברי, ו-prompt מוכן לסוכן שמעביר ל-`zephyr/` יעד | pending (no commit in this task) |
-| 2026-04-14 | firmware | Add BPS/WSS/SPS GATT Services | מימוש שירותי BLE חדשים (BPS/WSS/SPS+SCPS alias) עם אינטגרציית Kconfig/CMake/Logging, worklog ו-transfer README | pending (no commit in this task) |
-| 2026-04-14 | infra | Add BPS/WSS/SPS Implementation Prompt | הוספת prompt ייעודי תחת `.github/prompts/` להפעלת סשן סוכן נפרד למימוש BPS/WSS/SPS עם reconciliation, worklog ו-transfer README | pending (no commit in this task) |
+| 2026-04-14 | infra | Add BPS/WSS/SPS Transfer Bundle | יצירת bundle בשורש הריפו עם עותקים מדויקים של מימושי BPS/WSS/SPS, מדריך עברי, ו-prompt מוכן לסוכן שמעביר ל-`zephyr/` יעד | b9292c8 |
+| 2026-04-14 | firmware | Add BPS/WSS/SPS GATT Services | מימוש שירותי BLE חדשים (BPS/WSS/SPS+SCPS alias) עם אינטגרציית Kconfig/CMake/Logging, worklog ו-transfer README | b9292c8 |
+| 2026-04-14 | infra | Add BPS/WSS/SPS Implementation Prompt | הוספת prompt ייעודי תחת `.github/prompts/` להפעלת סשן סוכן נפרד למימוש BPS/WSS/SPS עם reconciliation, worklog ו-transfer README | b9292c8 |
 | 2026-04-14 | infra | Align Copilot Ecosystem Data Path References | הסרת הפניות legacy ב-workflow ובמסמכי seed/history כדי ליישר למבנה `data/` המקומי הנוכחי | pending (no commit in this task) |
 | 2026-04-07 | infra | Make `data/` Local-Only And Align Agent Loading | `data/` יוצא מה־remote, ההוראות לסוכנים מיושרות למבנה local-only, ו-CI מדלג כשעץ ה-data המקומי חסר | pending (no commit in this task) |
 | 2026-04-07 | tools | Extend Canonical Data Migration To Raw Specs And PTS Artifact Data | השלמת המיגרציה כך שגם artifacts רשמיים וגם datasets של PTS analysis חיים תחת `data/`, עם ניקוי `.gitignore`, `docs/` ו-`tmp` | c779090 |
